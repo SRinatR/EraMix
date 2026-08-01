@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eramix
+      POSTGRES_PASSWORD: eramix_local_dev
+      POSTGRES_DB: eramix
+    ports:
+      - '5432:5432'
+    volumes:
+      - eramix-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eramix']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  eramix-postgres-data:

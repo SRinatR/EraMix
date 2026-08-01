@@ -1,0 +1,27 @@
+{
+  "name": "@eramix/infrastructure",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern"
+  },
+  "dependencies": {
+    "@eramix/application": "workspace:*",
+    "@eramix/domain": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

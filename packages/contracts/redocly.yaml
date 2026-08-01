@@ -1,0 +1,9 @@
+extends:
+  - recommended
+rules:
+  # Internal proprietary API; no public license URL/SPDX identifier applies.
+  info-license-strict: off
+  # System/health probes intentionally return only 200/503; there is no
+  # per-request 4xx case (no auth, no input) so a fabricated 4xx would
+  # misrepresent the contract.
+  operation-4xx-response: off

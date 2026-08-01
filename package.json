@@ -1,0 +1,30 @@
+{
+  "name": "eramix",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "24.18.1",
+    "pnpm": "12.0.0-beta.2"
+  },
+  "packageManager": "pnpm@12.0.0-beta.2+sha512.bfe5bc4de6852a91e1f2b982adae34646838648f6f35e3e0ba873009a517d1f09e60105c4ab17d8c2349aa2dfb9e0e260eea6604a902ce6aa945b7945c75b473",
+  "scripts": {
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint . -c eslint.config.js --no-error-on-unmatched-pattern && pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "build": "pnpm -r --if-present run build",
+    "check": "pnpm run format && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2"
+  }
+}

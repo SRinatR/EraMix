@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install:
+    name: Clean install (pnpm 12 beta risk gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies with a frozen, verified lockfile
+        run: pnpm install --frozen-lockfile
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+
+  source:
+    name: Source (format, lint, typecheck)
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - run: corepack enable
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+          fail-on-cache-miss: true
+      - run: pnpm run format
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+
+  unit:
+    name: Unit tests
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - run: corepack enable
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+          fail-on-cache-miss: true
+      - run: pnpm run test
+
+  build:
+    name: Production build
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - run: corepack enable
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+          fail-on-cache-miss: true
+      - run: pnpm run build

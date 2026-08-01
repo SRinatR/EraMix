@@ -1,0 +1,25 @@
+{
+  "name": "@eramix/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern && redocly lint openapi/openapi.yaml"
+  },
+  "dependencies": {
+    "@eramix/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.43.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

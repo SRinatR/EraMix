@@ -1,0 +1,110 @@
+openapi: 3.2.0
+info:
+  title: EraMix B2B API
+  version: 0.0.0
+  license:
+    name: Proprietary
+  description: >
+    Source-of-truth contract for the EraMix B2B platform. Endpoint groups are
+    added incrementally as their owning phase is implemented (see
+    docs/IMPLEMENTATION_ROADMAP.md). Do not hand-author public URLs or error
+    shapes outside this document and the generated types in
+    packages/contracts.
+servers:
+  - url: /
+tags:
+  - name: System
+    description: Liveness and readiness probes.
+paths:
+  /health/live:
+    get:
+      operationId: getHealthLive
+      summary: Liveness probe
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+  /health/ready:
+    get:
+      operationId: getHealthReady
+      summary: Readiness probe
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: The process is ready to accept traffic.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: A required dependency is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    ProblemDetailsFieldError:
+      type: object
+      required: [pointer, code, message]
+      properties:
+        pointer:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+    ProblemDetails:
+      type: object
+      description: RFC 9457 Problem Details, extended with EraMix-specific fields.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          description: Stable machine-readable EraMix error code.
+          enum:
+            - AUTH_REQUIRED
+            - AUTH_CALLBACK_FAILED
+            - ACCESS_DENIED
+            - COMPANY_REQUIRED
+            - RESOURCE_NOT_FOUND
+            - VALIDATION_FAILED
+            - ORDER_STATE_CONFLICT
+            - CONCURRENCY_CONFLICT
+            - IDEMPOTENCY_CONFLICT
+            - RATE_LIMITED
+            - DEPENDENCY_UNAVAILABLE
+            - INTERNAL_ERROR
+            - SLUG_CONFLICT
+            - LOCALE_NOT_SUPPORTED
+            - CANONICAL_ROUTE_MISSING
+        traceId:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProblemDetailsFieldError'

@@ -1,0 +1,22 @@
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# Generated QA proofing renders of docs/*.docx (PDF/PNG snapshots produced
+# while editing the spec) and the one-off docx-editing/inspection scripts
+# used to produce them. Not product source; regenerable from the docx and
+# python-docx if ever needed again. Re-track deliberately if these become
+# maintained tooling rather than one-time editing aids.
+/qa/
+/tools/
