@@ -36,7 +36,14 @@ describe('LocalFilesystemStorageProvider', () => {
     const sig = parsed.searchParams.get('sig')!;
 
     expect(provider.verifySignedDownload('key-1', expires, sig)).toBe(true);
-    expect(provider.verifySignedDownload('key-1', expires, `${sig.slice(0, -1)}0`)).toBe(false);
+    // Flip the last hex digit to one guaranteed different from the original
+    // (rather than always appending '0', which would occasionally — 1 in 16
+    // — leave the signature completely unchanged and make this assertion
+    // flaky).
+    const lastDigit = sig.at(-1)!;
+    const tamperedDigit = lastDigit === '0' ? '1' : '0';
+    const tamperedSig = `${sig.slice(0, -1)}${tamperedDigit}`;
+    expect(provider.verifySignedDownload('key-1', expires, tamperedSig)).toBe(false);
     expect(provider.verifySignedDownload('different-key', expires, sig)).toBe(false);
   });
 

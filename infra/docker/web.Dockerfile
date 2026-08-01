@@ -35,6 +35,10 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 ENV NODE_ENV=production
+# `prisma generate` needs DATABASE_URL merely resolvable (prisma.config.ts's
+# env('DATABASE_URL') throws if entirely unset), never actually reachable —
+# the real value is injected at container runtime, not build time.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN pnpm --filter @eramix/infrastructure run db:generate
 RUN pnpm --filter @eramix/web... run build
 
