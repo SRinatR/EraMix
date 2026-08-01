@@ -1,6 +1,11 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    # ADR-0013: PostgreSQL 19 Beta 2 is mandatory for local/CI/staging/initial
+    # production; 17/18 must never be a silent fallback. The exact image
+    # digest still needs to be resolved and pinned here (requires `docker
+    # pull`/`docker inspect`, deferred to the Raspberry Pi integration
+    # environment per CLAUDE.md's laptop/Pi split) — tag-only for now.
+    image: postgres:19beta2-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: eramix

@@ -1,0 +1,141 @@
+import type { ProductRepository, ProductWithTranslations } from '@eramix/application';
+import { ResourceNotFoundError, type Product, type ProductTranslation } from '@eramix/domain';
+import type {
+  Product as ProductRow,
+  ProductTranslation as ProductTranslationRow,
+} from '../generated/prisma/client.js';
+import { nullToUndefined } from '../prisma-json.js';
+import type { PrismaClient } from '../prisma-client.js';
+import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
+import { resolveClient } from '../transaction-context.js';
+
+const WITH_TRANSLATIONS = { translations: true } as const;
+type ProductRowWithTranslations = ProductRow & { translations: ProductTranslationRow[] };
+
+export class PrismaProductRepository implements ProductRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async findById(id: string): Promise<ProductWithTranslations | undefined> {
+    const row = await resolveClient(this.prisma).product.findUnique({
+      where: { id },
+      include: WITH_TRANSLATIONS,
+    });
+    return row ? toDomain(row) : undefined;
+  }
+
+  async findByPublicId(publicId: string): Promise<ProductWithTranslations | undefined> {
+    const row = await resolveClient(this.prisma).product.findUnique({
+      where: { publicId },
+      include: WITH_TRANSLATIONS,
+    });
+    return row ? toDomain(row) : undefined;
+  }
+
+  async findBySku(sku: string): Promise<ProductWithTranslations | undefined> {
+    const row = await resolveClient(this.prisma).product.findUnique({
+      where: { sku },
+      include: WITH_TRANSLATIONS,
+    });
+    return row ? toDomain(row) : undefined;
+  }
+
+  async create(
+    product: Omit<Product, 'version' | 'createdAt' | 'updatedAt'>,
+    translations: readonly Omit<ProductTranslation, 'createdAt' | 'updatedAt'>[],
+  ): Promise<ProductWithTranslations> {
+    const row = await resolveClient(this.prisma).product.create({
+      data: {
+        id: product.id,
+        publicId: product.publicId,
+        sku: product.sku,
+        categoryId: product.categoryId,
+        status: product.status,
+        publishedAt: product.publishedAt ?? null,
+        translations: {
+          create: translations.map((translation) => ({
+            id: translation.id,
+            locale: translation.locale,
+            name: translation.name,
+            slug: translation.slug,
+            description: translation.description ?? null,
+            seoTitle: translation.seoTitle ?? null,
+            seoDescription: translation.seoDescription ?? null,
+            priceFromMinor: translation.indicativePrice?.priceFromMinor ?? null,
+            currency: translation.indicativePrice?.currency ?? null,
+            priceDisclaimer: translation.indicativePrice?.priceDisclaimer ?? null,
+          })),
+        },
+      },
+      include: WITH_TRANSLATIONS,
+    });
+    return toDomain(row);
+  }
+
+  async updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Product['status'],
+  ): Promise<ProductWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.product.updateMany({
+      where: { id, version: expectedVersion },
+      data: {
+        status,
+        version: { increment: 1 },
+        ...(status === 'PUBLISHED' ? { publishedAt: new Date() } : {}),
+      },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Product ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Product ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+}
+
+function toDomain(row: ProductRowWithTranslations): ProductWithTranslations {
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    sku: row.sku,
+    categoryId: row.categoryId,
+    status: row.status,
+    publishedAt: nullToUndefined(row.publishedAt),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    version: row.version,
+    translations: row.translations.map(translationToDomain),
+  };
+}
+
+function translationToDomain(row: ProductTranslationRow): ProductTranslation {
+  const hasPrice = row.priceFromMinor !== null && row.currency !== null;
+  return {
+    id: row.id,
+    productId: row.productId,
+    locale: row.locale,
+    name: row.name,
+    slug: row.slug,
+    description: nullToUndefined(row.description),
+    seoTitle: nullToUndefined(row.seoTitle),
+    seoDescription: nullToUndefined(row.seoDescription),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    ...(hasPrice
+      ? {
+          indicativePrice: {
+            // Non-null asserted: `hasPrice` just proved both fields are set.
+            priceFromMinor: row.priceFromMinor!,
+            currency: row.currency!,
+            priceMode: row.priceMode,
+            ...(row.priceDisclaimer !== null ? { priceDisclaimer: row.priceDisclaimer } : {}),
+          },
+        }
+      : {}),
+  };
+}

@@ -57,6 +57,33 @@ components:
         status:
           type: string
           enum: [ok]
+    LocaleCode:
+      type: string
+      description: MVP locale allowlist (ADR-0010); en is the default locale.
+      enum: [en, ru, uz]
+    ProductIndicativePrice:
+      type: object
+      description: >-
+        Non-binding, display-only "from" price (ADR-0005). This is never a
+        binding offer or payable total; OrderLine carries no price field in
+        MVP — final commercial terms are confirmed manually by a manager
+        after order submission (quote-only workflow). Both fields are
+        present together or absent together.
+      properties:
+        priceFromMinor:
+          type: integer
+          minimum: 0
+          description: Indicative amount in minor currency units (e.g. cents/tiyin).
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217 currency code; required whenever priceFromMinor is set.
+        priceMode:
+          type: string
+          enum: [FROM_PRICE_INDICATIVE]
+        priceDisclaimer:
+          type: string
+          description: Localized non-binding disclaimer text (e.g. "от", "starting from").
     ProblemDetailsFieldError:
       type: object
       required: [pointer, code, message]

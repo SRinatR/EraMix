@@ -1,0 +1,88 @@
+import path from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+import { generatePublicId } from '@eramix/domain';
+import { createPrismaClient } from '../src/prisma-client.js';
+
+// Seed data is intentionally minimal: User/Company/Order data would need
+// real ODS Identity claims (Q-01, still open — docs/OPEN_QUESTIONS.md) or
+// invented business data this repo has no authority to make up. This seeds
+// only structural catalog data needed to exercise the schema end to end.
+
+loadDotenv({ path: path.join(import.meta.dirname, '..', '..', '..', '.env') });
+
+const databaseUrl = process.env['DATABASE_URL'];
+if (!databaseUrl) {
+  throw new Error('DATABASE_URL is required to run the seed script.');
+}
+
+const prisma = createPrismaClient(databaseUrl);
+
+async function main(): Promise<void> {
+  const category = await prisma.category.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000001' },
+    create: {
+      id: '00000000-0000-4000-8000-000000000001',
+      status: 'PUBLISHED',
+      publishedAt: new Date(),
+      translations: {
+        create: [
+          { id: '00000000-0000-4000-8000-000000000011', locale: 'en', name: 'General' },
+          { id: '00000000-0000-4000-8000-000000000012', locale: 'ru', name: 'Общее' },
+          { id: '00000000-0000-4000-8000-000000000013', locale: 'uz', name: 'Umumiy' },
+        ],
+      },
+    },
+    update: {},
+  });
+
+  const enTranslation = await prisma.categoryTranslation.findUniqueOrThrow({
+    where: { id: '00000000-0000-4000-8000-000000000011' },
+  });
+
+  await prisma.categoryRoute.upsert({
+    where: { locale_slug: { locale: 'en', slug: 'general' } },
+    create: {
+      translationId: enTranslation.id,
+      locale: 'en',
+      slug: 'general',
+      isCanonical: true,
+    },
+    update: {},
+  });
+
+  const sampleSku = 'SEED-0001';
+  const existingProduct = await prisma.product.findUnique({ where: { sku: sampleSku } });
+  if (!existingProduct) {
+    await prisma.product.create({
+      data: {
+        publicId: generatePublicId(),
+        sku: sampleSku,
+        categoryId: category.id,
+        status: 'DRAFT',
+        translations: {
+          create: [
+            {
+              locale: 'en',
+              name: 'Sample product',
+              slug: 'sample-product',
+              priceFromMinor: 15000,
+              currency: 'UZS',
+              priceDisclaimer: 'starting from',
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  console.log(JSON.stringify({ msg: 'seed complete', categoryId: category.id, sampleSku }));
+}
+
+main()
+  .catch((error: unknown) => {
+    console.error(JSON.stringify({ msg: 'seed failed', error: String(error) }));
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    void prisma.$disconnect();
+  });

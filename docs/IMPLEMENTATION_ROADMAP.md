@@ -131,6 +131,79 @@ Exit criteria:
   optimistic concurrency, and audit/outbox atomicity.
 - No combined `id-slug` column exists.
 
+### Phase 1 status: schema/domain/repository layer built and laptop-verified; PostgreSQL integration unverified
+
+Evidence, 2026-08-01:
+
+- **ADR-0005 resolved**: hybrid indicative pricing (Product Owner decision).
+  `OrderLine` carries no price/tax/total column (quote-only); `ProductTranslation`
+  gets an optional, structured, non-binding `priceFromMinor`/`currency`/
+  `priceMode`/`priceDisclaimer`, with a `CHECK` constraint tying currency to
+  priceFromMinor. `docs/OPEN_QUESTIONS.md` Q-03 marked resolved.
+- **New open item recorded, not invented**: Company's required legal/registration
+  fields are still an unapproved business decision (TZ intro, not a numbered
+  Q- item) — modeled as `Company.metadata: Json?` rather than fabricated
+  structured columns; tracked as Q-09.
+- **Prisma schema** (`packages/infrastructure/prisma/schema.prisma`): all
+  Phase 1 aggregates — User, Company, Membership, Category/CategoryTranslation/
+  CategoryRoute, Product/ProductTranslation, Content/ContentTranslation/
+  ContentRoute (shared by Article/Page/FAQ — TZ Appendix F.3 explicitly allows
+  either a per-type or a common typed registry; chose the latter since the
+  three are structurally identical), Order/OrderLine/OrderStatusHistory,
+  AuditEvent, OutboxMessage. `npx prisma validate` and `npx prisma generate`
+  both pass (Prisma 7.9.1 — connection config now lives in `prisma.config.ts`,
+  not `schema.prisma`; `PrismaClient` requires an explicit `@prisma/adapter-pg`
+  driver adapter). No combined `id-slug` column anywhere; `publicId`/
+  `orderNumber` are separate, immutable, domain-generated columns.
+- **Domain layer** (`packages/domain`): all six remaining typed errors added
+  (`AccessDeniedError`, `OrderStateConflictError`, `ConcurrencyConflictError`,
+  `IdempotencyConflictError`, `SlugConflictError`, `CanonicalRouteMissingError`);
+  value objects for `publicId`/`orderNumber` generation (Web Crypto
+  `getRandomValues`, Crockford base32, no `@types/node`/framework dependency —
+  kept consistent with the package's existing zero-platform-dependency
+  convention), `quantity`, and the indicative-price invariant. Locale
+  allowlist code fixed to match ADR-0010 (was still `ru/tt/en/uz`; is now
+  `en/ru/uz`, `en` default — the doc/code drift predates this session).
+- **Repository layer**: ports in `packages/application/src/repositories.ts`
+  and Prisma adapters in `packages/infrastructure/src/repositories/*` for
+  every Phase 1 aggregate (User, Company, Membership, Category, Product,
+  Content, Order, AuditEvent, OutboxMessage), plus `PrismaUnitOfWork`
+  (AsyncLocalStorage-based ambient transaction client) and
+  `prisma-error-mapping.ts` (unique-constraint → `SlugConflictError`/
+  `IdempotencyConflictError`, optimistic-lock-miss → `ConcurrencyConflictError`).
+  `ContentRepository.setCanonicalRoute`/demoted-then-created pattern and
+  `ProductRepository.updateStatus`'s `updateMany({ where: { id, version } })`
+  are the concrete OCC/slug-conflict/canonical-route demonstrations named in
+  this phase's exit criteria.
+- **Migration**: `packages/infrastructure/prisma/migrations/20260801170000_init_phase1_schema/migration.sql`
+  — the table/enum/index/FK portion is tool-generated
+  (`prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`,
+  fully offline, no live database needed), with four manual additions Prisma
+  has no `schema.prisma` attribute for: two partial unique indexes
+  (`content_route_one_canonical`, `category_route_one_canonical` — exactly one
+  canonical route per translation) and two `CHECK` constraints
+  (`order_line_quantity_positive`, `product_translation_price_currency_pair`).
+  `prisma/seed.ts` seeds only structural catalog data (one category, one
+  product) — no User/Company/Order seed data, since that would need either
+  real ODS claims (Q-01, still open) or invented business data.
+- **Laptop-safe verification** (`pnpm run check`: format, lint, typecheck,
+  test, build) — exit 0, **79 unit tests** across 8 workspace packages/apps,
+  `next build` unaffected.
+- **Not yet verified — the exit criteria this status block cannot claim**:
+  nothing above has touched a real PostgreSQL instance. Whether the migration
+  actually applies cleanly to an empty PostgreSQL 19 Beta 2 database, whether
+  the partial unique indexes and `CHECK` constraints behave as intended,
+  whether the optimistic-concurrency/unique-constraint-mapping code paths
+  behave correctly against real Postgres error codes, and whether transaction
+  rollback/audit-outbox atomicity hold under `PrismaUnitOfWork` are all
+  **unverified**. Per CLAUDE.md, PostgreSQL integration testing runs on the
+  Raspberry Pi, not this laptop; this is pending Pi SSH access (the user
+  opted for key-based auth, to be set up separately) and the PostgreSQL
+  19 Beta 2 image digest is likewise not yet resolved/pinned in
+  `infra/docker/docker-compose.yml` (tag `postgres:19beta2-alpine` is set;
+  the exact digest needs `docker pull`/`docker inspect` on the Pi).
+  Do not treat this status block as Phase 1 completion — it is not.
+
 ## Phase 2 — localized URLs, content foundation, and SEO
 
 Deliver:

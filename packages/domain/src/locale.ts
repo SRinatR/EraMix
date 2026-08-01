@@ -1,6 +1,8 @@
 import { LocaleNotSupportedError } from './errors.js';
 
-export const SUPPORTED_LOCALES = ['ru', 'tt', 'en', 'uz'] as const;
+export const SUPPORTED_LOCALES = ['en', 'ru', 'uz'] as const;
+
+export const DEFAULT_LOCALE: LocaleCode = 'en';
 
 export type LocaleCode = (typeof SUPPORTED_LOCALES)[number];
 

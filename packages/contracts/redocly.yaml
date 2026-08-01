@@ -7,3 +7,8 @@ rules:
   # per-request 4xx case (no auth, no input) so a fabricated 4xx would
   # misrepresent the contract.
   operation-4xx-response: off
+  # LocaleCode/ProductIndicativePrice (ADR-0005) are added ahead of their
+  # owning Phase 3 catalog endpoints so the contract documents the pricing
+  # shape decided in ADR-0005 from Phase 1 onward. Re-enable once Phase 3
+  # wires up GET /catalog/products/{publicId} and these are referenced.
+  no-unused-components: off

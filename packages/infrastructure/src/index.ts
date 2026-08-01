@@ -1,2 +1,14 @@
 export { loadEnv } from './env.js';
 export type { Env } from './env.js';
+export { createPrismaClient } from './prisma-client.js';
+export type { PrismaClient } from './prisma-client.js';
+export { PrismaUnitOfWork } from './unit-of-work.js';
+export { PrismaUserRepository } from './repositories/user-repository.js';
+export { PrismaCompanyRepository } from './repositories/company-repository.js';
+export { PrismaMembershipRepository } from './repositories/membership-repository.js';
+export { PrismaCategoryRepository } from './repositories/category-repository.js';
+export { PrismaAuditEventRepository } from './repositories/audit-event-repository.js';
+export { PrismaOutboxMessageRepository } from './repositories/outbox-message-repository.js';
+export { PrismaProductRepository } from './repositories/product-repository.js';
+export { PrismaContentRepository } from './repositories/content-repository.js';
+export { PrismaOrderRepository } from './repositories/order-repository.js';
