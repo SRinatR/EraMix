@@ -1,6 +1,9 @@
 import { SystemClock } from '@eramix/application';
 import {
   CryptoIdGenerator,
+  DevMalwareScanner,
+  JsonLogger,
+  LocalFilesystemStorageProvider,
   OidcIdentityProvider,
   PendingAuthCodec,
   PrismaAuditEventRepository,
@@ -17,6 +20,7 @@ import {
   createPrismaClient,
   loadEnv,
 } from '@eramix/infrastructure';
+import path from 'node:path';
 
 /**
  * Composition root for apps/web's server-side code (route handlers, Server
@@ -29,6 +33,7 @@ import {
 function buildContainer() {
   const env = loadEnv();
   const prisma = createPrismaClient(env.DATABASE_URL);
+  const logger = new JsonLogger();
 
   return {
     env,
@@ -36,6 +41,7 @@ function buildContainer() {
     uow: new PrismaUnitOfWork(prisma),
     clock: new SystemClock(),
     idGen: new CryptoIdGenerator(),
+    scanner: new DevMalwareScanner(logger),
     users: new PrismaUserRepository(prisma),
     companies: new PrismaCompanyRepository(prisma),
     memberships: new PrismaMembershipRepository(prisma),
@@ -68,6 +74,17 @@ function buildContainer() {
         throw new Error('SESSION_SECRET is not configured — required for /api/auth/*.');
       }
       return new PendingAuthCodec(env.SESSION_SECRET);
+    },
+    get storage() {
+      if (env.MEDIA_SIGNING_SECRET === undefined) {
+        throw new Error('MEDIA_SIGNING_SECRET is not configured — required for /api/media/*.');
+      }
+      const publicOrigin = env.PUBLIC_ORIGIN ?? 'https://eramix.example';
+      return new LocalFilesystemStorageProvider(
+        path.resolve(env.MEDIA_STORAGE_DIR),
+        new URL('/api/media/download', publicOrigin).toString(),
+        env.MEDIA_SIGNING_SECRET,
+      );
     },
   };
 }

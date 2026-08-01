@@ -31,6 +31,12 @@ export type {
 } from './url-builder.js';
 export { createIndicativePrice } from './indicative-price.js';
 export type { IndicativePrice, IndicativePriceInput } from './indicative-price.js';
+export {
+  ALLOWED_UPLOAD_TYPES,
+  MAX_UPLOAD_SIZE_BYTES,
+  validateUpload,
+} from './upload-validation.js';
+export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
 export type {
   Versioned,
   Timestamped,

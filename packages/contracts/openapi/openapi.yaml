@@ -28,6 +28,12 @@ tags:
     description: Quote-only B2B order lifecycle (ADR-0005).
   - name: Admin
     description: Administrator-only users/roles management (TZ §3.1 "Пользователи и роли").
+  - name: Media
+    description: >-
+      Catalog/content asset upload and controlled download (content.write
+      permission). The concrete object-storage provider is blocked on
+      Q-06/ADR-0006; the current implementation is a dev-only local-disk
+      stand-in behind the same StorageProvider port.
 security:
   - sessionCookie: []
 paths:
@@ -504,6 +510,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
 
+  /api/media:
+    post:
+      operationId: uploadMedia
+      summary: Upload a catalog/content media asset (content.write)
+      tags: [Media]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: The stored asset descriptor and a time-limited signed download URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaDescriptor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          description: >-
+            Rejected by validation (disallowed content type, extension
+            mismatch, signature mismatch, size limit) or malware scanning.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/media/download:
+    get:
+      operationId: downloadMedia
+      summary: Download a previously uploaded asset via a signed URL
+      tags: [Media]
+      security: []
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The file content.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '403':
+          description: Signature invalid, tampered with, or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -579,6 +652,17 @@ components:
           type: string
           enum: [ACTIVE, DISABLED]
         version: { type: integer }
+    MediaDescriptor:
+      type: object
+      required: [key, contentType, sizeBytes, checksumSha256, downloadUrl]
+      properties:
+        key: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        checksumSha256: { type: string }
+        downloadUrl:
+          type: string
+          description: Time-limited signed download URL (1 hour).
     ProductIndicativePrice:
       type: object
       description: >-

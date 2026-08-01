@@ -21,6 +21,13 @@ const envSchema = z.object({
   PUBLIC_ORIGIN: z.string().url().optional(),
   /** OTLP/HTTP traces endpoint (packages/infrastructure/src/telemetry.ts); tracing no-ops when unset. */
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  /**
+   * Dev-only local media storage (packages/infrastructure/src/
+   * local-storage-provider.ts) — the real S3-compatible provider is
+   * blocked on Q-06/ADR-0006. Required only when /api/media/* is used.
+   */
+  MEDIA_STORAGE_DIR: z.string().min(1).default('.var/media'),
+  MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

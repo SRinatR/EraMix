@@ -100,3 +100,19 @@ export interface EmailMessage {
 export interface EmailSender {
   send(message: EmailMessage): Promise<void>;
 }
+
+export interface MalwareScanResult {
+  readonly clean: boolean;
+  readonly signature?: string;
+}
+
+/**
+ * Malware-scanning integration point (CLAUDE.md: "malware scanning
+ * integration point"). The concrete scanner (hosted service or self-hosted
+ * ClamAV-equivalent) is blocked on Q-06/ADR-0006; this port lets upload
+ * validation require a scan result before a file is ever stored, without
+ * deciding the provider now.
+ */
+export interface MalwareScanner {
+  scan(content: Uint8Array): Promise<MalwareScanResult>;
+}

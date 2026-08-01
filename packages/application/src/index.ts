@@ -10,6 +10,8 @@ export type {
   StorageProvider,
   EmailMessage,
   EmailSender,
+  MalwareScanResult,
+  MalwareScanner,
 } from './ports.js';
 export { SystemClock } from './system-clock.js';
 export type {
@@ -60,3 +62,5 @@ export {
   listContentByType,
 } from './catalog-queries.js';
 export type { ProductSearchResult } from './catalog-queries.js';
+export { uploadMedia } from './uploads.js';
+export type { UploadMediaDeps, UploadMediaInput } from './uploads.js';
