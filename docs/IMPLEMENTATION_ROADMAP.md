@@ -320,6 +320,41 @@ Exit criteria:
   contrast, and reduced motion.
 - Catalog tests verify only published content is exposed.
 
+### Phase 3 status: catalog/content pages and API wired to real repositories; not statically prerendered, unauthenticated by design; accessibility/visual polish and media/documents not yet built
+
+Evidence, 2026-08-01:
+
+- **Public pages** (`apps/web/src/app/[locale]/`): `catalog` (category
+  index), `catalog/[slug]` (disambiguates category vs. product by the
+  `{publicId}-{slug}` shape — `packages/domain`'s `PUBLIC_ID_LENGTH`/
+  `isValidPublicId`, redirects via `resolveCategoryRoute`/
+  `resolveProductRoute`), `articles`, `articles/[slug]`, `pages/[slug]`,
+  `faq` (FAQ has no per-item route — `ContentRouteNamespace` only covers
+  `ARTICLES`/`PAGES`, so it is a single listing page, not invented per-item
+  URLs). All call `getContainer()`'s real `PrismaCategoryRepository`/
+  `PrismaProductRepository`/`PrismaContentRepository`, not fakes, and are
+  marked `export const dynamic = 'force-dynamic'` so `next build` never
+  needs a live database.
+- **API mirrors the same use cases**: `GET /api/catalog/categories`,
+  `/api/catalog/products` (the rate-limited search endpoint), `/api/catalog/
+products/{publicId}`, `/api/content/{type}` — all public (`security: []`
+  in the OpenAPI contract), all only ever return `PUBLISHED` items (the
+  application-layer `listCatalogCategories`/`listCatalogProducts`/
+  `listContentByType` queries filter by status at the repository layer, not
+  the delivery layer).
+- **Not yet built**: company information/certificates/instructions/contacts
+  pages (no such `Content`/`ContentType` beyond `ARTICLE`/`PAGE`/
+  `FAQ_ITEM` exists to back them — would need a product decision on
+  whether they're `PAGE`s or a new type, not invented here), product
+  media/document attachments (Phase 6 upload plumbing exists —
+  `packages/domain/src/upload-validation.ts`, `POST /api/media` — but no
+  `ProductAsset`-style association table or gallery UI), and any
+  accessibility-specific smoke test (keyboard nav/contrast/reduced-motion) —
+  the current pages are plain semantic HTML with no dedicated a11y test
+  pass. **Nothing here has touched a real PostgreSQL instance on this
+  laptop**; see the CI/Pi verification notes under Phase 7.
+  Do not treat this status block as Phase 3 completion — it is not.
+
 ## Phase 4 — ODS identity, session, RBAC, and account
 
 Deliver:
@@ -336,6 +371,45 @@ Exit criteria:
 - OIDC tests cover successful login, invalid state/nonce/signature, expired
   token, unknown claims, callback failure, logout, and JWKS refresh.
 - Negative permission tests prove that direct API calls cannot bypass RBAC.
+
+### Phase 4 status: generic OIDC PKCE flow + RBAC engine built and unit-verified against a real JWKS/signature stack; ODS-specific claim mapping remains blocked; account/profile UI not yet built
+
+Evidence, 2026-08-01:
+
+- **ADR-0014 (new, grounded in TZ §3.1's RBAC matrix, not invented)**: adds
+  `PlatformRole` (`CUSTOMER`/`MANAGER`/`CONTENT_EDITOR`/`ADMIN`/`AUDITOR`) to
+  `User`, migration `20260801180000_add_platform_role`.
+  `packages/application/src/authorization.ts` transcribes TZ §3.1 table 8's
+  resource×role matrix directly into `hasPermission`/`requirePermission`/
+  `assertOrderCompanyAccess` — 15 unit tests including the exact ORD-008
+  ("клиент видит только... заказы своей компании") boundary.
+- **Generic OIDC Authorization Code + PKCE** (`packages/infrastructure/src/
+oidc/`): `OidcIdentityProvider` implements the application-layer
+  `IdentityProvider` port using `.well-known/openid-configuration`
+  discovery, PKCE S256, and `jose`'s JWKS verification (issuer/audience/
+  signature/expiry). No ODS-specific issuer URL, endpoint, or claim name is
+  hardcoded anywhere — ADR-0003/Q-01 remain explicitly blocked, exactly per
+  that ADR's instruction not to implement against invented ODS values.
+  Verified against a **locally-generated RSA key pair and a fake IdP fetch
+  double** (no network, no ODS): successful callback with a
+  properly-signed token; rejected on state mismatch (CSRF), nonce mismatch
+  (replay), and a token signed by a key absent from the serving JWKS
+  (forged signature) — 7 tests. Session is a stateless, signed
+  (`SessionCodec`) HttpOnly cookie carrying only `{userId, platformRole,
+companyIds}`, never the raw OIDC tokens (CLAUDE.md: "Browser JavaScript
+  must not access access or refresh tokens").
+- **Server-side enforcement (IAM-008)**: every protected route handler
+  (`apps/web/src/app/api/**`) calls `requireActor`/`requirePermission`
+  before doing anything else; verified live (dev server, no session
+  cookie) that `POST /api/media` and `GET /api/orders` both 401 rather
+  than 200.
+- **Not yet built**: `/auth/login`→ODS redirect has never been exercised
+  against a real IdP (no ODS test tenant — Q-01), account dashboard/
+  profile/company views, onboarding/no-company state UI, and the OIDC
+  JWKS-rotation/expired-token/unknown-claims negative tests this phase's
+  own exit criteria name are only proven against the fake IdP double, not
+  a real ODS instance (cannot be, until Q-01 resolves).
+  Do not treat this status block as Phase 4 completion — it is not.
 
 ## Phase 5 — ordering and notifications
 
