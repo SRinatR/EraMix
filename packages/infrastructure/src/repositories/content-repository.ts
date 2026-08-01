@@ -147,6 +147,15 @@ export class PrismaContentRepository implements ContentRepository {
     );
     return routeToDomain(created);
   }
+
+  async listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).content.findMany({
+      where: { type, status: 'PUBLISHED' },
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy: { publishedAt: 'desc' },
+    });
+    return rows.map(toDomain);
+  }
 }
 
 function toDomain(row: ContentRowWithTranslations): ContentWithTranslations {

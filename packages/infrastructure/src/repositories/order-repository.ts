@@ -1,8 +1,10 @@
 import type { OrderRepository, OrderWithLines } from '@eramix/application';
 import {
   IdempotencyConflictError,
+  ResourceNotFoundError,
   type Order,
   type OrderLine,
+  type OrderStatus,
   type OrderStatusHistoryEntry,
 } from '@eramix/domain';
 import type {
@@ -11,7 +13,10 @@ import type {
   OrderStatusHistory as OrderStatusHistoryRow,
 } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
-import { withUniqueConstraintMapping } from '../prisma-error-mapping.js';
+import {
+  assertOptimisticLockAcquired,
+  withUniqueConstraintMapping,
+} from '../prisma-error-mapping.js';
 import { nullableJsonToRecord, nullToUndefined } from '../prisma-json.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -90,6 +95,130 @@ export class PrismaOrderRepository implements OrderRepository {
       },
     );
     return toDomain(row);
+  }
+
+  async listByCompany(companyId: string): Promise<readonly OrderWithLines[]> {
+    const rows = await resolveClient(this.prisma).order.findMany({
+      where: { companyId },
+      include: WITH_LINES_AND_HISTORY,
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(toDomain);
+  }
+
+  async listAll(): Promise<readonly OrderWithLines[]> {
+    const rows = await resolveClient(this.prisma).order.findMany({
+      include: WITH_LINES_AND_HISTORY,
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(toDomain);
+  }
+
+  async addLine(
+    orderId: string,
+    expectedVersion: number,
+    line: Omit<OrderLine, 'id' | 'orderId'>,
+  ): Promise<OrderWithLines> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.order.updateMany({
+      where: { id: orderId, version: expectedVersion },
+      data: { version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Order ${orderId} was modified by another operation (expected version ${expectedVersion}).`,
+      { orderId, expectedVersion },
+    );
+    await client.orderLine.create({
+      data: {
+        orderId,
+        productId: line.productId,
+        productNameSnapshot: line.productNameSnapshot,
+        productSkuSnapshot: line.productSkuSnapshot,
+        quantity: line.quantity,
+        note: line.note ?? null,
+      },
+    });
+    return this.requireById(orderId);
+  }
+
+  async removeLine(
+    orderId: string,
+    expectedVersion: number,
+    lineId: string,
+  ): Promise<OrderWithLines> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.order.updateMany({
+      where: { id: orderId, version: expectedVersion },
+      data: { version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Order ${orderId} was modified by another operation (expected version ${expectedVersion}).`,
+      { orderId, expectedVersion },
+    );
+    await client.orderLine.delete({ where: { id: lineId, orderId } });
+    return this.requireById(orderId);
+  }
+
+  async transitionStatus(
+    orderId: string,
+    expectedVersion: number,
+    input: {
+      readonly toStatus: OrderStatus;
+      readonly actorUserId?: string;
+      readonly reason?: string;
+      readonly idempotencyKey?: string;
+      readonly submittedAt?: Date;
+    },
+  ): Promise<OrderWithLines> {
+    const client = resolveClient(this.prisma);
+    const current = await client.order.findUnique({ where: { id: orderId } });
+    if (!current) {
+      throw new ResourceNotFoundError(`Order ${orderId} not found.`, { orderId });
+    }
+
+    const { count } = await withUniqueConstraintMapping(
+      () =>
+        client.order.updateMany({
+          where: { id: orderId, version: expectedVersion },
+          data: {
+            status: input.toStatus,
+            version: { increment: 1 },
+            ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
+            ...(input.submittedAt !== undefined ? { submittedAt: input.submittedAt } : {}),
+          },
+        }),
+      (meta) => {
+        throw new IdempotencyConflictError(
+          'This Idempotency-Key was already used for a different order.',
+          { orderId, prismaMeta: meta },
+        );
+      },
+    );
+    await assertOptimisticLockAcquired(
+      count,
+      `Order ${orderId} was modified by another operation (expected version ${expectedVersion}).`,
+      { orderId, expectedVersion },
+    );
+    await client.orderStatusHistory.create({
+      data: {
+        orderId,
+        fromStatus: current.status,
+        toStatus: input.toStatus,
+        actorUserId: input.actorUserId ?? null,
+        reason: input.reason ?? null,
+      },
+    });
+    return this.requireById(orderId);
+  }
+
+  private async requireById(orderId: string): Promise<OrderWithLines> {
+    const updated = await this.findById(orderId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Order ${orderId} not found after update.`, { orderId });
+    }
+    return updated;
   }
 }
 

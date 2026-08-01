@@ -5,3 +5,98 @@ export interface Clock {
 export interface UnitOfWork {
   runInTransaction<T>(work: () => Promise<T>): Promise<T>;
 }
+
+export interface IdGenerator {
+  nextId(): string;
+}
+
+/**
+ * Generic OIDC identity claims after token validation (signature, issuer,
+ * audience, expiry, nonce already checked by the adapter). Claim *names* are
+ * intentionally the standard OIDC Core ones (`sub`, `email`, `name`) — ODS's
+ * actual issuer/endpoint/claim contract is blocked on Q-01/ADR-0003. This
+ * port lets the generic RFC 9700 + OIDC Core PKCE flow (packages/
+ * infrastructure) be implemented and tested now against a documented test
+ * IdP double, and pointed at the real ODS issuer later without changing any
+ * call site.
+ */
+export interface OidcClaims {
+  readonly issuer: string;
+  readonly subject: string;
+  readonly email: string;
+  readonly displayName: string;
+}
+
+export interface PkceChallenge {
+  readonly codeVerifier: string;
+  readonly codeChallenge: string;
+  readonly codeChallengeMethod: 'S256';
+}
+
+export interface AuthorizationRequest {
+  readonly authorizationUrl: string;
+  readonly state: string;
+  readonly nonce: string;
+  readonly pkce: PkceChallenge;
+}
+
+/**
+ * Adapter boundary for the OIDC Authorization Code + PKCE flow. A concrete
+ * adapter (packages/infrastructure) wraps a standard OIDC client library
+ * against a configured issuer; a test double implements this same port
+ * against an in-memory/test IdP. No ODS-specific endpoint/claim assumption
+ * belongs on this interface.
+ */
+export interface IdentityProvider {
+  buildAuthorizationRequest(redirectUri: string): Promise<AuthorizationRequest>;
+  /**
+   * Exchanges the callback `code` for validated claims. Implementations must
+   * verify state, nonce, PKCE verifier, issuer, audience, signature (via
+   * JWKS), and expiration before returning — never return claims from an
+   * unverified token.
+   */
+  handleCallback(input: {
+    readonly code: string;
+    readonly state: string;
+    readonly expectedState: string;
+    readonly expectedNonce: string;
+    readonly codeVerifier: string;
+    readonly redirectUri: string;
+  }): Promise<OidcClaims>;
+}
+
+export interface UploadedFileDescriptor {
+  readonly key: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly checksumSha256: string;
+}
+
+/**
+ * Object-storage adapter boundary. The concrete provider (S3-compatible vs.
+ * something else) is blocked on Q-06/ADR-0006; this port lets upload
+ * validation (packages/application/src/uploads.ts) and controlled download
+ * URL issuance be implemented and tested against a local/dev adapter now.
+ */
+export interface StorageProvider {
+  put(key: string, content: Uint8Array, contentType: string): Promise<UploadedFileDescriptor>;
+  /** Time-limited, controlled download URL — never a permanently public object URL. */
+  createSignedDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
+  delete(key: string): Promise<void>;
+}
+
+export interface EmailMessage {
+  readonly to: string;
+  readonly subject: string;
+  readonly textBody: string;
+}
+
+/**
+ * Notification adapter boundary. The concrete provider is blocked on
+ * Q-06/ADR-0007; outbox dispatch (apps/worker) calls this port, never an
+ * email SDK directly, so the provider can be swapped without touching
+ * use-case code.
+ */
+export interface EmailSender {
+  send(message: EmailMessage): Promise<void>;
+}

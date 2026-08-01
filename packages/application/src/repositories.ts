@@ -12,8 +12,10 @@ import type {
   Membership,
   Order,
   OrderLine,
+  OrderStatus,
   OrderStatusHistoryEntry,
   OutboxMessage,
+  PlatformRole,
   Product,
   ProductTranslation,
   User,
@@ -35,6 +37,14 @@ export interface UserRepository {
   findById(id: string): Promise<User | undefined>;
   findByIssuerAndSubject(issuer: string, subject: string): Promise<User | undefined>;
   create(input: Omit<User, 'version' | 'createdAt' | 'updatedAt'>): Promise<User>;
+  /** Admin `users.manage` listing (Phase 6) — small MVP user base, no pagination yet. */
+  listAll(): Promise<readonly User[]>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updatePlatformRole(
+    id: string,
+    expectedVersion: number,
+    platformRole: PlatformRole,
+  ): Promise<User>;
 }
 
 export interface CompanyRepository {
@@ -70,6 +80,9 @@ export interface CategoryRepository {
   setCanonicalRoute(
     route: Omit<CategoryRoute, 'id' | 'createdAt' | 'isCanonical'>,
   ): Promise<CategoryRoute>;
+  /** PUBLISHED categories only — catalog browse and sitemap generation. */
+  listPublished(): Promise<readonly CategoryWithTranslations[]>;
+  listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]>;
 }
 
 export interface ProductWithTranslations extends Product {
@@ -90,6 +103,14 @@ export interface ProductRepository {
     expectedVersion: number,
     status: Product['status'],
   ): Promise<ProductWithTranslations>;
+  /** PUBLISHED products only, optionally scoped to a category — catalog browse/search and sitemap generation. */
+  listPublished(input: {
+    categoryId?: string;
+    search?: string;
+    limit: number;
+    offset: number;
+  }): Promise<readonly ProductWithTranslations[]>;
+  countPublished(input: { categoryId?: string; search?: string }): Promise<number>;
 }
 
 export interface ContentWithTranslations extends Content {
@@ -127,6 +148,8 @@ export interface ContentRepository {
   setCanonicalRoute(
     route: Omit<ContentRoute, 'id' | 'createdAt' | 'isCanonical'>,
   ): Promise<ContentRoute>;
+  /** PUBLISHED content only, scoped to a type — public listing (e.g. FAQ, article index) and sitemap generation. */
+  listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]>;
 }
 
 export interface OrderWithLines extends Order {
@@ -138,9 +161,35 @@ export interface OrderRepository {
   findById(id: string): Promise<OrderWithLines | undefined>;
   findByOrderNumber(orderNumber: string): Promise<OrderWithLines | undefined>;
   findByIdempotencyKey(idempotencyKey: string): Promise<OrderWithLines | undefined>;
+  /** Manager/admin queue (`order.read.all`) — small MVP volume, no pagination yet. */
+  listByCompany(companyId: string): Promise<readonly OrderWithLines[]>;
+  listAll(): Promise<readonly OrderWithLines[]>;
   create(
     order: Omit<Order, 'version' | 'createdAt' | 'updatedAt'>,
     lines: readonly Omit<OrderLine, 'id'>[],
+  ): Promise<OrderWithLines>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. DRAFT-only line mutation (ORD-006). */
+  addLine(
+    orderId: string,
+    expectedVersion: number,
+    line: Omit<OrderLine, 'id' | 'orderId'>,
+  ): Promise<OrderWithLines>;
+  removeLine(orderId: string, expectedVersion: number, lineId: string): Promise<OrderWithLines>;
+  /**
+   * Appends an OrderStatusHistory row and updates `status` (plus optionally
+   * `idempotencyKey`/`submittedAt` for the DRAFT->SUBMITTED transition)
+   * atomically. Throws ConcurrencyConflictError on a stale expectedVersion.
+   */
+  transitionStatus(
+    orderId: string,
+    expectedVersion: number,
+    input: {
+      readonly toStatus: OrderStatus;
+      readonly actorUserId?: string;
+      readonly reason?: string;
+      readonly idempotencyKey?: string;
+      readonly submittedAt?: Date;
+    },
   ): Promise<OrderWithLines>;
 }
 

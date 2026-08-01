@@ -96,6 +96,44 @@ export class PrismaProductRepository implements ProductRepository {
     }
     return updated;
   }
+
+  async listPublished(input: {
+    categoryId?: string;
+    search?: string;
+    limit: number;
+    offset: number;
+  }): Promise<readonly ProductWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).product.findMany({
+      where: buildPublishedWhere(input),
+      include: WITH_TRANSLATIONS,
+      orderBy: { createdAt: 'desc' },
+      take: input.limit,
+      skip: input.offset,
+    });
+    return rows.map(toDomain);
+  }
+
+  async countPublished(input: { categoryId?: string; search?: string }): Promise<number> {
+    return resolveClient(this.prisma).product.count({ where: buildPublishedWhere(input) });
+  }
+}
+
+function buildPublishedWhere(input: { categoryId?: string; search?: string }) {
+  const search = input.search;
+  return {
+    status: 'PUBLISHED' as const,
+    ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+    ...(search !== undefined && search.length > 0
+      ? {
+          OR: [
+            { sku: { contains: search, mode: 'insensitive' as const } },
+            {
+              translations: { some: { name: { contains: search, mode: 'insensitive' as const } } },
+            },
+          ],
+        }
+      : {}),
+  };
 }
 
 function toDomain(row: ProductRowWithTranslations): ProductWithTranslations {

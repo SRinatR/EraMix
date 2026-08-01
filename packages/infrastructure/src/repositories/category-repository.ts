@@ -131,6 +131,24 @@ export class PrismaCategoryRepository implements CategoryRepository {
     );
     return toDomain(row);
   }
+
+  async listPublished(): Promise<readonly CategoryWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).category.findMany({
+      where: { status: 'PUBLISHED' },
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map(toDomain);
+  }
+
+  async listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).category.findMany({
+      where: { status: 'PUBLISHED', parentId: parentId ?? null },
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map(toDomain);
+  }
 }
 
 function toDomain(row: CategoryRowWithTranslations): CategoryWithTranslations {

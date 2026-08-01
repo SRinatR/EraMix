@@ -8,6 +8,8 @@ import type { LocaleCode } from './locale.js';
 
 export type PublicationStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type UserStatus = 'ACTIVE' | 'DISABLED';
+/** See ADR-0014 (TZ §3.1 RBAC matrix). Distinct from CompanyRole. */
+export type PlatformRole = 'CUSTOMER' | 'MANAGER' | 'CONTENT_EDITOR' | 'ADMIN' | 'AUDITOR';
 export type CompanyStatus = 'ACTIVE' | 'SUSPENDED';
 export type CompanyRole = 'OWNER' | 'MEMBER';
 export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'REVOKED';
@@ -44,6 +46,7 @@ export interface User extends Versioned, Timestamped {
   readonly email: string;
   readonly displayName: string;
   readonly status: UserStatus;
+  readonly platformRole: PlatformRole;
 }
 
 export interface Company extends Versioned, Timestamped {

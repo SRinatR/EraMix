@@ -76,6 +76,18 @@ enum UserStatus {
   DISABLED
 }
 
+/// Platform-wide staff/customer role — see ADR-0014 (grounded in TZ §3.1's
+/// RBAC matrix: Клиент/Менеджер/Редактор/Администратор + Auditor). Distinct
+/// from CompanyRole, which is company-scoped (OWNER/MEMBER within one
+/// Membership row).
+enum PlatformRole {
+  CUSTOMER
+  MANAGER
+  CONTENT_EDITOR
+  ADMIN
+  AUDITOR
+}
+
 enum CompanyStatus {
   ACTIVE
   SUSPENDED
@@ -131,6 +143,9 @@ model User {
   email       String   @db.VarChar(320)
   displayName String   @db.VarChar(255)
   status      UserStatus @default(ACTIVE)
+  /// See ADR-0014. Defaults to CUSTOMER; promotion to staff roles is an
+  /// explicit admin `users.manage` action, never inferred from an OIDC claim.
+  platformRole PlatformRole @default(CUSTOMER)
 
   memberships        Membership[]
   createdOrders      Order[]              @relation("OrderCreatedBy")

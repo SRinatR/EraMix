@@ -32,6 +32,7 @@ export type {
   Timestamped,
   PublicationStatus,
   UserStatus,
+  PlatformRole,
   CompanyStatus,
   CompanyRole,
   MembershipStatus,

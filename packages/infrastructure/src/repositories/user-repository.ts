@@ -1,7 +1,8 @@
 import type { UserRepository } from '@eramix/application';
-import type { User } from '@eramix/domain';
+import { ResourceNotFoundError, type PlatformRole, type User } from '@eramix/domain';
 import type { User as UserRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
+import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
 
 export class PrismaUserRepository implements UserRepository {
@@ -28,9 +29,37 @@ export class PrismaUserRepository implements UserRepository {
         email: input.email,
         displayName: input.displayName,
         status: input.status,
+        platformRole: input.platformRole,
       },
     });
     return toDomain(row);
+  }
+
+  async listAll(): Promise<readonly User[]> {
+    const rows = await resolveClient(this.prisma).user.findMany({ orderBy: { createdAt: 'asc' } });
+    return rows.map(toDomain);
+  }
+
+  async updatePlatformRole(
+    id: string,
+    expectedVersion: number,
+    platformRole: PlatformRole,
+  ): Promise<User> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.user.updateMany({
+      where: { id, version: expectedVersion },
+      data: { platformRole, version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `User ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await resolveClient(this.prisma).user.findUnique({ where: { id } });
+    if (!updated) {
+      throw new ResourceNotFoundError(`User ${id} not found after update.`, { id });
+    }
+    return toDomain(updated);
   }
 }
 
@@ -42,6 +71,7 @@ function toDomain(row: UserRow): User {
     email: row.email,
     displayName: row.displayName,
     status: row.status,
+    platformRole: row.platformRole,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,
