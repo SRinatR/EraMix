@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - name: Enable Corepack
         run: corepack enable
       - name: Install dependencies with a frozen, verified lockfile
@@ -38,6 +39,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - run: corepack enable
       - uses: actions/cache/restore@v4
         with:
@@ -59,6 +61,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - run: corepack enable
       - uses: actions/cache/restore@v4
         with:
@@ -78,6 +81,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - run: corepack enable
       - uses: actions/cache/restore@v4
         with:
@@ -99,6 +103,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - run: corepack enable
       - uses: actions/cache/restore@v4
         with:
@@ -146,6 +151,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.node-version'
+          package-manager-cache: false
       - run: corepack enable
       - uses: actions/cache/restore@v4
         with:
