@@ -574,8 +574,8 @@ rate-limit.ts`. Verified live: 10 requests to `/api/auth/login` succeed
 - **CI now actually executes** — this is new evidence, not merely
   "configured but unproven" as Phase 0 left it (no git remote existed
   before this session). Getting a _first_ successful run required finding
-  and fixing three distinct, real, independently-verified bugs (full
-  diagnosis trail in ADR-0011's addendum), none of them fabricated or
+  and fixing four distinct, real, independently-verified issues (full
+  diagnosis trail in ADR-0011's two addenda), none of them fabricated or
   guessed — each was root-caused against the actual failing GitHub Actions
   log before the next fix was attempted:
   1. `actions/setup-node@v5`'s new `package-manager-cache: true` default
@@ -592,6 +592,10 @@ rate-limit.ts`. Verified live: 10 requests to `/api/auth/login` succeed
      fixed by pinning both to slightly older, equally-current versions
      (`jose@6.2.5`, `@types/pg@8.20.0` via a `pnpm-workspace.yaml`
      override), not by weakening the policy.
+  4. `actions/cache` round-tripping `node_modules` across jobs reported a
+     cache hit but then failed tar extraction — switched to the standard
+     pnpm+CI pattern of caching pnpm's own store instead and letting every
+     job run its own (fast, store-cached) `pnpm install --frozen-lockfile`.
      New CI jobs added and exercised for the first time on GitHub's own cloud
      runners (never this laptop, never the Pi): `security` (`pnpm audit` at
      the ADR-0015-documented `critical` threshold + `gitleaks` secret scan),

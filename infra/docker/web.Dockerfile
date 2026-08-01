@@ -1,15 +1,15 @@
+# syntax=docker/dockerfile:1
+#
 # apps/web production image.
 #
-# UNVERIFIED: this file has never been built or run — the laptop this was
-# authored on has no Docker available (CLAUDE.md/session policy). Build and
-# run it for the first time in the authorized Docker-capable session (the
-# Raspberry Pi) before relying on it, per docs/IMPLEMENTATION_ROADMAP.md's
-# Phase 7 exit criteria ("CI blocks release... staging smoke and production
-# promotion evidence are retained").
+# UNVERIFIED locally: no Docker on the authoring laptop (CLAUDE.md/session
+# policy) — first built and exercised by CI's docker-build job
+# (.github/workflows/ci.yml), not this laptop or the Pi. Run it for the
+# first time against a real deployment target in the authorized
+# Docker-capable session before relying on it there.
 #
 # Build from the repository root:
 #   docker build -f infra/docker/web.Dockerfile -t eramix-web .
-syntax=docker/dockerfile:1
 
 FROM node:24.18.1-alpine AS base
 # Prisma's query engine (packages/infrastructure/prisma/schema.prisma

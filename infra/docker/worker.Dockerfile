@@ -1,12 +1,14 @@
+# syntax=docker/dockerfile:1
+#
 # apps/worker (transactional outbox dispatcher) production image.
 #
-# UNVERIFIED: never built or run — see infra/docker/web.Dockerfile's header
-# for why (no Docker on the authoring laptop). Verify in the authorized
-# Docker-capable session before relying on it.
+# UNVERIFIED locally: no Docker on the authoring laptop — see
+# infra/docker/web.Dockerfile's header. First built by CI's docker-build
+# job, not this laptop or the Pi. Verify against a real deployment target
+# in the authorized Docker-capable session before relying on it there.
 #
 # Build from the repository root:
 #   docker build -f infra/docker/worker.Dockerfile -t eramix-worker .
-syntax=docker/dockerfile:1
 
 FROM node:24.18.1-alpine AS base
 RUN apk add --no-cache libc6-compat openssl

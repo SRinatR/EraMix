@@ -9,6 +9,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `prisma generate` (via db:generate) requires DATABASE_URL to be resolvable
+# even though it never connects — prisma.config.ts's env('DATABASE_URL')
+# throws if the variable is entirely unset. This placeholder is never used
+# to actually reach a database in jobs that don't also define a postgres
+# service (only db-migration does, and its job-level env below overrides
+# this workflow-level default).
+env:
+  DATABASE_URL: postgresql://eramix:eramix_ci@localhost:5432/eramix
+
 jobs:
   install:
     name: Clean install (pnpm 12 beta risk gate)
@@ -61,6 +70,11 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
+      # packages/infrastructure/src/generated/ is gitignored (Prisma's own
+      # generated output, per Prisma 7's explicit-output-path requirement)
+      # — every job that builds/tests/typechecks it must regenerate it
+      # first, offline, no database connection required.
+      - run: pnpm --filter @eramix/infrastructure run db:generate
       - run: pnpm run format
       - run: pnpm run lint
       - run: pnpm run typecheck
@@ -85,6 +99,7 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @eramix/infrastructure run db:generate
       - run: pnpm run test
 
   build:
@@ -107,6 +122,7 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @eramix/infrastructure run db:generate
       - run: pnpm run build
 
   security:
@@ -181,6 +197,7 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @eramix/infrastructure run db:generate
       - name: Apply migrations from empty (Phase 1 exit criterion)
         run: pnpm --filter @eramix/infrastructure run db:migrate:deploy
       - name: Real-PostgreSQL repository/transaction integration tests

@@ -129,3 +129,39 @@ runner, not the already-warmed local dev cache).
 pnpm v12 GA ships with a working Corepack fetch path), try reverting CI to
 `corepack enable` + `corepack prepare pnpm@<version> --activate` and delete
 this addendum if it now passes.
+
+## Addendum 2, same session: two more independent issues found getting the _first_ green CI run
+
+Fixing the Corepack issue above only got the `install` job itself green.
+Two further, unrelated issues surfaced immediately after, each fixed before
+moving to the next (evidence, not guesses):
+
+1. **pnpm 12's new `minimumReleaseAge` supply-chain policy** (a genuine
+   security feature, not a bug) rejected `jose@6.2.6` (published
+   2026-07-31T19:04) and a _transitive_ `@types/pg@8.20.3` (published
+   2026-08-01T06:19, pulled in by the exact-pinned, mandatory
+   `@prisma/adapter-pg@7.9.1` regardless of this workspace's own
+   `@types/pg` devDependency choice) as both published within 24h of the
+   CI run. Fixed by pinning `jose@6.2.5` and adding a
+   `pnpm-workspace.yaml` `overrides: { '@types/pg': 8.20.0 }` (both
+   comfortably older, type-declarations-only for the latter, no runtime
+   behavior change) — not by weakening the policy.
+2. **`actions/cache/save@v4` + `actions/cache/restore@v4` round-tripping
+   `node_modules`/`**/node_modules` across jobs failed** — the restore step
+   reported a cache **hit**, then tar extraction itself failed
+   (`"/usr/bin/tar" failed with error: ... exit code 2`), reproducibly, in
+   every downstream job. Root cause not fully isolated (plausibly pnpm's
+   isolated-linker symlink-heavy `node_modules` layout not round-tripping
+   through the cache action's tar archive format) — rather than keep
+   debugging tar/symlink serialization, switched to the standard,
+   documented pnpm+CI caching pattern instead: cache pnpm's own
+   content-addressable **store** (keyed on `pnpm-lock.yaml`'s hash) and let
+   every job run its own `pnpm install --frozen-lockfile` (fast, since
+   packages are already in the cached store). This sidesteps cross-job
+   `node_modules` serialization entirely rather than working around it.
+
+Net result: getting the very first real, green CI run on this repository
+required finding and fixing **four** independent, evidence-based issues
+(the original Corepack bug plus these two, plus the `package-manager-cache`
+default from Addendum 1) — none of them guessed, none bypassed/hidden, each
+verified against the actual failing log before moving to the next.
