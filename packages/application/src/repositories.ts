@@ -83,6 +83,14 @@ export interface CategoryRepository {
   /** PUBLISHED categories only — catalog browse and sitemap generation. */
   listPublished(): Promise<readonly CategoryWithTranslations[]>;
   listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing only, small MVP volume, no pagination yet. */
+  listAll(): Promise<readonly CategoryWithTranslations[]>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Category['status'],
+  ): Promise<CategoryWithTranslations>;
 }
 
 export interface ProductWithTranslations extends Product {
@@ -111,6 +119,8 @@ export interface ProductRepository {
     offset: number;
   }): Promise<readonly ProductWithTranslations[]>;
   countPublished(input: { categoryId?: string; search?: string }): Promise<number>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing only, small MVP volume, no pagination yet. */
+  listAll(): Promise<readonly ProductWithTranslations[]>;
 }
 
 export interface ContentWithTranslations extends Content {
@@ -150,6 +160,14 @@ export interface ContentRepository {
   ): Promise<ContentRoute>;
   /** PUBLISHED content only, scoped to a type — public listing (e.g. FAQ, article index) and sitemap generation. */
   listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED), all types — admin content listing only, small MVP volume, no pagination yet. */
+  listAll(): Promise<readonly ContentWithTranslations[]>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Content['status'],
+  ): Promise<ContentWithTranslations>;
 }
 
 export interface OrderWithLines extends Order {

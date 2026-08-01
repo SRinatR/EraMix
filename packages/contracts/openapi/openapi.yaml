@@ -510,6 +510,162 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
 
+  /api/admin/categories/{categoryId}/status:
+    patch:
+      operationId: transitionCategoryStatus
+      summary: >-
+        Transition a category's publication status (catalog.write —
+        Administrator only). Publishing validates that every translation has
+        seoTitle, seoDescription, and a canonical route first (Phase 6 exit
+        criterion); unpublishing (DRAFT/ARCHIVED) is never gated.
+      tags: [Admin]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationStatusUpdate'
+      responses:
+        '200':
+          description: The updated category status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or (publishing) a missing SEO field/canonical route.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content/{contentId}/status:
+    patch:
+      operationId: transitionContentStatus
+      summary: >-
+        Transition a content item's publication status (content.write —
+        Administrator/Content editor). Same publish gate as categories.
+      tags: [Admin]
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationStatusUpdate'
+      responses:
+        '200':
+          description: The updated content status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or (publishing) a missing SEO field/canonical route.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products/{productId}/status:
+    patch:
+      operationId: transitionProductStatus
+      summary: >-
+        Transition a product's publication status (catalog.write —
+        Administrator only). Publishing validates that every translation has
+        a slug, seoTitle, and seoDescription first.
+      tags: [Admin]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationStatusUpdate'
+      responses:
+        '200':
+          description: The updated product status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or (publishing) a missing SEO field/canonical route.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/audit:
+    get:
+      operationId: searchAuditEvents
+      summary: >-
+        Search audit events for one entity (audit.read.limited or
+        audit.read.full — Manager/Administrator/Auditor).
+      tags: [Admin]
+      parameters:
+        - name: entityType
+          in: query
+          required: true
+          schema: { type: string }
+        - name: entityId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Audit events for the given entity, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -652,6 +808,41 @@ components:
           type: string
           enum: [ACTIVE, DISABLED]
         version: { type: integer }
+    PublicationStatus:
+      type: string
+      description: >-
+        Category/Content/Product lifecycle status. Publishing is gated
+        (Phase 6 exit criterion: required SEO fields, canonical route, and
+        slug uniqueness must hold first); DRAFT/ARCHIVED are never gated.
+      enum: [DRAFT, PUBLISHED, ARCHIVED]
+    PublicationStatusUpdate:
+      type: object
+      required: [toStatus, expectedVersion]
+      properties:
+        toStatus:
+          $ref: '#/components/schemas/PublicationStatus'
+        expectedVersion: { type: integer }
+    PublicationTransitionResult:
+      type: object
+      required: [id, status, version]
+      properties:
+        id: { type: string }
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        version: { type: integer }
+    AuditEvent:
+      type: object
+      required: [id, action, entityType, entityId, createdAt]
+      properties:
+        id: { type: string }
+        actorUserId: { type: string }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
     MediaDescriptor:
       type: object
       required: [key, contentType, sizeBytes, checksumSha256, downloadUrl]

@@ -116,6 +116,14 @@ export class PrismaProductRepository implements ProductRepository {
   async countPublished(input: { categoryId?: string; search?: string }): Promise<number> {
     return resolveClient(this.prisma).product.count({ where: buildPublishedWhere(input) });
   }
+
+  async listAll(): Promise<readonly ProductWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).product.findMany({
+      include: WITH_TRANSLATIONS,
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(toDomain);
+  }
 }
 
 function buildPublishedWhere(input: { categoryId?: string; search?: string }) {

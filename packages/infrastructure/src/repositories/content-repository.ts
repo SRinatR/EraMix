@@ -1,5 +1,6 @@
 import type { ContentRepository, ContentWithTranslations } from '@eramix/application';
 import {
+  ResourceNotFoundError,
   SlugConflictError,
   type Content,
   type ContentRoute,
@@ -13,7 +14,10 @@ import type {
   ContentTranslation as ContentTranslationRow,
 } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
-import { withUniqueConstraintMapping } from '../prisma-error-mapping.js';
+import {
+  assertOptimisticLockAcquired,
+  withUniqueConstraintMapping,
+} from '../prisma-error-mapping.js';
 import { nullToUndefined } from '../prisma-json.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -148,11 +152,45 @@ export class PrismaContentRepository implements ContentRepository {
     return routeToDomain(created);
   }
 
+  async updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Content['status'],
+  ): Promise<ContentWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.content.updateMany({
+      where: { id, version: expectedVersion },
+      data: {
+        status,
+        version: { increment: 1 },
+        ...(status === 'PUBLISHED' ? { publishedAt: new Date() } : {}),
+      },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Content ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Content ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+
   async listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]> {
     const rows = await resolveClient(this.prisma).content.findMany({
       where: { type, status: 'PUBLISHED' },
       include: WITH_TRANSLATIONS_AND_ROUTES,
       orderBy: { publishedAt: 'desc' },
+    });
+    return rows.map(toDomain);
+  }
+
+  async listAll(): Promise<readonly ContentWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).content.findMany({
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy: { createdAt: 'desc' },
     });
     return rows.map(toDomain);
   }

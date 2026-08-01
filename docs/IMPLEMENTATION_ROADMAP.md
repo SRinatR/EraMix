@@ -492,15 +492,50 @@ Exit criteria:
 - Publication validates required SEO fields, canonical route, links, and slug
   uniqueness before it becomes public.
 
-### Phase 6 status: users/roles admin API + upload/media pipeline built; catalog/content/orders admin CRUD, publication workflow, and any admin UI are not yet built
+### Phase 6 status: users/roles, publication workflow, status-transition admin CRUD, upload/media pipeline, and audit search UI are built; create/edit forms for new categories/products/content translations are not
 
-Evidence, 2026-08-01:
+Evidence, 2026-08-02:
 
 - **Users/roles** (TZ §3.1 "Пользователи и роли: CRUD" — Admin only):
   `GET /api/admin/users`, `PATCH /api/admin/users/{userId}/role` both
   `requirePermission(actor.platformRole, 'users.manage')` (only `ADMIN`
   holds it per `authorization.ts`), rate-limited, audit-logged
-  (`user.platform_role_changed` with before/after role).
+  (`user.platform_role_changed` with before/after role). UI at
+  `/admin/users`.
+- **Publication workflow** (`packages/application/src/publication.ts`,
+  12 unit tests) — the exit criterion this phase names: `transition
+  CategoryStatus`/`transitionContentStatus`/`transitionProductStatus`
+  each require the resource-appropriate permission (`catalog.write` for
+  Category/Product, `content.write` for Content), then, only when the
+  target status is `PUBLISHED`, verify every existing translation has
+  `seoTitle`, `seoDescription`, and (Category/Content) a canonical route,
+  or (Product) a non-empty `slug` — throwing `ValidationFailedError`
+  (422) otherwise. Transitions to `DRAFT`/`ARCHIVED` are never gated (an
+  editor must always be able to unpublish). Each transition runs in one
+  `UnitOfWork` transaction with the `updateStatus` optimistic-concurrency
+  write (new `CategoryRepository.updateStatus`/`ContentRepository.
+  updateStatus` — mirroring the pre-existing `ProductRepository.
+  updateStatus` — both throw `ConcurrencyConflictError`/409 on a stale
+  `expectedVersion`), an audit record (`category.status_changed`/
+  `content.status_changed`/`product.status_changed` with before/after
+  status), and an outbox message, exactly like `changeContentSlug`/
+  `changeCategorySlug` (Phase 2). Wired to `PATCH /api/admin/categories/
+  {categoryId}/status`, `PATCH /api/admin/content/{contentId}/status`,
+  `PATCH /api/admin/products/{productId}/status` (all rate-limited,
+  `requireActor`-gated, documented in `packages/contracts/openapi/
+  openapi.yaml`) and to a shared `TransitionStatusForm` client component
+  used by the new `/admin/catalog` (categories + products) and
+  `/admin/content` admin pages. `CategoryRepository`/`ContentRepository`/
+  `ProductRepository` each gained a `listAll()` method (all statuses, no
+  pagination — small MVP volume, same pattern as `UserRepository.
+  listAll`) so these admin pages can show DRAFT/ARCHIVED items, not only
+  what the public `listPublished` methods expose.
+- **Audit search UI**: `GET /api/admin/audit?entityType=&entityId=`
+  (`audit.read.limited` or `audit.read.full`) wraps the existing
+  `AuditEventRepository.listByEntity` — entity-scoped search only, there
+  is still no list-everything method — and a plain-HTML-form
+  `/admin/audit` Server Component page (no client JS needed) renders the
+  results table.
 - **Upload validation + media pipeline** (`packages/domain/src/
 upload-validation.ts`, `packages/application/src/uploads.ts`): allowlisted
   MIME/extension/magic-byte-signature checks for jpeg/png/webp/pdf, a
@@ -516,18 +551,16 @@ upload-validation.ts`, `packages/application/src/uploads.ts`): allowlisted
   scanner remain the documented dev-only stand-ins (`LocalFilesystemStorageProvider`,
   `DevMalwareScanner`) pending ADR-0006/Q-06 — never to be used in
   production as-is.
-- **Not yet built**: catalog/content admin CRUD (create/edit/archive a
-  Category/Product/Content/translation through an authenticated surface —
-  currently only Phase 1's repository `create` methods and Phase 2's
-  `changeContentSlug`/`changeCategorySlug` use cases exist, with no route
-  handler or UI calling them), the publication workflow this phase's exit
-  criteria explicitly name (required-SEO-field/canonical-route/slug-
-  uniqueness validation _before_ a translation becomes public — no such
-  gate exists yet; today `status: 'PUBLISHED'` is just a column any
-  direct repository call could set), audit search UI (audit events are
-  recorded and queryable via `AuditEventRepository.listByEntity`, but no
-  route/page exposes a search), and any admin dashboard UI at all.
-  Do not treat this status block as Phase 6 completion — it is not.
+- **Not yet built**: creating a brand-new Category/Product/Content item
+  (with its first translation(s) and initial canonical route) through an
+  authenticated UI — Phase 1's repository `create` methods and Phase 2's
+  `changeContentSlug`/`changeCategorySlug` use cases exist and are now
+  reachable for *editing an existing* item's slug/status, but there is no
+  route handler or form to author a new one, or to add/edit a translation
+  on an existing item. Admin E2E (role-specific access + protected-action
+  proof) also remains unbuilt (see Phase 8 — no browser-driven test exists
+  in this repository yet). Do not treat this status block as Phase 6
+  completion — it is not.
 
 ## Phase 7 — observability, security, infrastructure, and CI/CD
 

@@ -92,6 +92,14 @@ class InMemoryContentRepository implements ContentRepository {
     return Promise.resolve([...this.contents.values()].filter((c) => c.status === 'PUBLISHED'));
   }
 
+  updateStatus(): Promise<ContentWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  listAll(): Promise<readonly ContentWithTranslations[]> {
+    throw new Error('not needed for these tests');
+  }
+
   async setCanonicalRoute(
     route: Omit<ContentRoute, 'id' | 'createdAt' | 'isCanonical'>,
   ): Promise<ContentRoute> {
@@ -297,6 +305,12 @@ describe('resolveContentRoute', () => {
         throw new Error('not needed for this test');
       },
       listPublished: () => Promise.resolve([]),
+      updateStatus: () => {
+        throw new Error('not needed for this test');
+      },
+      listAll: () => {
+        throw new Error('not needed for this test');
+      },
     };
 
     await expect(
@@ -338,6 +352,10 @@ class InMemoryProductRepository implements ProductRepository {
 
   countPublished(): Promise<number> {
     return Promise.resolve(this.product ? 1 : 0);
+  }
+
+  listAll(): Promise<readonly (Product & { translations: ProductTranslation[] })[]> {
+    throw new Error('not needed for these tests');
   }
 }
 
@@ -439,6 +457,12 @@ describe('CanonicalRouteMissingError', () => {
         throw new Error('not needed for this test');
       },
       listPublished: () => Promise.resolve([]),
+      updateStatus: () => {
+        throw new Error('not needed for this test');
+      },
+      listAll: () => {
+        throw new Error('not needed for this test');
+      },
     };
 
     await expect(resolveContentRoute(brokenRepo, 'ARTICLES', 'en', 'orphaned')).rejects.toThrow(

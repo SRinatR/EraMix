@@ -1,5 +1,6 @@
 import type { CategoryRepository, CategoryWithTranslations } from '@eramix/application';
 import {
+  ResourceNotFoundError,
   SlugConflictError,
   type Category,
   type CategoryRoute,
@@ -12,7 +13,10 @@ import type {
   CategoryTranslation as CategoryTranslationRow,
 } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
-import { withUniqueConstraintMapping } from '../prisma-error-mapping.js';
+import {
+  assertOptimisticLockAcquired,
+  withUniqueConstraintMapping,
+} from '../prisma-error-mapping.js';
 import { nullToUndefined } from '../prisma-json.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -132,6 +136,28 @@ export class PrismaCategoryRepository implements CategoryRepository {
     return toDomain(row);
   }
 
+  async updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Category['status'],
+  ): Promise<CategoryWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.category.updateMany({
+      where: { id, version: expectedVersion },
+      data: { status, version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Category ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Category ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+
   async listPublished(): Promise<readonly CategoryWithTranslations[]> {
     const rows = await resolveClient(this.prisma).category.findMany({
       where: { status: 'PUBLISHED' },
@@ -144,6 +170,14 @@ export class PrismaCategoryRepository implements CategoryRepository {
   async listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]> {
     const rows = await resolveClient(this.prisma).category.findMany({
       where: { status: 'PUBLISHED', parentId: parentId ?? null },
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map(toDomain);
+  }
+
+  async listAll(): Promise<readonly CategoryWithTranslations[]> {
+    const rows = await resolveClient(this.prisma).category.findMany({
       include: WITH_TRANSLATIONS_AND_ROUTES,
       orderBy: { sortOrder: 'asc' },
     });

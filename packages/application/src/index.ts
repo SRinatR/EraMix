@@ -47,6 +47,12 @@ export { buildAlternateLinks } from './metadata.js';
 export type { AlternateLinks } from './metadata.js';
 export { changeContentSlug, changeCategorySlug } from './slug-change.js';
 export {
+  transitionCategoryStatus,
+  transitionContentStatus,
+  transitionProductStatus,
+} from './publication.js';
+export type { TransitionStatusInput } from './publication.js';
+export {
   createDraftOrder,
   addOrderLine,
   removeOrderLine,
