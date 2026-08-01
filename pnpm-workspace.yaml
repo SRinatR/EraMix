@@ -1,6 +1,15 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+overrides:
+  # @prisma/adapter-pg@7.9.1 (exact-pinned, mandatory) brings in
+  # @types/pg@8.20.3 as its own dependency, published <24h before a CI run
+  # and rejected by pnpm 12's minimumReleaseAge supply-chain policy — see
+  # docs/adr/0011-pnpm-12-beta-risk.md. This is type-declarations-only (no
+  # runtime behavior), so forcing the whole tree to the same
+  # already-pinned, age-safe @types/pg@8.20.0 this workspace's own
+  # devDependency uses is safe and keeps a single resolved version.
+  '@types/pg': 8.20.0
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/engines': true

@@ -430,6 +430,50 @@ Exit criteria:
   behaviour.
 - Every status transition has a reason/actor/audit record where required.
 
+### Phase 5 status: order lifecycle, state machine, and outbox notification worker built and unit-verified; no E2E (browser-driven) tests, real Postgres unverified on this laptop
+
+Evidence, 2026-08-01:
+
+- **State machine** (`packages/application/src/order-lifecycle.ts`):
+  `ALLOWED_ORDER_TRANSITIONS` implements the roadmap's own named sequence
+  (DRAFT→SUBMITTED→UNDER_REVIEW→WAITING_CONFIRMATION→CONFIRMED→
+  IN_PREPARATION→READY_FOR_PICKUP|READY_FOR_DELIVERY→COMPLETED), CANCELLED
+  reachable from every non-terminal state; ORD-006 (no direct line edits
+  once SUBMITTED), ORD-007 (state machine + role + version + required
+  data), ORD-008 (company isolation), ORD-010 (customer cancellation only
+  pre-CONFIRMED; manager-only + reason required after) are each a named,
+  passing test, including the literal TZ wording ("недопустимый переход
+  возвращает RFC 9457 conflict").
+- **Idempotent submit**: `submitOrder` treats a replayed Idempotency-Key
+  against the same order as a no-op (returns the existing order, no second
+  transition/outbox event) and a reused key against a _different_ order as
+  `IdempotencyConflictError` — both are dedicated tests. Delivery layer
+  (`POST /api/orders/by-id/{orderId}/submit`) requires the header and
+  rate-limits the endpoint per CLAUDE.md's named "order submission" surface.
+- **Transactional outbox + notification worker**: `apps/worker/src/
+outbox-worker.ts`'s `processOutboxBatch` claims `PENDING`-or-backed-off-
+  `FAILED` messages, dispatches via the `EmailSender` port, exponential
+  backoff on failure, `DEAD_LETTER` after `MAX_OUTBOX_ATTEMPTS` (5) with no
+  further retry — 4 tests including the dead-letter-never-reclaimed case.
+  **Found and fixed a real pre-existing bug while building this**:
+  `PrismaOutboxMessageRepository.claimPending` only matched
+  `status: 'PENDING'`, so a message that had ever failed once could never
+  be retried again regardless of its backoff `availableAt` — now matches
+  `PENDING` or `FAILED`.
+- **Not yet built**: no E2E/browser-driven test exists anywhere in this
+  repo (Phase 8's traceability matrix will need to name this gap
+  explicitly); the notification worker's `DevEmailSender` only logs
+  recipient/subject to structured JSON, it does not send real mail (ADR-0007
+  blocked on Q-06); manager comments/status-timeline UI does not exist (the
+  `order.transition` API + audit trail exist, but no admin page renders
+  them yet — see Phase 6). **No test in this phase has run against a real
+  PostgreSQL instance on this laptop** — `packages/application`'s tests use
+  in-memory fakes; `packages/infrastructure/src/repositories/
+postgres.integration.test.ts` (new this session) exercises the real Prisma
+  adapters but only runs where `DATABASE_URL` points at a live, migrated
+  Postgres — see the CI/Pi verification section under Phase 7.
+  Do not treat this status block as Phase 5 completion — it is not.
+
 ## Phase 6 — administration, publishing, and media
 
 Deliver:
