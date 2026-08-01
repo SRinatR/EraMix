@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   AccessDeniedError,
+  AuthCallbackFailedError,
+  AuthRequiredError,
   CanonicalRouteMissingError,
+  CompanyRequiredError,
   ConcurrencyConflictError,
   IdempotencyConflictError,
   OrderStateConflictError,
@@ -16,6 +19,9 @@ describe('typed domain errors', () => {
     [IdempotencyConflictError, 'IDEMPOTENCY_CONFLICT'],
     [SlugConflictError, 'SLUG_CONFLICT'],
     [CanonicalRouteMissingError, 'CANONICAL_ROUTE_MISSING'],
+    [AuthRequiredError, 'AUTH_REQUIRED'],
+    [AuthCallbackFailedError, 'AUTH_CALLBACK_FAILED'],
+    [CompanyRequiredError, 'COMPANY_REQUIRED'],
   ] as const)('%s carries code %s and is an Error/DomainError instance', (ErrorClass, code) => {
     const error = new ErrorClass('boom', { entityId: 'abc' });
     expect(error).toBeInstanceOf(Error);

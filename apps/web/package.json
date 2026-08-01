@@ -12,6 +12,7 @@
     "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern"
   },
   "dependencies": {
+    "@eramix/application": "workspace:*",
     "@eramix/contracts": "workspace:*",
     "@eramix/domain": "workspace:*",
     "@eramix/infrastructure": "workspace:*",
@@ -19,7 +20,8 @@
     "next": "16.2.12",
     "next-intl": "4.13.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3",

@@ -13,12 +13,16 @@
     "incremental": true,
     "allowJs": true,
     "types": ["node"],
-    "plugins": [{ "name": "next" }]
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["next-env.d.ts", "src", "next.config.ts", ".next/types/**/*.ts"],
   "exclude": ["node_modules"],
   "references": [
     { "path": "../../packages/domain" },
+    { "path": "../../packages/application" },
     { "path": "../../packages/infrastructure" },
     { "path": "../../packages/contracts" },
     { "path": "../../packages/ui" }

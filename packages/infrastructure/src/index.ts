@@ -12,3 +12,11 @@ export { PrismaOutboxMessageRepository } from './repositories/outbox-message-rep
 export { PrismaProductRepository } from './repositories/product-repository.js';
 export { PrismaContentRepository } from './repositories/content-repository.js';
 export { PrismaOrderRepository } from './repositories/order-repository.js';
+export { CryptoIdGenerator } from './id-generator.js';
+export { OidcIdentityProvider } from './oidc/oidc-identity-provider.js';
+export type { OidcIdentityProviderConfig } from './oidc/oidc-identity-provider.js';
+export { SessionCodec } from './oidc/session-codec.js';
+export type { SessionPayload } from './oidc/session-codec.js';
+export { PendingAuthCodec } from './oidc/pending-auth-codec.js';
+export type { PendingAuthPayload } from './oidc/pending-auth-codec.js';
+export { generatePkceChallenge, generateRandomToken } from './oidc/pkce.js';

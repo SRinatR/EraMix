@@ -7,7 +7,10 @@ export type DomainErrorCode =
   | 'IDEMPOTENCY_CONFLICT'
   | 'SLUG_CONFLICT'
   | 'LOCALE_NOT_SUPPORTED'
-  | 'CANONICAL_ROUTE_MISSING';
+  | 'CANONICAL_ROUTE_MISSING'
+  | 'AUTH_REQUIRED'
+  | 'AUTH_CALLBACK_FAILED'
+  | 'COMPANY_REQUIRED';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;
@@ -23,6 +26,21 @@ export abstract class DomainError extends Error {
 
 export class ValidationFailedError extends DomainError {
   readonly code = 'VALIDATION_FAILED' as const;
+}
+
+/** Thrown when a protected use case is invoked without a valid session. */
+export class AuthRequiredError extends DomainError {
+  readonly code = 'AUTH_REQUIRED' as const;
+}
+
+/** Thrown when the OIDC callback fails state/nonce/PKCE/signature/issuer/audience/expiry validation. */
+export class AuthCallbackFailedError extends DomainError {
+  readonly code = 'AUTH_CALLBACK_FAILED' as const;
+}
+
+/** Thrown when a B2B use case requires an active company membership the actor does not have. */
+export class CompanyRequiredError extends DomainError {
+  readonly code = 'COMPANY_REQUIRED' as const;
 }
 
 export class ResourceNotFoundError extends DomainError {

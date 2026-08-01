@@ -9,6 +9,9 @@ export {
   IdempotencyConflictError,
   SlugConflictError,
   CanonicalRouteMissingError,
+  AuthRequiredError,
+  AuthCallbackFailedError,
+  CompanyRequiredError,
 } from './errors.js';
 export type { DomainErrorCode } from './errors.js';
 export { SUPPORTED_LOCALES, DEFAULT_LOCALE, isSupportedLocale, parseLocale } from './locale.js';

@@ -1,7 +1,7 @@
 openapi: 3.2.0
 info:
   title: EraMix B2B API
-  version: 0.0.0
+  version: 0.1.0
   license:
     name: Proprietary
   description: >
@@ -15,6 +15,21 @@ servers:
 tags:
   - name: System
     description: Liveness and readiness probes.
+  - name: Auth
+    description: >-
+      OIDC Authorization Code + PKCE session endpoints. The concrete ODS
+      issuer/claim contract is blocked on Q-01/ADR-0003; these operations are
+      the generic RFC 9700 + OIDC Core flow shape.
+  - name: Catalog
+    description: Public category/product browse and search (TZ §3.1 "Публичный каталог").
+  - name: Content
+    description: Public articles, pages, and FAQ.
+  - name: Orders
+    description: Quote-only B2B order lifecycle (ADR-0005).
+  - name: Admin
+    description: Administrator-only users/roles management (TZ §3.1 "Пользователи и роли").
+security:
+  - sessionCookie: []
 paths:
   /health/live:
     get:
@@ -48,7 +63,481 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+
+  /api/auth/login:
+    get:
+      operationId: getAuthLogin
+      summary: Start the OIDC Authorization Code + PKCE flow
+      description: >-
+        Builds the authorization request (state, nonce, PKCE challenge),
+        stores them server-side against the pending session, and redirects
+        to the identity provider. No claims are trusted until /auth/callback
+        validates the returned token.
+      tags: [Auth]
+      security: []
+      responses:
+        '302':
+          description: Redirect to the identity provider's authorization endpoint.
+  /api/auth/callback:
+    get:
+      operationId: getAuthCallback
+      summary: OIDC callback — exchange code for validated claims and establish a session
+      tags: [Auth]
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Session cookie set; redirect to the post-login destination.
+        '401':
+          description: State/nonce/PKCE/signature/issuer/audience/expiry validation failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/auth/logout:
+    post:
+      operationId: postAuthLogout
+      summary: Clear the local session
+      tags: [Auth]
+      responses:
+        '204':
+          description: Session cleared.
+  /api/auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Current session's user/role/company membership
+      tags: [Auth]
+      responses:
+        '200':
+          description: The current session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '401':
+          description: No valid session.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/catalog/categories:
+    get:
+      operationId: listCatalogCategories
+      summary: List published categories
+      tags: [Catalog]
+      security: []
+      parameters:
+        - name: locale
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocaleCode'
+        - name: parentId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Published categories for the requested locale.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+  /api/catalog/products:
+    get:
+      operationId: listCatalogProducts
+      summary: Search/browse published products
+      tags: [Catalog]
+      security: []
+      parameters:
+        - name: locale
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocaleCode'
+        - name: categoryId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Paginated published products.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+  /api/catalog/products/{publicId}:
+    get:
+      operationId: getCatalogProduct
+      summary: Resolve a published product by its immutable publicId
+      description: >-
+        Resolution is always by publicId (ADR-0010); a stale slug in the
+        canonical URL is a client-side 308 redirect, not a 404 here.
+      tags: [Catalog]
+      security: []
+      parameters:
+        - name: publicId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: locale
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocaleCode'
+      responses:
+        '200':
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Unknown publicId, unpublished product, or no translation for the locale.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/content/{type}:
+    get:
+      operationId: listContent
+      summary: List published content (articles, pages, or FAQ items)
+      tags: [Content]
+      security: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [articles, pages, faq]
+        - name: locale
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/LocaleCode'
+      responses:
+        '200':
+          description: Published content items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContentItem'
+
+  /api/orders:
+    get:
+      operationId: listOrders
+      summary: List orders visible to the caller
+      description: >-
+        A customer sees only their own company's orders (order.read.own); a
+        manager/admin sees all orders (order.read.all) — TZ ORD-008.
+      tags: [Orders]
+      responses:
+        '200':
+          description: Orders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createDraftOrder
+      summary: Create a DRAFT order (quote-only, no price snapshot)
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: The created draft order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/orders/{orderNumber}:
+    get:
+      operationId: getOrder
+      summary: Get an order by its public order number
+      tags: [Orders]
+      parameters:
+        - name: orderNumber
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/orders/by-id/{orderId}/lines:
+    post:
+      operationId: addOrderLine
+      summary: Add a line to a DRAFT order
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddOrderLineRequest'
+      responses:
+        '200':
+          description: The updated order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Order is no longer DRAFT (ORD-006), or a stale version was supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/orders/by-id/{orderId}/submit:
+    post:
+      operationId: submitOrder
+      summary: Submit a DRAFT order (DRAFT -> SUBMITTED)
+      description: Idempotent via the required Idempotency-Key header.
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitOrderRequest'
+      responses:
+        '200':
+          description: The submitted order (or the already-submitted order, if this Idempotency-Key was replayed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Order is not DRAFT, has no lines, a stale version, or the Idempotency-Key was reused for a different order.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/orders/by-id/{orderId}/transition:
+    post:
+      operationId: transitionOrderStatus
+      summary: Transition an order's status (state machine + RBAC + version — ORD-007)
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionOrderRequest'
+      responses:
+        '200':
+          description: The order in its new status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: >-
+            Transition not allowed from the current status, a stale version,
+            or (post-CONFIRMED cancellation) a missing reason.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: List platform users (users.manage — Administrator only)
+      tags: [Admin]
+      responses:
+        '200':
+          description: Users.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+  /api/admin/users/{userId}/role:
+    patch:
+      operationId: updateUserPlatformRole
+      summary: Change a user's platform role (users.manage — Administrator only)
+      tags: [Admin]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platformRole, expectedVersion]
+              properties:
+                platformRole:
+                  $ref: '#/components/schemas/PlatformRole'
+                expectedVersion: { type: integer }
+      responses:
+        '200':
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Stale version (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: eramix_session
+      description: >-
+        Secure, HttpOnly, SameSite session cookie set by /auth/callback.
+        Browser JavaScript never has access to the underlying OIDC tokens.
+  responses:
+    Unauthorized:
+      description: No valid session (AUTH_REQUIRED).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    AccessDenied:
+      description: Session valid but lacks the required permission (IAM-008).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Resource not found, or hidden by access-control policy.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationFailed:
+      description: Request failed input validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
   schemas:
     HealthStatus:
       type: object
@@ -61,6 +550,35 @@ components:
       type: string
       description: MVP locale allowlist (ADR-0010); en is the default locale.
       enum: [en, ru, uz]
+    PlatformRole:
+      type: string
+      description: Platform-wide staff/customer role (ADR-0014, TZ §3.1 RBAC matrix).
+      enum: [CUSTOMER, MANAGER, CONTENT_EDITOR, ADMIN, AUDITOR]
+    Session:
+      type: object
+      required: [userId, email, displayName, platformRole, companyIds]
+      properties:
+        userId: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        platformRole:
+          $ref: '#/components/schemas/PlatformRole'
+        companyIds:
+          type: array
+          items: { type: string }
+    AdminUser:
+      type: object
+      required: [id, email, displayName, platformRole, status, version]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        platformRole:
+          $ref: '#/components/schemas/PlatformRole'
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED]
+        version: { type: integer }
     ProductIndicativePrice:
       type: object
       description: >-
@@ -84,6 +602,121 @@ components:
         priceDisclaimer:
           type: string
           description: Localized non-binding disclaimer text (e.g. "от", "starting from").
+    Category:
+      type: object
+      required: [id, slug, name, status]
+      properties:
+        id: { type: string }
+        parentId: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        status:
+          type: string
+          enum: [PUBLISHED]
+    Product:
+      type: object
+      required: [publicId, sku, slug, name, status]
+      properties:
+        publicId: { type: string }
+        sku: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        status:
+          type: string
+          enum: [PUBLISHED]
+        indicativePrice:
+          $ref: '#/components/schemas/ProductIndicativePrice'
+    ContentItem:
+      type: object
+      required: [id, slug, title, status]
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        status:
+          type: string
+          enum: [PUBLISHED]
+    OrderLine:
+      type: object
+      required: [id, productId, productNameSnapshot, productSkuSnapshot, quantity]
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        productNameSnapshot: { type: string }
+        productSkuSnapshot: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        note: { type: string }
+    OrderStatus:
+      type: string
+      enum:
+        - DRAFT
+        - SUBMITTED
+        - UNDER_REVIEW
+        - WAITING_CONFIRMATION
+        - CONFIRMED
+        - IN_PREPARATION
+        - READY_FOR_PICKUP
+        - READY_FOR_DELIVERY
+        - COMPLETED
+        - CANCELLED
+    Order:
+      type: object
+      required: [id, orderNumber, companyId, status, version, lines]
+      properties:
+        id: { type: string }
+        orderNumber: { type: string }
+        companyId: { type: string }
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        version: { type: integer }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string }
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+    CreateOrderRequest:
+      type: object
+      required: [companyId, lines]
+      properties:
+        companyId: { type: string }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: string }
+              quantity: { type: integer, minimum: 1 }
+              note: { type: string }
+    AddOrderLineRequest:
+      type: object
+      required: [expectedVersion, productId, quantity]
+      properties:
+        expectedVersion: { type: integer }
+        productId: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        note: { type: string }
+    SubmitOrderRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+    TransitionOrderRequest:
+      type: object
+      required: [expectedVersion, toStatus]
+      properties:
+        expectedVersion: { type: integer }
+        toStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        reason: { type: string }
     ProblemDetailsFieldError:
       type: object
       required: [pointer, code, message]
