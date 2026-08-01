@@ -504,7 +504,7 @@ Evidence, 2026-08-02:
   `/admin/users`.
 - **Publication workflow** (`packages/application/src/publication.ts`,
   12 unit tests) — the exit criterion this phase names: `transition
-  CategoryStatus`/`transitionContentStatus`/`transitionProductStatus`
+CategoryStatus`/`transitionContentStatus`/`transitionProductStatus`
   each require the resource-appropriate permission (`catalog.write` for
   Category/Product, `content.write` for Content), then, only when the
   target status is `PUBLISHED`, verify every existing translation has
@@ -514,21 +514,21 @@ Evidence, 2026-08-02:
   editor must always be able to unpublish). Each transition runs in one
   `UnitOfWork` transaction with the `updateStatus` optimistic-concurrency
   write (new `CategoryRepository.updateStatus`/`ContentRepository.
-  updateStatus` — mirroring the pre-existing `ProductRepository.
-  updateStatus` — both throw `ConcurrencyConflictError`/409 on a stale
+updateStatus` — mirroring the pre-existing `ProductRepository.
+updateStatus` — both throw `ConcurrencyConflictError`/409 on a stale
   `expectedVersion`), an audit record (`category.status_changed`/
   `content.status_changed`/`product.status_changed` with before/after
   status), and an outbox message, exactly like `changeContentSlug`/
   `changeCategorySlug` (Phase 2). Wired to `PATCH /api/admin/categories/
-  {categoryId}/status`, `PATCH /api/admin/content/{contentId}/status`,
+{categoryId}/status`, `PATCH /api/admin/content/{contentId}/status`,
   `PATCH /api/admin/products/{productId}/status` (all rate-limited,
   `requireActor`-gated, documented in `packages/contracts/openapi/
-  openapi.yaml`) and to a shared `TransitionStatusForm` client component
+openapi.yaml`) and to a shared `TransitionStatusForm` client component
   used by the new `/admin/catalog` (categories + products) and
   `/admin/content` admin pages. `CategoryRepository`/`ContentRepository`/
   `ProductRepository` each gained a `listAll()` method (all statuses, no
   pagination — small MVP volume, same pattern as `UserRepository.
-  listAll`) so these admin pages can show DRAFT/ARCHIVED items, not only
+listAll`) so these admin pages can show DRAFT/ARCHIVED items, not only
   what the public `listPublished` methods expose.
 - **Audit search UI**: `GET /api/admin/audit?entityType=&entityId=`
   (`audit.read.limited` or `audit.read.full`) wraps the existing
@@ -555,7 +555,7 @@ upload-validation.ts`, `packages/application/src/uploads.ts`): allowlisted
   (with its first translation(s) and initial canonical route) through an
   authenticated UI — Phase 1's repository `create` methods and Phase 2's
   `changeContentSlug`/`changeCategorySlug` use cases exist and are now
-  reachable for *editing an existing* item's slug/status, but there is no
+  reachable for _editing an existing_ item's slug/status, but there is no
   route handler or form to author a new one, or to add/edit a translation
   on an existing item. Admin E2E (role-specific access + protected-action
   proof) also remains unbuilt (see Phase 8 — no browser-driven test exists
