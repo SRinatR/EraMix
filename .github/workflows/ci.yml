@@ -20,7 +20,9 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - name: Enable Corepack
-        run: corepack enable
+        run: |
+          npm install -g corepack@latest
+          corepack enable
       - name: Install dependencies with a frozen, verified lockfile
         run: pnpm install --frozen-lockfile
       - uses: actions/cache/save@v4
@@ -40,7 +42,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: corepack enable
+      - run: npm install -g corepack@latest && corepack enable
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -62,7 +64,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: corepack enable
+      - run: npm install -g corepack@latest && corepack enable
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -82,7 +84,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: corepack enable
+      - run: npm install -g corepack@latest && corepack enable
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -104,7 +106,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: corepack enable
+      - run: npm install -g corepack@latest && corepack enable
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -152,7 +154,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: corepack enable
+      - run: npm install -g corepack@latest && corepack enable
       - uses: actions/cache/restore@v4
         with:
           path: |
