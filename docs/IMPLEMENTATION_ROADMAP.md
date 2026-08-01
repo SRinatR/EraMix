@@ -114,6 +114,8 @@ ci.yml` exists and mirrors the local `check` sequence plus the
 Deliver:
 
 - PostgreSQL and Prisma configuration with versioned migrations.
+- PostgreSQL `19beta2` is mandatory for local, CI, staging, and initial
+  production; pin its image digest and implement the ADR-0013 safeguards.
 - Core aggregates: User, Company, Membership, Category, Product,
   ProductTranslation, Order, OrderLine, OrderStatusHistory, Article/Page/FAQ,
   ContentTranslation, route history, AuditEvent, and OutboxMessage.
@@ -133,7 +135,9 @@ Exit criteria:
 
 Deliver:
 
-- Locale allowlist `ru`, `tt`, `en`, `uz` and translation-aware content model.
+- Locale allowlist `ru`, `en`, `uz`, with `en` default and translation-aware
+  content model. Configure `next-intl` with `localePrefix: 'always'` and
+  `localeDetection: true` for unprefixed entry URLs.
 - Route registry/history for article, page, and category; current and historical
   resolution with a one-hop `308` redirect.
 - Immutable product `publicId` and localized product slugs.
@@ -232,6 +236,8 @@ Deliver:
 - Environment configuration, immutable image build, migration gate, staging
   deployment, smoke tests, production promotion controls, backup/PITR plan,
   restore drill, and rollback/forward-fix procedure.
+- Initial production uses PostgreSQL `19beta2` under ADR-0013. PostgreSQL 19 GA
+  is a separate rehearsed, explicitly authorized upgrade after its release.
 
 Exit criteria:
 

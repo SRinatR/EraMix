@@ -6,7 +6,8 @@ Implement the EraMix B2B MVP incrementally, with production-quality contracts
 and verification at every phase. The authoritative product and engineering
 requirements are in:
 
-- `docs/EraMix_Полное_техническое_задание_MVP_v1.1.docx`
+- `docs/EraMix_Полное_техническое_задание_MVP_v1.3.docx` (supersedes v1.0/v1.1/v1.2,
+  retained for history)
 - `docs/IMPLEMENTATION_ROADMAP.md`
 
 Do not invent requirements that contradict these documents. If a requirement is
@@ -106,8 +107,12 @@ gate.
 
 ## Public URL and localization policy — mandatory
 
-Supported MVP locales are `ru`, `tt`, `en`, and `uz`. Locale is the first segment
-of every indexable public URL and must match the translation being served.
+Supported MVP locales are `ru`, `en`, and `uz`; `en` is the default locale.
+Locale is the first segment of every indexable public URL and must match the
+translation being served. Configure `next-intl` with `localePrefix: 'always'`
+and `localeDetection: true`: an unprefixed entry URL is redirected by the
+visitor's `Accept-Language` preference to the appropriate prefixed URL, while
+an explicit locale prefix always wins.
 
 | Resource | Canonical URL | Resolution rule |
 | --- | --- | --- |
@@ -148,6 +153,16 @@ never a fallback page rendered under the wrong locale URL.
 
 ## Data, content, and ordering invariants
 
+- PostgreSQL `19beta2` is the mandatory version for local, CI, staging, and
+  the explicitly approved initial production deployment. Do not silently fall
+  back to PostgreSQL 17 or 18.
+- PostgreSQL 19 beta in production is an explicit Product Owner risk acceptance.
+  Pin the exact container image digest; perform a successful backup/restore and
+  migration rehearsal before production use; monitor PostgreSQL beta release
+  notes and regressions. The upgrade to PostgreSQL 19 GA is a separate planned
+  production change: rehearse the supported upgrade path, preserve rollback
+  evidence, and require an explicit deployment authorization when GA is
+  available. Never auto-upgrade a production database merely because GA ships.
 - `ContentTranslation` and `ProductTranslation` are unique per parent and locale.
 - A route is globally unique for its route namespace and locale. Each published
   translation has exactly one canonical route, enforced by a PostgreSQL partial

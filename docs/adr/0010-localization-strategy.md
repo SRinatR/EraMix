@@ -15,7 +15,7 @@ derived from.
 
 ## Decision
 
-- Supported MVP locales: `ru`, `tt`, `en`, `uz` (fixed allowlist; encoded as
+- Supported MVP locales: `ru`, `en`, `uz`; `en` is the default locale (fixed allowlist; encoded as
   `packages/domain`'s `LocaleCode`/`SUPPORTED_LOCALES`).
 - Locale is the first path segment of every indexable public URL and must
   match the translation actually served; a missing translation is either a
