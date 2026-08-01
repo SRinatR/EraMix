@@ -1,5 +1,6 @@
 import { AuthRequiredError, type PlatformRole } from '@eramix/domain';
 import type { SessionPayload } from '@eramix/infrastructure';
+import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
 import { getContainer } from './container';
 
@@ -37,4 +38,20 @@ export async function requireActor(request: NextRequest): Promise<Actor> {
     throw new AuthRequiredError('A valid session is required for this endpoint.');
   }
   return actor;
+}
+
+/**
+ * Server Component / Server Action equivalent of getActor — reads the
+ * session cookie via next/headers instead of a NextRequest (Server
+ * Components render without one). Never throws; returns undefined for no
+ * session.
+ */
+export async function getServerActor(): Promise<Actor | undefined> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) {
+    return undefined;
+  }
+  const payload = await getContainer().sessionCodec.decode(token);
+  return payload ? toActor(payload) : undefined;
 }
