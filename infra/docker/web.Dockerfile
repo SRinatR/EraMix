@@ -16,7 +16,10 @@ FROM node:24.18.1-alpine AS base
 # binaryTargets: linux-musl-openssl-3.0.x) needs OpenSSL 3 on Alpine.
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /repo
-RUN corepack enable
+# ADR-0011: Corepack has a confirmed, open upstream bug (nodejs/corepack#873)
+# fetching pnpm@12 alpha/beta releases (MODULE_NOT_FOUND) — install the
+# exact pinned version directly via npm instead of `corepack enable`.
+RUN npm install -g pnpm@12.0.0-beta.2
 
 FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./

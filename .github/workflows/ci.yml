@@ -100,6 +100,13 @@ jobs:
           restore-keys: ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @eramix/infrastructure run db:generate
+      # apps/web and apps/worker's own tests import the other workspace
+      # packages via their built dist/ output (each package.json's
+      # main/exports point at ./dist), not TypeScript source directly — so
+      # a fresh checkout needs them built first. This was masked all
+      # session locally because dist/ was already present from earlier
+      # `pnpm run build` runs.
+      - run: pnpm run build
       - run: pnpm run test
 
   build:
@@ -200,6 +207,9 @@ jobs:
       - run: pnpm --filter @eramix/infrastructure run db:generate
       - name: Apply migrations from empty (Phase 1 exit criterion)
         run: pnpm --filter @eramix/infrastructure run db:migrate:deploy
+      # The integration test imports @eramix/domain/@eramix/application by
+      # their built dist/ output (package.json main/exports), not source.
+      - run: pnpm --filter @eramix/infrastructure... run build
       - name: Real-PostgreSQL repository/transaction integration tests
         run: pnpm --filter @eramix/infrastructure run test:integration
 
