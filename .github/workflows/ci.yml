@@ -87,3 +87,95 @@ jobs:
           key: eramix-install-${{ github.sha }}
           fail-on-cache-miss: true
       - run: pnpm run build
+
+  security:
+    name: Dependency + secret scan
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - run: corepack enable
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+          fail-on-cache-miss: true
+      # ADR-0015: audit-level=critical is a deliberate, documented threshold
+      # (not a bypass) — 3 high/1 moderate findings are currently transitive
+      # to the pinned next@16.2.12 itself and tracked there, re-reviewed on
+      # the next Next.js upgrade.
+      - name: pnpm audit (dependency vulnerabilities, ADR-0015)
+        run: pnpm audit --audit-level=critical
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  db-migration:
+    name: Migration gate + real-PostgreSQL integration tests
+    needs: install
+    runs-on: ubuntu-latest
+    # ADR-0013: PostgreSQL 19 Beta 2 is mandatory; the exact image digest is
+    # still pending (Pi session pulls/inspects it). Tag-only here, same as
+    # infra/docker/docker-compose.yml.
+    services:
+      postgres:
+        image: postgres:19beta2-alpine
+        env:
+          POSTGRES_USER: eramix
+          POSTGRES_PASSWORD: eramix_ci
+          POSTGRES_DB: eramix
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eramix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://eramix:eramix_ci@localhost:5432/eramix
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+      - run: corepack enable
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            **/node_modules
+          key: eramix-install-${{ github.sha }}
+          fail-on-cache-miss: true
+      - name: Apply migrations from empty (Phase 1 exit criterion)
+        run: pnpm --filter @eramix/infrastructure run db:migrate:deploy
+      - name: Real-PostgreSQL repository/transaction integration tests
+        run: pnpm --filter @eramix/infrastructure run test:integration
+
+  docker-build:
+    name: Container image build (no push)
+    needs: install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build apps/web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          push: false
+          tags: eramix-web:ci
+      - name: Build apps/worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/worker.Dockerfile
+          push: false
+          tags: eramix-worker:ci

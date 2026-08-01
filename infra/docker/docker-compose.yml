@@ -1,4 +1,8 @@
 services:
+  # UNVERIFIED: web/worker/migrate have never been built or started — no
+  # Docker on the authoring laptop (session policy). Verify in the
+  # authorized Docker-capable session (docs/IMPLEMENTATION_ROADMAP.md Phase
+  # 7) before relying on this file for a real deployment.
   postgres:
     # ADR-0013: PostgreSQL 19 Beta 2 is mandatory for local/CI/staging/initial
     # production; 17/18 must never be a silent fallback. The exact image
@@ -20,6 +24,51 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # One-off migration gate: `docker compose --profile migrate run --rm migrate`.
+  # Never part of the default `docker compose up` — migrations are an
+  # explicit, auditable step, not a side effect of starting the stack.
+  # Targets web.Dockerfile's `build` stage deliberately (not the pruned
+  # runtime stage): `prisma migrate deploy` needs the `prisma` CLI, which is
+  # a devDependency stripped by `pnpm deploy --prod` in the runtime image.
+  migrate:
+    profiles: ['migrate']
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      target: build
+    environment:
+      DATABASE_URL: postgresql://eramix:eramix_local_dev@postgres:5432/eramix
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ['pnpm', '--filter', '@eramix/infrastructure', 'run', 'db:migrate:deploy']
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://eramix:eramix_local_dev@postgres:5432/eramix
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://eramix:eramix_local_dev@postgres:5432/eramix
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   eramix-postgres-data:

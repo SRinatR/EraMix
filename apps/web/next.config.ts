@@ -10,6 +10,10 @@ loadDotenv({ path: path.join(import.meta.dirname, '..', '..', '.env') });
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Produces a minimal, self-contained server bundle (.next/standalone) for
+  // the production container image (infra/docker/web.Dockerfile) — avoids
+  // shipping the full monorepo node_modules tree.
+  output: 'standalone',
   experimental: {
     // TS 7 (native compiler) doesn't expose the Program API Next's built-in
     // checker uses; the project's own `tsc -b` typecheck gate already runs

@@ -12,6 +12,7 @@
     "build": "tsc -b",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
