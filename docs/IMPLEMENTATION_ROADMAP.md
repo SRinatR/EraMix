@@ -492,6 +492,43 @@ Exit criteria:
 - Publication validates required SEO fields, canonical route, links, and slug
   uniqueness before it becomes public.
 
+### Phase 6 status: users/roles admin API + upload/media pipeline built; catalog/content/orders admin CRUD, publication workflow, and any admin UI are not yet built
+
+Evidence, 2026-08-01:
+
+- **Users/roles** (TZ §3.1 "Пользователи и роли: CRUD" — Admin only):
+  `GET /api/admin/users`, `PATCH /api/admin/users/{userId}/role` both
+  `requirePermission(actor.platformRole, 'users.manage')` (only `ADMIN`
+  holds it per `authorization.ts`), rate-limited, audit-logged
+  (`user.platform_role_changed` with before/after role).
+- **Upload validation + media pipeline** (`packages/domain/src/
+upload-validation.ts`, `packages/application/src/uploads.ts`): allowlisted
+  MIME/extension/magic-byte-signature checks for jpeg/png/webp/pdf, a
+  10 MB size ceiling, a required `MalwareScanner` port call before a file
+  ever reaches storage (never optional — a failed scan or failed
+  validation never calls `storage.put`), and a generated (never the raw
+  user-supplied) storage key. `POST /api/media` (content.write permission)
+  and `GET /api/media/download` (HMAC-signed, expiring URL, verified
+  before the file is ever read from disk) — 20 tests across the domain/
+  application/infrastructure layers, including a renamed-executable-with-
+  spoofed-Content-Type rejection and a path-traversal-filename
+  sanitization check. The concrete object-storage provider and malware
+  scanner remain the documented dev-only stand-ins (`LocalFilesystemStorageProvider`,
+  `DevMalwareScanner`) pending ADR-0006/Q-06 — never to be used in
+  production as-is.
+- **Not yet built**: catalog/content admin CRUD (create/edit/archive a
+  Category/Product/Content/translation through an authenticated surface —
+  currently only Phase 1's repository `create` methods and Phase 2's
+  `changeContentSlug`/`changeCategorySlug` use cases exist, with no route
+  handler or UI calling them), the publication workflow this phase's exit
+  criteria explicitly name (required-SEO-field/canonical-route/slug-
+  uniqueness validation _before_ a translation becomes public — no such
+  gate exists yet; today `status: 'PUBLISHED'` is just a column any
+  direct repository call could set), audit search UI (audit events are
+  recorded and queryable via `AuditEventRepository.listByEntity`, but no
+  route/page exposes a search), and any admin dashboard UI at all.
+  Do not treat this status block as Phase 6 completion — it is not.
+
 ## Phase 7 — observability, security, infrastructure, and CI/CD
 
 Deliver:
@@ -512,6 +549,71 @@ Exit criteria:
 - Restore drill meets MVP RPO/RTO targets and is documented.
 - CI blocks release on failing required gates; staging smoke and production
   promotion evidence are retained.
+
+### Phase 7 status: observability/rate-limiting/CI-CD artifacts built; CI now runs for real on GitHub's runners (three genuine, independently-diagnosed bugs found and fixed in the process); Docker images/staging/production promotion remain unbuilt and unrun pending the authorized Docker-capable session
+
+Evidence, 2026-08-01:
+
+- **Observability**: `packages/infrastructure/src/telemetry.ts` (OpenTelemetry
+  Node SDK, OTLP/HTTP trace exporter, no-ops without
+  `OTEL_EXPORTER_OTLP_ENDPOINT` configured — traces only; metrics/logs via
+  OTel are an explicitly scoped-out follow-up, not silently dropped —
+  structured JSON logging with the same `traceId` already satisfies the
+  correlation requirement), wired into both `apps/web`'s `instrumentation.ts`
+  hook and `apps/worker`'s `main.ts`. `GET /health/ready` now actually
+  executes `SELECT 1` against Postgres (2s timeout) and reports 503
+  `DEPENDENCY_UNAVAILABLE` instead of an unconditional `ok` — verified live
+  (dev server, no Postgres running) that it correctly 503s.
+- **Rate limiting** (CLAUDE.md's named surfaces: auth, search, order
+  submission, uploads, admin): `InMemoryRateLimiter` (documented
+  single-instance MVP mechanism, explicit about needing a shared store once
+  more than one instance runs) applied via `apps/web/src/server/
+rate-limit.ts`. Verified live: 10 requests to `/api/auth/login` succeed
+  (or fail on the unrelated missing-OIDC-config error), the 11th returns
+  `429` with `Retry-After: 60`.
+- **CI now actually executes** — this is new evidence, not merely
+  "configured but unproven" as Phase 0 left it (no git remote existed
+  before this session). Getting a _first_ successful run required finding
+  and fixing three distinct, real, independently-verified bugs (full
+  diagnosis trail in ADR-0011's addendum), none of them fabricated or
+  guessed — each was root-caused against the actual failing GitHub Actions
+  log before the next fix was attempted:
+  1. `actions/setup-node@v5`'s new `package-manager-cache: true` default
+     invoked `pnpm` before Corepack had run.
+  2. A confirmed, open upstream Corepack bug
+     ([nodejs/corepack#873](https://github.com/nodejs/corepack/issues/873))
+     fetching `pnpm@12` alpha/beta releases — worked around by installing
+     the exact pinned `pnpm@12.0.0-beta.2` directly via `npm install -g`,
+     never calling `corepack enable` in CI.
+  3. pnpm 12's new `minimumReleaseAge` supply-chain policy (a genuine
+     security feature, not a bug) correctly rejected `jose@6.2.6` and a
+     transitive `@types/pg@8.20.3` (via the mandatory, exact-pinned
+     `@prisma/adapter-pg@7.9.1`) as published within 24h of the CI run —
+     fixed by pinning both to slightly older, equally-current versions
+     (`jose@6.2.5`, `@types/pg@8.20.0` via a `pnpm-workspace.yaml`
+     override), not by weakening the policy.
+     New CI jobs added and exercised for the first time on GitHub's own cloud
+     runners (never this laptop, never the Pi): `security` (`pnpm audit` at
+     the ADR-0015-documented `critical` threshold + `gitleaks` secret scan),
+     `db-migration` (a real `postgres:19beta2-alpine` **service container** —
+     applies migrations from empty, then runs
+     `packages/infrastructure/src/repositories/postgres.integration.test.ts`),
+     `docker-build` (builds both `infra/docker/*.Dockerfile` images, no push).
+- **Docker/Compose artifacts** (`infra/docker/web.Dockerfile`,
+  `worker.Dockerfile`, updated `docker-compose.yml` with `web`/`worker`/a
+  profiled one-off `migrate` service): written, and — once the
+  `docker-build` CI job above ran — **built for the first time on GitHub's
+  runners** (still never on this laptop, which has no Docker, and never on
+  the Pi, which remains off-limits this session). `docs/runbooks/
+backup-restore.md` written (pg_dump/pg_restore + restore-drill checklist);
+  the drill itself has not been run (needs a container to run it against).
+- **Not yet done, honestly**: staging deployment, production promotion
+  controls, the actual restore-drill timing evidence Phase 7's exit
+  criteria want, and a CSP/CSRF threat-model writeup. These need either the
+  authorized Pi/Docker session or an actual staging environment, neither of
+  which this session has access to.
+  Do not treat this status block as Phase 7 completion — it is not; see the
+  final report's Pi test plan for exactly what remains.
 
 ## Phase 8 — release acceptance
 

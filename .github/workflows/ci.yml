@@ -32,12 +32,6 @@ jobs:
         run: npm install -g pnpm@12.0.0-beta.2
       - name: Install dependencies with a frozen, verified lockfile
         run: pnpm install --frozen-lockfile
-      - uses: actions/cache/save@v4
-        with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
 
   source:
     name: Source (format, lint, typecheck)
@@ -50,13 +44,23 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - run: npm install -g pnpm@12.0.0-beta.2
-      - uses: actions/cache/restore@v4
+      # Caching pnpm's content-addressable store (not node_modules — a
+      # prior attempt caching/restoring node_modules across jobs failed
+      # ("/usr/bin/tar" exit 2 on restore, reproducibly, likely pnpm's
+      # isolated-linker symlink layout not round-tripping through the
+      # cache action's tar archive) is the standard, documented pnpm+CI
+      # pattern: each job still runs its own `pnpm install
+      # --frozen-lockfile`, but it's fast because packages are already in
+      # the cached store.
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
-          fail-on-cache-miss: true
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
       - run: pnpm run format
       - run: pnpm run lint
       - run: pnpm run typecheck
@@ -72,13 +76,15 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - run: npm install -g pnpm@12.0.0-beta.2
-      - uses: actions/cache/restore@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
-          fail-on-cache-miss: true
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
       - run: pnpm run test
 
   build:
@@ -92,13 +98,15 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - run: npm install -g pnpm@12.0.0-beta.2
-      - uses: actions/cache/restore@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
-          fail-on-cache-miss: true
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
       - run: pnpm run build
 
   security:
@@ -114,13 +122,15 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - run: npm install -g pnpm@12.0.0-beta.2
-      - uses: actions/cache/restore@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
-          fail-on-cache-miss: true
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
       # ADR-0015: audit-level=critical is a deliberate, documented threshold
       # (not a bypass) — 3 high/1 moderate findings are currently transitive
       # to the pinned next@16.2.12 itself and tracked there, re-reviewed on
@@ -162,13 +172,15 @@ jobs:
           node-version-file: '.node-version'
           package-manager-cache: false
       - run: npm install -g pnpm@12.0.0-beta.2
-      - uses: actions/cache/restore@v4
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
-          path: |
-            node_modules
-            **/node_modules
-          key: eramix-install-${{ github.sha }}
-          fail-on-cache-miss: true
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
       - name: Apply migrations from empty (Phase 1 exit criterion)
         run: pnpm --filter @eramix/infrastructure run db:migrate:deploy
       - name: Real-PostgreSQL repository/transaction integration tests
