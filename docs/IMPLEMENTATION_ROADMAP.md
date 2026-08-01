@@ -226,6 +226,82 @@ Exit criteria:
 - No public URL is composed manually outside the URL-builder package.
 - Sitemap contains canonical published URLs only.
 
+### Phase 2 status: routing/domain/application layer built and dev-server-verified; PostgreSQL-backed pages and full SEO metadata not yet built
+
+Evidence, 2026-08-01 (continued from the Phase 1 session; PostgreSQL integration
+gate explicitly kept pending per Product Owner instruction — no Pi SSH/Docker/
+Postgres work was attempted in this session):
+
+- **Slug normalization** (`packages/domain/src/slug.ts`): deny-by-default
+  `^[a-z0-9]+(?:-[a-z0-9]+)*$` allowlist, which is what actually rejects every
+  CLAUDE.md-named category (empty, control characters, path separators,
+  query/fragment characters, dot segments, percent-encoding) in one rule
+  rather than a denylist that's easy to leave a gap in, plus a reserved-slug
+  set covering TZ Appendix F.2's system routes and CLAUDE.md's technical
+  route segments (`articles`, `pages`, `catalog`, `account`, `orders`, ...).
+- **Typed URL builder** (`packages/domain/src/url-builder.ts`): `articleUrl`,
+  `pageUrl`, `categoryUrl`, `productUrl`, `orderUrl` matching CLAUDE.md's
+  canonical URL table exactly; each asserts its slug/publicId/orderNumber
+  argument is already normalized/valid rather than silently re-normalizing
+  it. Placed in `packages/domain` (not a new package) — pure zero-dependency
+  policy code every layer already depends on; a dedicated package would need
+  its own ADR for no behavioural difference.
+- **Route resolution use cases** (`packages/application/src/route-resolution.ts`):
+  `resolveContentRoute`, `resolveCategoryRoute`, `resolveProductRoute` —
+  canonical/redirect/not-found decisions, always one hop (a historical route
+  looks up the _current_ canonical route directly; once
+  `*Repository.setCanonicalRoute` demotes a route it is never re-promoted, so
+  chains are structurally impossible, not just tested-against). Unpublished
+  content/category/product and a missing translation for the requested
+  locale both resolve as not-found. 26 unit tests exercise every named exit
+  criterion (current route, old-slug redirect spanning three slug
+  generations, collision, missing locale, unpublished content, product slug
+  mismatch, 404s, and a data-integrity guard for an orphaned canonical
+  route) against in-memory fakes of the repository ports — **this verifies
+  the resolution algorithm only, not `PrismaContentRepository`/
+  `PrismaProductRepository` themselves, which remain gated on the pending
+  PostgreSQL integration session.**
+- **`next-intl` wired into `apps/web`**: `localePrefix: 'always'`,
+  `localeDetection: true` (`src/i18n/routing.ts`, locales/default sourced
+  from `packages/domain`), `src/proxy.ts` (Next.js 16 renamed
+  `middleware.ts` → `proxy.ts` — confirmed against Next.js's own docs, not
+  assumed), `app/[locale]/layout.tsx` + `page.tsx` with `notFound()` for an
+  unsupported locale, `/health/*` routes deliberately left unprefixed and
+  outside the proxy matcher. **Actually run and curl-tested against the dev
+  server** (not just `next build`), per the project's UI-verification
+  policy:
+  - `GET /` with no `Accept-Language` → `307` to `/en`; with
+    `Accept-Language: ru` → `307` to `/ru`; with `Accept-Language: uz` →
+    `307` to `/uz`.
+  - `GET /uz` with `Accept-Language: ru` still `200`s on `/uz` — explicit
+    prefix wins over detection.
+  - `curl -L` from `/` shows exactly one redirect hop, not a chain.
+  - `GET /en`, `/ru`, `/uz` render the correct `lang` attribute and
+    correct-locale content; `GET /fr` (unsupported) → `404`.
+  - `GET /health/live`, `/health/ready` unaffected (still unprefixed `200`).
+  - First attempt placed `proxy.ts` at the app root and it was silently
+    never invoked (`/` 404'd instead of redirecting) — Next.js requires
+    `proxy.ts` at the same level as `app/` when a `src/` directory is used,
+    not the package root; moving it to `src/proxy.ts` fixed it, confirmed by
+    `next build` now printing `ƒ Proxy (Middleware)`, which it did not
+    before the fix.
+- **Laptop-safe verification** (`pnpm run check`) — exit 0, **173 unit
+  tests** across 8 workspace packages/apps (130 domain + 26 application + 8
+  infrastructure + 2 contracts + 2 ui + 1 web + 4 worker; up from Phase 1's
+  79), `next build` unaffected, plus the manual dev-server curl verification
+  above.
+- **Not yet built**: `CategoryRepository`/`ContentRepository`/
+  `ProductRepository`-backed public pages (Phase 3 territory per the
+  roadmap's own phase split), canonical `generateMetadata`/hreflang/
+  x-default, `robots.txt`/`sitemap.xml`, Open Graph/JSON-LD, and the
+  explicit "change slug" editorial command (Phase 2's `setCanonicalRoute`
+  repository primitive exists; the use case/audit-event/outbox-event wiring
+  around it does not yet). No public content page has been wired to a real
+  repository adapter, so "Sitemap contains canonical published URLs only"
+  and "product slug mismatch" against **real data** remain unverified along
+  with everything else gated on PostgreSQL.
+  Do not treat this status block as Phase 2 completion — it is not.
+
 ## Phase 3 — public website and catalog
 
 Deliver:

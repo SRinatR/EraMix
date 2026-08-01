@@ -56,6 +56,26 @@ export class PrismaContentRepository implements ContentRepository {
     return translation ? this.findById(translation.contentId) : undefined;
   }
 
+  async findRouteBySlug(
+    namespace: ContentRouteNamespace,
+    locale: LocaleCode,
+    slug: string,
+  ): Promise<ContentRoute | undefined> {
+    const route = await resolveClient(this.prisma).contentRoute.findUnique({
+      where: { namespace_locale_slug: { namespace, locale, slug } },
+    });
+    return route ? routeToDomain(route) : undefined;
+  }
+
+  async findCanonicalRouteByTranslationId(
+    translationId: string,
+  ): Promise<ContentRoute | undefined> {
+    const route = await resolveClient(this.prisma).contentRoute.findFirst({
+      where: { translationId, isCanonical: true },
+    });
+    return route ? routeToDomain(route) : undefined;
+  }
+
   async create(
     content: Omit<Content, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<ContentTranslation, 'createdAt' | 'updatedAt'>[],

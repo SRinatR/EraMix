@@ -16,6 +16,15 @@ export type { LocaleCode } from './locale.js';
 export { generatePublicId, isValidPublicId, PUBLIC_ID_LENGTH } from './public-id.js';
 export { generateOrderNumber, isValidOrderNumber, ORDER_NUMBER_PREFIX } from './order-number.js';
 export { parseQuantity } from './quantity.js';
+export { normalizeSlug, RESERVED_SLUGS } from './slug.js';
+export { articleUrl, pageUrl, categoryUrl, productUrl, orderUrl } from './url-builder.js';
+export type {
+  ArticleUrlParams,
+  PageUrlParams,
+  CategoryUrlParams,
+  ProductUrlParams,
+  OrderUrlParams,
+} from './url-builder.js';
 export { createIndicativePrice } from './indicative-price.js';
 export type { IndicativePrice, IndicativePriceInput } from './indicative-price.js';
 export type {

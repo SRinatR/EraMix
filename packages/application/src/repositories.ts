@@ -60,10 +60,16 @@ export interface CategoryRepository {
     locale: LocaleCode,
     slug: string,
   ): Promise<CategoryWithTranslations | undefined>;
+  /** Returns the route regardless of canonical status — the raw building block route resolution needs. */
+  findRouteBySlug(locale: LocaleCode, slug: string): Promise<CategoryRoute | undefined>;
+  findCanonicalRouteByTranslationId(translationId: string): Promise<CategoryRoute | undefined>;
   create(
     category: Omit<Category, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>[],
   ): Promise<CategoryWithTranslations>;
+  setCanonicalRoute(
+    route: Omit<CategoryRoute, 'id' | 'createdAt' | 'isCanonical'>,
+  ): Promise<CategoryRoute>;
 }
 
 export interface ProductWithTranslations extends Product {
@@ -100,6 +106,13 @@ export interface ContentRepository {
     locale: LocaleCode,
     slug: string,
   ): Promise<ContentWithTranslations | undefined>;
+  /** Returns the route regardless of canonical status — the raw building block route resolution needs. */
+  findRouteBySlug(
+    namespace: ContentRouteNamespace,
+    locale: LocaleCode,
+    slug: string,
+  ): Promise<ContentRoute | undefined>;
+  findCanonicalRouteByTranslationId(translationId: string): Promise<ContentRoute | undefined>;
   create(
     content: Omit<Content, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<ContentTranslation, 'createdAt' | 'updatedAt'>[],

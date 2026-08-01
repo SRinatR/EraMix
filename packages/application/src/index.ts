@@ -15,3 +15,13 @@ export type {
   AuditEventRepository,
   OutboxMessageRepository,
 } from './repositories.js';
+export {
+  resolveContentRoute,
+  resolveCategoryRoute,
+  resolveProductRoute,
+} from './route-resolution.js';
+export type {
+  ContentRouteResolution,
+  CategoryRouteResolution,
+  ProductRouteResolution,
+} from './route-resolution.js';
