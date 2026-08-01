@@ -17,6 +17,8 @@ const envSchema = z.object({
   OIDC_REDIRECT_URI: z.string().url().optional(),
   /** Signs the stateless session cookie (HS256 JWT — see oidc/session-codec.ts). Required only when /auth/* is used. */
   SESSION_SECRET: z.string().min(32).optional(),
+  /** Absolute origin used to build absolute URLs (sitemap.xml, Open Graph); optional, falls back to a placeholder in dev. */
+  PUBLIC_ORIGIN: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

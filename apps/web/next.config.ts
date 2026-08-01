@@ -1,5 +1,12 @@
+import path from 'node:path';
+import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+
+// Monorepo-wide .env lives at the repository root, not per-app (mirrors
+// packages/infrastructure/prisma.config.ts) — Next.js only auto-loads a
+// .env colocated with this file, so apps/web needs its own explicit load.
+loadDotenv({ path: path.join(import.meta.dirname, '..', '..', '.env') });
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
