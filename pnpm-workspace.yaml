@@ -1,6 +1,12 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+# Required by `pnpm deploy` (infra/docker/worker.Dockerfile's production
+# stage): pnpm v10+ refuses to deploy from a workspace unless workspace
+# dependencies are injected (copied) rather than symlinked, since a deploy
+# output must be a standalone directory with no symlinks pointing back into
+# the monorepo.
+injectWorkspacePackages: true
 overrides:
   # @prisma/adapter-pg@7.9.1 (exact-pinned, mandatory) brings in
   # @types/pg@8.20.3 as its own dependency, published <24h before a CI run
