@@ -19,11 +19,17 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - name: Enable Corepack
-        run: |
-          npm install -g corepack@latest
-          corepack enable
-          corepack prepare pnpm@12.0.0-beta.2 --activate
+      # ADR-0011: Corepack itself has a confirmed, open upstream bug
+      # (nodejs/corepack#873) fetching pnpm@12 alpha/beta releases — it
+      # reports MODULE_NOT_FOUND because pnpm@12's new `preinstall` script
+      # isn't handled correctly by Corepack's download/activate path.
+      # Installing the exact pinned version directly via npm sidesteps
+      # Corepack's shim entirely (deliberately not calling `corepack
+      # enable`, which would reinstate the buggy shim on PATH ahead of
+      # this binary) while still running the identical, exactly-pinned
+      # pnpm@12.0.0-beta.2 CLAUDE.md requires.
+      - name: Install pnpm (bypassing Corepack — ADR-0011)
+        run: npm install -g pnpm@12.0.0-beta.2
       - name: Install dependencies with a frozen, verified lockfile
         run: pnpm install --frozen-lockfile
       - uses: actions/cache/save@v4
@@ -43,7 +49,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: npm install -g corepack@latest && corepack enable && corepack prepare pnpm@12.0.0-beta.2 --activate
+      - run: npm install -g pnpm@12.0.0-beta.2
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -65,7 +71,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: npm install -g corepack@latest && corepack enable && corepack prepare pnpm@12.0.0-beta.2 --activate
+      - run: npm install -g pnpm@12.0.0-beta.2
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -85,7 +91,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: npm install -g corepack@latest && corepack enable && corepack prepare pnpm@12.0.0-beta.2 --activate
+      - run: npm install -g pnpm@12.0.0-beta.2
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -107,7 +113,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: npm install -g corepack@latest && corepack enable && corepack prepare pnpm@12.0.0-beta.2 --activate
+      - run: npm install -g pnpm@12.0.0-beta.2
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -155,7 +161,7 @@ jobs:
         with:
           node-version-file: '.node-version'
           package-manager-cache: false
-      - run: npm install -g corepack@latest && corepack enable && corepack prepare pnpm@12.0.0-beta.2 --activate
+      - run: npm install -g pnpm@12.0.0-beta.2
       - uses: actions/cache/restore@v4
         with:
           path: |

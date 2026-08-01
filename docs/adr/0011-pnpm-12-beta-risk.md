@@ -46,7 +46,7 @@ mitigations recorded rather than silently worked around:
   no benefit.
 - CI (`.github/workflows/ci.yml`, `install` job) runs `pnpm install
 --frozen-lockfile` on `ubuntu-latest`, where symlink creation is
-  unprivileged and this failure mode does not occur — this is the
+  unprivileged and this specific failure mode does not occur — this is the
   "reproducible clean-install CI gate" CLAUDE.md requires for the beta risk.
 - `pnpm-workspace.yaml`'s `allowBuilds: { sharp: true }` is committed
   explicitly rather than left for each developer to answer interactively.
@@ -64,3 +64,68 @@ mitigations recorded rather than silently worked around:
   same: enable the equivalent of Developer Mode on that image, not a switch
   to `hoisted` (which did not fix it here) and not a silent downgrade of the
   pin without the Product Owner sign-off CLAUDE.md requires for that change.
+
+## Addendum, 2026-08-01 (same day, later session): a second, distinct pnpm-12-beta risk found once CI actually ran
+
+The paragraph above ("this is the reproducible clean-install CI gate...")
+was written before this repository had a git remote or any real GitHub
+Actions execution (see Phase 0's status block: "no real GitHub Actions run
+has executed it yet"). Once a remote was added and pushes started
+triggering real runs, the `install` job failed on **every single push**
+(multiple consecutive commits, all failing identically) — a _different_
+defect from the Windows symlink issue above, this time in Corepack itself,
+not this project's configuration:
+
+```
+! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-12.0.0-beta.2.tgz
+node:internal/modules/cjs/loader:1520
+  throw err;
+Error: Cannot find module '/home/runner/.cache/node/corepack/v1/pnpm/12.0.0-beta.2/bin/pnpm.mjs'
+```
+
+Diagnosis (in order actually attempted, each verified against the real CI
+log before moving to the next):
+
+1. `actions/setup-node@v5`'s new `package-manager-cache: true` default was
+   independently also broken (tried to invoke `pnpm` before Corepack had
+   even run) — fixed by setting `package-manager-cache: false` explicitly.
+   This was a real, separate bug layered on top of the one below; fixing it
+   was necessary but not sufficient.
+2. Upgrading Corepack itself (`npm install -g corepack@latest`) before
+   `corepack enable` — did not fix it; identical error.
+3. `corepack prepare pnpm@12.0.0-beta.2 --activate` (the documented pattern
+   for forcing eager, synchronous download instead of relying on lazy
+   first-use fetch) — printed "Preparing pnpm@12.0.0-beta.2 for immediate
+   activation..." and then returned control to the next step _before_ the
+   download/extraction actually completed, so the following `pnpm install`
+   still hit the same missing-file error. This, plus confirming the exact
+   tarball URL Corepack logs returns a real `200 OK` (`curl -I` verified),
+   ruled out "missing package" and pointed at Corepack's own fetch/activate
+   sequencing.
+4. Found the actual root cause: **[nodejs/corepack#873](https://github.com/nodejs/corepack/issues/873)**,
+   open since 2026-07-15, still unresolved — `MODULE_NOT_FOUND` reproducing
+   with `pnpm@12` alpha/beta releases specifically, because pnpm@12
+   introduced a `preinstall` lifecycle script (not present in pnpm@11) that
+   Corepack's current release does not handle correctly when fetching and
+   activating a package manager version. Cross-referenced and
+   maintainer-triaged at pnpm/pnpm#13018; listed under the
+   [pnpm v12 milestone](https://github.com/pnpm/pnpm/milestone/120), i.e.
+   expected to be resolved by pnpm v12's stable release, not by anything
+   fixable in this repository's configuration.
+
+**Resolution applied**: `.github/workflows/ci.yml`'s `install` job (and
+every other job needing pnpm) now runs `npm install -g pnpm@12.0.0-beta.2`
+directly and does **not** call `corepack enable`/`corepack prepare` at all
+in CI — calling `corepack enable` would reinstate Corepack's shim ahead of
+this binary on `PATH` and immediately re-trigger the same upstream bug on
+first invocation. This still runs the exact CLAUDE.md-pinned
+`pnpm@12.0.0-beta.2`; only the _activation mechanism_ differs from local
+dev (which continues to use Corepack per the Decision section above, since
+this exact failure has not reproduced locally — the trigger condition
+appears specific to a from-empty `~/.cache/node/corepack` on a fresh
+runner, not the already-warmed local dev cache).
+
+**Re-review trigger**: once nodejs/corepack#873 is closed upstream (or
+pnpm v12 GA ships with a working Corepack fetch path), try reverting CI to
+`corepack enable` + `corepack prepare pnpm@<version> --activate` and delete
+this addendum if it now passes.
