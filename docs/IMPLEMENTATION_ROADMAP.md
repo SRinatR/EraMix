@@ -571,46 +571,42 @@ Evidence, 2026-08-01:
 rate-limit.ts`. Verified live: 10 requests to `/api/auth/login` succeed
   (or fail on the unrelated missing-OIDC-config error), the 11th returns
   `429` with `Retry-After: 60`.
-- **CI now actually executes** — this is new evidence, not merely
-  "configured but unproven" as Phase 0 left it (no git remote existed
-  before this session). Getting a _first_ successful run required finding
-  and fixing four distinct, real, independently-verified issues (full
-  diagnosis trail in ADR-0011's two addenda), none of them fabricated or
-  guessed — each was root-caused against the actual failing GitHub Actions
-  log before the next fix was attempted:
-  1. `actions/setup-node@v5`'s new `package-manager-cache: true` default
-     invoked `pnpm` before Corepack had run.
-  2. A confirmed, open upstream Corepack bug
-     ([nodejs/corepack#873](https://github.com/nodejs/corepack/issues/873))
-     fetching `pnpm@12` alpha/beta releases — worked around by installing
-     the exact pinned `pnpm@12.0.0-beta.2` directly via `npm install -g`,
-     never calling `corepack enable` in CI.
-  3. pnpm 12's new `minimumReleaseAge` supply-chain policy (a genuine
-     security feature, not a bug) correctly rejected `jose@6.2.6` and a
-     transitive `@types/pg@8.20.3` (via the mandatory, exact-pinned
-     `@prisma/adapter-pg@7.9.1`) as published within 24h of the CI run —
-     fixed by pinning both to slightly older, equally-current versions
-     (`jose@6.2.5`, `@types/pg@8.20.0` via a `pnpm-workspace.yaml`
-     override), not by weakening the policy.
-  4. `actions/cache` round-tripping `node_modules` across jobs reported a
-     cache hit but then failed tar extraction — switched to the standard
-     pnpm+CI pattern of caching pnpm's own store instead and letting every
-     job run its own (fast, store-cached) `pnpm install --frozen-lockfile`.
-     New CI jobs added and exercised for the first time on GitHub's own cloud
-     runners (never this laptop, never the Pi): `security` (`pnpm audit` at
-     the ADR-0015-documented `critical` threshold + `gitleaks` secret scan),
-     `db-migration` (a real `postgres:19beta2-alpine` **service container** —
-     applies migrations from empty, then runs
-     `packages/infrastructure/src/repositories/postgres.integration.test.ts`),
-     `docker-build` (builds both `infra/docker/*.Dockerfile` images, no push).
+- **CI now actually executes, and is fully green** — this is new evidence,
+  not merely "configured but unproven" as Phase 0 left it (no git remote
+  existed before this session). Getting there required finding and fixing
+  **eight** distinct, real, independently-verified issues — full diagnosis
+  trail in ADR-0011's three addenda, each root-caused against the actual
+  failing GitHub Actions log before the next fix was attempted, none
+  fabricated, none bypassed: `actions/setup-node@v5`'s
+  `package-manager-cache` default invoking `pnpm` before Corepack ran; a
+  confirmed open upstream Corepack bug
+  ([nodejs/corepack#873](https://github.com/nodejs/corepack/issues/873))
+  fetching `pnpm@12` alpha/beta releases (worked around by installing the
+  exact pinned version directly via `npm install -g`, never calling
+  `corepack enable` in CI or inside the Docker builds); pnpm 12's
+  `minimumReleaseAge` supply-chain policy correctly rejecting two
+  just-published dependency versions; `actions/cache` failing to round-trip
+  `node_modules` (switched to caching pnpm's own store instead); a missing
+  `prisma generate` step in every job (masked locally all session by an
+  already-generated client); a Dockerfile `syntax=` parser-directive typo; a
+  flaky signature-tamper unit test; workspace packages needing to be built
+  before `apps/web`/`apps/worker`'s own tests could resolve them; a missing
+  `DATABASE_URL` placeholder inside the Docker build stage; and
+  `pnpm deploy`'s `injectWorkspacePackages` requirement for
+  `infra/docker/worker.Dockerfile`. **[GitHub Actions run 30703816257](https://github.com/SRinatR/EraMix/actions/runs/30703816257)**
+  is the first fully green run: all 7 jobs pass, including two real,
+  load-bearing confirmations against `postgres:19beta2-alpine` — migrations
+  apply from empty (Phase 1's own exit criterion, now genuinely verified,
+  not just locally simulated) and the real-Postgres repository/transaction
+  integration tests pass.
 - **Docker/Compose artifacts** (`infra/docker/web.Dockerfile`,
   `worker.Dockerfile`, updated `docker-compose.yml` with `web`/`worker`/a
-  profiled one-off `migrate` service): written, and — once the
-  `docker-build` CI job above ran — **built for the first time on GitHub's
-  runners** (still never on this laptop, which has no Docker, and never on
-  the Pi, which remains off-limits this session). `docs/runbooks/
-backup-restore.md` written (pg_dump/pg_restore + restore-drill checklist);
-  the drill itself has not been run (needs a container to run it against).
+  profiled one-off `migrate` service): written, and now **built successfully
+  on GitHub's runners** (`docker-build` job) — still never run as a live
+  container anywhere (no Docker on this laptop; the Pi remains off-limits
+  this session). `docs/runbooks/backup-restore.md` written (pg_dump/
+  pg_restore + restore-drill checklist); the drill itself has not been run
+  (needs a running container to run it against).
 - **Not yet done, honestly**: staging deployment, production promotion
   controls, the actual restore-drill timing evidence Phase 7's exit
   criteria want, and a CSP/CSRF threat-model writeup. These need either the
@@ -631,6 +627,17 @@ Exit criteria:
 
 - All release-acceptance items from the technical specification have evidence.
 - Product Owner signs UAT after green staging/production-like verification.
+
+### Phase 8 status: not started — correctly blocked
+
+No traceability matrix, UAT package, release notes, or operational handover
+exists yet, and none should: this phase's own precondition (a green
+staging/production-like verification, plus the authorized Pi session's real
+PostgreSQL 19 Beta 2 / build / E2E / local-demo-deployment evidence) has not
+happened. Phase 7's CI is now genuinely green (see its status block above),
+which is necessary but not sufficient — Phase 8 remains correctly gated on
+work outside this session's authorized scope (the Pi session, and any
+staging/production environment). Do not claim any Phase 8 evidence exists.
 
 ## Required task format for the CLI agent
 

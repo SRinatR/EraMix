@@ -160,8 +160,57 @@ moving to the next (evidence, not guesses):
    packages are already in the cached store). This sidesteps cross-job
    `node_modules` serialization entirely rather than working around it.
 
-Net result: getting the very first real, green CI run on this repository
-required finding and fixing **four** independent, evidence-based issues
-(the original Corepack bug plus these two, plus the `package-manager-cache`
-default from Addendum 1) — none of them guessed, none bypassed/hidden, each
-verified against the actual failing log before moving to the next.
+## Addendum 3, same session: the remaining issues, and the first fully-green run
+
+Continuing from Addendum 2, five more issues surfaced and were fixed in
+turn, each root-caused against the real failing log before the next fix
+(none guessed, none bypassed):
+
+3. `packages/infrastructure/src/generated/` (Prisma's own generated client)
+   is gitignored; every job that builds/tests/typechecks infrastructure
+   needs `pnpm --filter @eramix/infrastructure run db:generate` first. This
+   worked all session on this laptop only because the generated client was
+   already present from earlier manual `prisma generate` runs — a truly
+   fresh checkout (CI) never had it. Added the step to every job that needs
+   it; `prisma generate` itself needs `DATABASE_URL` merely _resolvable_
+   (never connected to), so a workflow-level placeholder was added too.
+4. `infra/docker/*.Dockerfile`'s `syntax=docker/dockerfile:1` line was
+   missing its required `#` comment prefix (parsed as an unknown
+   instruction instead of the BuildKit parser directive it's meant to be)
+   and needed to be the literal first line, not after 11 lines of
+   unprefixed header comments.
+5. `packages/infrastructure/src/local-storage-provider.test.ts`'s
+   signature-tamper assertion always replaced the last hex character with
+   `'0'` — 1 in 16 times that was already the real last character, silently
+   leaving the signature unchanged and making the assertion flaky (it
+   triggered in this run: "expected true to be false"). Fixed to flip to a
+   digit guaranteed different from the original.
+6. `apps/web`/`apps/worker`'s own tests import sibling workspace packages
+   via their built `dist/` output (`package.json` main/exports), not
+   TypeScript source — the `unit` job needed `pnpm run build` before
+   `pnpm run test`, and `db-migration` needed
+   `pnpm --filter @eramix/infrastructure... run build` before its
+   integration tests, for the same reason this masked itself locally all
+   session (stale-but-present `dist/` from earlier manual builds).
+7. `infra/docker/*.Dockerfile`'s build stage had no `DATABASE_URL` at all
+   (unlike the CI workflow's placeholder), so its own `prisma generate`
+   step hit the identical "Cannot resolve environment variable" failure —
+   added the same kind of build-time-only placeholder `ENV`.
+8. `infra/docker/worker.Dockerfile`'s `pnpm --filter @eramix/worker deploy
+--prod` failed with `ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE` — pnpm v10+
+   requires `injectWorkspacePackages: true` for `pnpm deploy` to work (a
+   deploy output must be copied/standalone, not symlinked back into the
+   monorepo). Added to `pnpm-workspace.yaml`; verified locally
+   (`pnpm --filter @eramix/worker deploy --prod <dir>` succeeds and
+   produces a real standalone `dist/`+`node_modules`+`package.json`
+   directory) before pushing.
+
+**Result**: [GitHub Actions run 30703816257](https://github.com/SRinatR/EraMix/actions/runs/30703816257)
+is the first fully green CI run in this repository's history — all 7 jobs
+(`install`, `source`, `unit`, `build`, `security`, `db-migration`,
+`docker-build`) passed, including two real, load-bearing confirmations
+against `postgres:19beta2-alpine`: migrations apply from empty (Phase 1's
+own exit criterion), and the real-Postgres repository/transaction
+integration tests pass. Getting there required finding and fixing **eight**
+independent, evidence-based issues across this ADR's three addenda — none
+guessed, none bypassed, none hidden.
