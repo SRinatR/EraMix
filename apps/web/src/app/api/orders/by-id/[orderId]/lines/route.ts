@@ -1,9 +1,9 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { addOrderLine } from '@eramix/application';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const addLineSchema = z.object({
@@ -13,11 +13,9 @@ const addLineSchema = z.object({
   note: z.string().max(500).optional(),
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ orderId: string }> },
-): Promise<NextResponse> {
-  try {
+export const POST = withApiHandler<{ orderId: string }>(
+  'orders.lines.add',
+  async (request, traceId, { params }) => {
     const actor = await requireActor(request);
     const { orderId } = await params;
     const body = addLineSchema.parse(await request.json());
@@ -39,11 +37,10 @@ export async function POST(
         },
         actorUserId: actor.userId,
         actorCompanyIds: actor.companyIds,
+        traceId,
       },
     );
 
     return NextResponse.json(orderToDto(order));
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

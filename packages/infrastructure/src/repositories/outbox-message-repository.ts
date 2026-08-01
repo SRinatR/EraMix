@@ -22,9 +22,15 @@ export class PrismaOutboxMessageRepository implements OutboxMessageRepository {
     return toDomain(row);
   }
 
+  /**
+   * `FAILED` is included alongside `PENDING`: a message that failed once is
+   * still retryable (that's the whole point of markFailed's backoff
+   * `availableAt`) — only `SENT`/`DEAD_LETTER` are excluded from ever being
+   * claimed again.
+   */
   async claimPending(limit: number): Promise<readonly OutboxMessage[]> {
     const rows = await resolveClient(this.prisma).outboxMessage.findMany({
-      where: { status: 'PENDING', availableAt: { lte: new Date() } },
+      where: { status: { in: ['PENDING', 'FAILED'] }, availableAt: { lte: new Date() } },
       orderBy: { availableAt: 'asc' },
       take: limit,
     });
@@ -45,6 +51,17 @@ export class PrismaOutboxMessageRepository implements OutboxMessageRepository {
         status: 'FAILED',
         lastError: error,
         availableAt: nextAvailableAt,
+        attempts: { increment: 1 },
+      },
+    });
+  }
+
+  async markDeadLetter(id: string, error: string): Promise<void> {
+    await resolveClient(this.prisma).outboxMessage.update({
+      where: { id },
+      data: {
+        status: 'DEAD_LETTER',
+        lastError: error,
         attempts: { increment: 1 },
       },
     });

@@ -207,4 +207,6 @@ export interface OutboxMessageRepository {
   claimPending(limit: number): Promise<readonly OutboxMessage[]>;
   markSent(id: string): Promise<void>;
   markFailed(id: string, error: string, nextAvailableAt: Date): Promise<void>;
+  /** Terminal failure after exhausting retries — never retried again automatically. */
+  markDeadLetter(id: string, error: string): Promise<void>;
 }

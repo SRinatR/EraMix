@@ -1,28 +1,26 @@
 import { getContainer } from '@/server/container';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
+import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission } from '@eramix/application';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  try {
-    const actor = await requireActor(request);
-    requirePermission(actor.platformRole, 'users.manage');
+export const GET = withApiHandler('admin.users.list', async (request) => {
+  enforceRateLimit('admin', request);
+  const actor = await requireActor(request);
+  requirePermission(actor.platformRole, 'users.manage');
 
-    const container = getContainer();
-    const users = await container.users.listAll();
+  const container = getContainer();
+  const users = await container.users.listAll();
 
-    return NextResponse.json({
-      items: users.map((user) => ({
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        platformRole: user.platformRole,
-        status: user.status,
-        version: user.version,
-      })),
-    });
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  return NextResponse.json({
+    items: users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      platformRole: user.platformRole,
+      status: user.status,
+      version: user.version,
+    })),
+  });
+});

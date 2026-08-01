@@ -1,9 +1,9 @@
 import { getContainer } from '@/server/container';
 import { contentToDto } from '@/server/dto';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
 import { listContentByType } from '@eramix/application';
 import { ValidationFailedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const TYPE_BY_SEGMENT = {
   articles: 'ARTICLE',
@@ -11,11 +11,9 @@ const TYPE_BY_SEGMENT = {
   faq: 'FAQ_ITEM',
 } as const;
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ type: string }> },
-): Promise<NextResponse> {
-  try {
+export const GET = withApiHandler<{ type: string }>(
+  'content.list',
+  async (request, _traceId, { params }) => {
     const { type } = await params;
     const contentType = TYPE_BY_SEGMENT[type as keyof typeof TYPE_BY_SEGMENT];
     if (!contentType) {
@@ -44,7 +42,5 @@ export async function GET(
       .filter((item): item is NonNullable<typeof item> => item !== undefined);
 
     return NextResponse.json({ items });
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

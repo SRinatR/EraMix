@@ -1,13 +1,63 @@
-import { loadEnv } from '@eramix/infrastructure';
+import { SystemClock } from '@eramix/application';
+import {
+  DevEmailSender,
+  JsonLogger,
+  PrismaOutboxMessageRepository,
+  createPrismaClient,
+  loadEnv,
+  startTelemetry,
+} from '@eramix/infrastructure';
+import { processOutboxBatch } from './outbox-worker.js';
 import { createGracefulShutdown } from './shutdown.js';
 
+const POLL_INTERVAL_MS = 5_000;
+
 const env = loadEnv();
-console.log(JSON.stringify({ msg: 'worker starting', nodeEnv: env.NODE_ENV }));
+const logger = new JsonLogger();
+logger.log('info', 'worker_starting', { nodeEnv: env.NODE_ENV });
+
+startTelemetry({
+  serviceName: 'eramix-worker',
+  ...(env.OTEL_EXPORTER_OTLP_ENDPOINT !== undefined
+    ? { otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT }
+    : {}),
+});
+
+const prisma = createPrismaClient(env.DATABASE_URL);
+const deps = {
+  outbox: new PrismaOutboxMessageRepository(prisma),
+  email: new DevEmailSender(logger),
+  logger,
+  clock: new SystemClock(),
+};
+
+let stopped = false;
+
+async function pollLoop(): Promise<void> {
+  while (!stopped) {
+    try {
+      const result = await processOutboxBatch(deps);
+      if (result.claimed > 0) {
+        logger.log('info', 'outbox_batch_processed', { ...result });
+      }
+    } catch (error) {
+      logger.log('error', 'outbox_poll_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+}
+
+const pollPromise = pollLoop();
 
 const shutdown = createGracefulShutdown({
   timeoutMs: 10_000,
   onShutdown: async () => {
-    console.log(JSON.stringify({ msg: 'worker shutting down' }));
+    stopped = true;
+    await pollPromise;
+    await prisma.$disconnect();
+    logger.log('info', 'worker_shutdown_complete', {});
   },
 });
 

@@ -12,6 +12,8 @@
     "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern"
   },
   "dependencies": {
+    "@eramix/application": "workspace:*",
+    "@eramix/domain": "workspace:*",
     "@eramix/infrastructure": "workspace:*"
   },
   "devDependencies": {

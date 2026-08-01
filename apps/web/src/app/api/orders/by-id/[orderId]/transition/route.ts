@@ -1,9 +1,9 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { transitionOrderStatus } from '@eramix/application';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const ORDER_STATUSES = [
@@ -25,11 +25,9 @@ const transitionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ orderId: string }> },
-): Promise<NextResponse> {
-  try {
+export const POST = withApiHandler<{ orderId: string }>(
+  'orders.transition',
+  async (request, traceId, { params }) => {
     const actor = await requireActor(request);
     const { orderId } = await params;
     const body = transitionSchema.parse(await request.json());
@@ -49,12 +47,11 @@ export async function POST(
         actorUserId: actor.userId,
         actorRole: actor.platformRole,
         actorCompanyIds: actor.companyIds,
+        traceId,
         ...(body.reason !== undefined ? { reason: body.reason } : {}),
       },
     );
 
     return NextResponse.json(orderToDto(order));
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

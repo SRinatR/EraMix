@@ -10,7 +10,8 @@ export type DomainErrorCode =
   | 'CANONICAL_ROUTE_MISSING'
   | 'AUTH_REQUIRED'
   | 'AUTH_CALLBACK_FAILED'
-  | 'COMPANY_REQUIRED';
+  | 'COMPANY_REQUIRED'
+  | 'RATE_LIMITED';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;
@@ -41,6 +42,20 @@ export class AuthCallbackFailedError extends DomainError {
 /** Thrown when a B2B use case requires an active company membership the actor does not have. */
 export class CompanyRequiredError extends DomainError {
   readonly code = 'COMPANY_REQUIRED' as const;
+}
+
+/**
+ * Thrown by a rate limiter guard on a protected endpoint (auth, search,
+ * order submission, uploads, admin — CLAUDE.md security policy). Carries
+ * `retryAfterSeconds` in `details` so the delivery layer can set a
+ * `Retry-After` header ("Retry-After при возможности").
+ */
+export class RateLimitedError extends DomainError {
+  readonly code = 'RATE_LIMITED' as const;
+
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message, { retryAfterSeconds });
+  }
 }
 
 export class ResourceNotFoundError extends DomainError {

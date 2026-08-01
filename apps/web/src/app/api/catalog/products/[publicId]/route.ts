@@ -1,19 +1,17 @@
 import { getContainer } from '@/server/container';
 import { productToDto } from '@/server/dto';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
 import {
   ResourceNotFoundError,
   ValidationFailedError,
   isSupportedLocale,
   type LocaleCode,
 } from '@eramix/domain';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ publicId: string }> },
-): Promise<NextResponse> {
-  try {
+export const GET = withApiHandler<{ publicId: string }>(
+  'catalog.products.get',
+  async (request, _traceId, { params }) => {
     const { publicId } = await params;
     const url = new URL(request.url);
     const locale = url.searchParams.get('locale');
@@ -35,14 +33,9 @@ export async function GET(
     if (!dto) {
       throw new ResourceNotFoundError(
         `Product "${publicId}" has no translation for locale "${locale}".`,
-        {
-          publicId,
-          locale,
-        },
+        { publicId, locale },
       );
     }
     return NextResponse.json(dto);
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

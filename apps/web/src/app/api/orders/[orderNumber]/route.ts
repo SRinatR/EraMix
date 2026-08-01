@@ -1,16 +1,14 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { assertOrderCompanyAccess } from '@eramix/application';
 import { ResourceNotFoundError } from '@eramix/domain';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ orderNumber: string }> },
-): Promise<NextResponse> {
-  try {
+export const GET = withApiHandler<{ orderNumber: string }>(
+  'orders.getByNumber',
+  async (request, _traceId, { params }) => {
     const actor = await requireActor(request);
     const { orderNumber } = await params;
     const container = getContainer();
@@ -22,7 +20,5 @@ export async function GET(
     assertOrderCompanyAccess(actor.platformRole, actor.companyIds, order.companyId);
 
     return NextResponse.json(orderToDto(order));
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

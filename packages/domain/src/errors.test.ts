@@ -8,6 +8,7 @@ import {
   ConcurrencyConflictError,
   IdempotencyConflictError,
   OrderStateConflictError,
+  RateLimitedError,
   SlugConflictError,
 } from './errors.js';
 
@@ -28,5 +29,12 @@ describe('typed domain errors', () => {
     expect(error.code).toBe(code);
     expect(error.name).toBe(ErrorClass.name);
     expect(error.details).toEqual({ entityId: 'abc' });
+  });
+
+  it('RateLimitedError carries retryAfterSeconds in details for a Retry-After header', () => {
+    const error = new RateLimitedError('Too many requests.', 30);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBe('RATE_LIMITED');
+    expect(error.details).toEqual({ retryAfterSeconds: 30 });
   });
 });

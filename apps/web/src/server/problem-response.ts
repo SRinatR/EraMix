@@ -15,10 +15,12 @@ import { ZodError } from 'zod';
 export function problemResponse(error: unknown, traceId?: string): NextResponse<ProblemDetails> {
   if (error instanceof DomainError) {
     const problem = toProblemDetails(error, traceId);
-    return NextResponse.json(problem, {
-      status: problem.status,
-      headers: { 'content-type': 'application/problem+json' },
-    });
+    const headers: Record<string, string> = { 'content-type': 'application/problem+json' };
+    const retryAfterSeconds = error.details?.['retryAfterSeconds'];
+    if (problem.code === 'RATE_LIMITED' && typeof retryAfterSeconds === 'number') {
+      headers['Retry-After'] = String(retryAfterSeconds);
+    }
+    return NextResponse.json(problem, { status: problem.status, headers });
   }
 
   if (error instanceof ZodError) {

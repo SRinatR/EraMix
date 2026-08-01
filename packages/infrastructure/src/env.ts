@@ -19,6 +19,8 @@ const envSchema = z.object({
   SESSION_SECRET: z.string().min(32).optional(),
   /** Absolute origin used to build absolute URLs (sitemap.xml, Open Graph); optional, falls back to a placeholder in dev. */
   PUBLIC_ORIGIN: z.string().url().optional(),
+  /** OTLP/HTTP traces endpoint (packages/infrastructure/src/telemetry.ts); tracing no-ops when unset. */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

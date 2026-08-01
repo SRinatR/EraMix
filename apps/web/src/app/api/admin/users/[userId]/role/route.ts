@@ -1,8 +1,9 @@
 import { getContainer } from '@/server/container';
-import { problemResponse } from '@/server/problem-response';
+import { withApiHandler } from '@/server/handler';
+import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission } from '@eramix/application';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 const updateRoleSchema = z.object({
@@ -10,11 +11,10 @@ const updateRoleSchema = z.object({
   expectedVersion: z.number().int().min(0),
 });
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> },
-): Promise<NextResponse> {
-  try {
+export const PATCH = withApiHandler<{ userId: string }>(
+  'admin.users.updateRole',
+  async (request, traceId, { params }) => {
+    enforceRateLimit('admin', request);
     const actor = await requireActor(request);
     requirePermission(actor.platformRole, 'users.manage');
 
@@ -34,6 +34,7 @@ export async function PATCH(
       entityType: 'User',
       entityId: userId,
       metadata: { previousRole: before?.platformRole, newRole: body.platformRole },
+      traceId,
     });
 
     return NextResponse.json({
@@ -44,7 +45,5 @@ export async function PATCH(
       status: updated.status,
       version: updated.version,
     });
-  } catch (error) {
-    return problemResponse(error);
-  }
-}
+  },
+);

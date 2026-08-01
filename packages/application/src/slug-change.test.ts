@@ -39,6 +39,7 @@ function fakeOutboxRepo(): OutboxMessageRepository & { calls: unknown[] } {
     claimPending: () => Promise.resolve([]),
     markSent: () => Promise.resolve(),
     markFailed: () => Promise.resolve(),
+    markDeadLetter: () => Promise.resolve(),
   };
 }
 
