@@ -337,6 +337,8 @@ export interface OrderListFilter {
   readonly createdFrom?: Date;
   readonly createdTo?: Date;
   readonly sort?: 'createdAt_asc' | 'createdAt_desc';
+  /** Substring match against the public orderNumber — explicit allowlist for `sort`, but this is a search value, never a raw query passthrough. */
+  readonly search?: string;
   /**
    * Restricts to a `WHERE companyId IN (...)` set in a single query — the
    * multi-company customer order list's true cross-company page (one
@@ -394,9 +396,22 @@ export interface OrderCommentRepository {
   create(comment: Omit<OrderComment, 'createdAt'>): Promise<OrderComment>;
 }
 
+export interface AuditEventListFilter {
+  readonly action?: string;
+  readonly actorUserId?: string;
+  readonly createdFrom?: Date;
+  readonly createdTo?: Date;
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc';
+}
+
 export interface AuditEventRepository {
   record(event: Omit<AuditEvent, 'id' | 'createdAt'>): Promise<AuditEvent>;
-  listByEntity(entityType: string, entityId: string): Promise<readonly AuditEvent[]>;
+  /** ADM-002/DB-005: entity-scoped audit search — a hot entity's audit trail grows unbounded over time, so this is bounded and paginated like every other list endpoint, filterable by action/actor/date, sortable. */
+  listByEntity(
+    entityType: string,
+    entityId: string,
+    input?: PaginationInput & AuditEventListFilter,
+  ): Promise<Page<AuditEvent>>;
 }
 
 export interface OutboxMessageRepository {

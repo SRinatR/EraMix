@@ -48,6 +48,7 @@ function parseOrderListQuery(url: URL): {
   const createdFromParam = url.searchParams.get('createdFrom');
   const createdToParam = url.searchParams.get('createdTo');
   const sortParam = url.searchParams.get('sort');
+  const searchParam = url.searchParams.get('search');
   const limitParam = url.searchParams.get('limit');
   const offsetParam = url.searchParams.get('offset');
   return {
@@ -55,6 +56,7 @@ function parseOrderListQuery(url: URL): {
     ...(createdFromParam !== null ? { createdFrom: new Date(createdFromParam) } : {}),
     ...(createdToParam !== null ? { createdTo: new Date(createdToParam) } : {}),
     ...(sortParam === 'createdAt_asc' || sortParam === 'createdAt_desc' ? { sort: sortParam } : {}),
+    ...(searchParam !== null ? { search: searchParam } : {}),
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
     ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
   };

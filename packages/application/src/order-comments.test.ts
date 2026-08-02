@@ -30,7 +30,7 @@ class SequentialIdGenerator {
 function fakeAuditRepo(): AuditEventRepository {
   return {
     record: (event) => Promise.resolve({ id: 'audit-1', createdAt: new Date(), ...event }),
-    listByEntity: () => Promise.resolve([]),
+    listByEntity: () => Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 }),
   };
 }
 

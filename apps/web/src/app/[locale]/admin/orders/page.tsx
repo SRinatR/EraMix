@@ -1,7 +1,11 @@
 import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
 import { Link } from '@/i18n/navigation';
-import { parsePaginationParams } from '@/server/pagination';
+import {
+  parseAllowlistedParam,
+  parsePaginationParams,
+  parseStringParam,
+} from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { requirePermission, type OrderListFilter } from '@eramix/application';
 import type { OrderStatus } from '@eramix/domain';
@@ -19,6 +23,7 @@ const ORDER_STATUSES: readonly OrderStatus[] = [
   'COMPLETED',
   'CANCELLED',
 ];
+const SORTS: readonly NonNullable<OrderListFilter['sort']>[] = ['createdAt_asc', 'createdAt_desc'];
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +43,14 @@ export default async function AdminOrdersPage({
   }
 
   const resolved = await searchParams;
-  const statusParam = typeof resolved['status'] === 'string' ? resolved['status'] : undefined;
-  const status =
-    statusParam && (ORDER_STATUSES as readonly string[]).includes(statusParam)
-      ? (statusParam as OrderStatus)
-      : undefined;
-  const filter: OrderListFilter = status !== undefined ? { status } : {};
+  const status = parseAllowlistedParam(resolved, 'status', ORDER_STATUSES);
+  const search = parseStringParam(resolved, 'search');
+  const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
+  const filter: OrderListFilter = {
+    ...(status !== undefined ? { status } : {}),
+    ...(search !== undefined ? { search } : {}),
+    ...(sort !== undefined ? { sort } : {}),
+  };
 
   const container = getContainer();
   const {
@@ -68,10 +75,24 @@ export default async function AdminOrdersPage({
       <h1>Order queue</h1>
       <form method="get">
         <label>
+          Order number
+          <input type="search" name="search" defaultValue={search ?? ''} />
+        </label>
+        <label>
           Status
           <select name="status" defaultValue={status ?? ''}>
             <option value="">All</option>
             {ORDER_STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort
+          <select name="sort" defaultValue={sort ?? 'createdAt_desc'}>
+            {SORTS.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -111,7 +132,11 @@ export default async function AdminOrdersPage({
         total={total}
         limit={limit}
         offset={offset}
-        extraParams={status !== undefined ? { status } : {}}
+        extraParams={{
+          ...(status !== undefined ? { status } : {}),
+          ...(search !== undefined ? { search } : {}),
+          ...(sort !== undefined ? { sort } : {}),
+        }}
       />
     </main>
   );

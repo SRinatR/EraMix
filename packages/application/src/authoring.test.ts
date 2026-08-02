@@ -39,7 +39,7 @@ function fakeAuditRepo(): AuditEventRepository & { calls: unknown[] } {
       calls.push(event);
       return Promise.resolve({ id: 'audit-1', createdAt: new Date(), ...event });
     },
-    listByEntity: () => Promise.resolve([]),
+    listByEntity: () => Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 }),
   };
 }
 

@@ -1,9 +1,13 @@
 import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
-import { parsePaginationParams } from '@/server/pagination';
+import {
+  parseAllowlistedParam,
+  parsePaginationParams,
+  parseStringParam,
+} from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { Link } from '@/i18n/navigation';
-import { listOrdersForActor } from '@eramix/application';
+import { listOrdersForActor, type OrderListFilter } from '@eramix/application';
 import { AccessDeniedError, isSupportedLocale, type OrderStatus } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
@@ -21,6 +25,7 @@ const ORDER_STATUSES: readonly OrderStatus[] = [
   'COMPLETED',
   'CANCELLED',
 ];
+const SORTS: readonly NonNullable<OrderListFilter['sort']>[] = ['createdAt_asc', 'createdAt_desc'];
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'My orders', robots: { index: false } };
@@ -45,13 +50,10 @@ export default async function AccountOrdersPage({
   }
 
   const resolved = await searchParams;
-  const statusParam = typeof resolved['status'] === 'string' ? resolved['status'] : undefined;
-  const status =
-    statusParam && (ORDER_STATUSES as readonly string[]).includes(statusParam)
-      ? (statusParam as OrderStatus)
-      : undefined;
-  const companyIdParam =
-    typeof resolved['companyId'] === 'string' ? resolved['companyId'] : undefined;
+  const status = parseAllowlistedParam(resolved, 'status', ORDER_STATUSES);
+  const search = parseStringParam(resolved, 'search');
+  const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
+  const companyIdParam = parseStringParam(resolved, 'companyId');
   const pagination = parsePaginationParams(resolved);
 
   const container = getContainer();
@@ -64,6 +66,8 @@ export default async function AccountOrdersPage({
     orderPage = await listOrdersForActor(container.orders, {
       ...pagination,
       ...(status !== undefined ? { status } : {}),
+      ...(search !== undefined ? { search } : {}),
+      ...(sort !== undefined ? { sort } : {}),
       actorRole: actor.platformRole,
       actorCompanyIds: actor.companyIds,
       ...(companyIdParam !== undefined ? { companyId: companyIdParam } : {}),
@@ -105,10 +109,24 @@ export default async function AccountOrdersPage({
           </label>
         )}
         <label>
+          Order number
+          <input type="search" name="search" defaultValue={search ?? ''} />
+        </label>
+        <label>
           Status
           <select name="status" defaultValue={status ?? ''}>
             <option value="">All</option>
             {ORDER_STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort
+          <select name="sort" defaultValue={sort ?? 'createdAt_desc'}>
+            {SORTS.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -152,6 +170,8 @@ export default async function AccountOrdersPage({
         offset={offset}
         extraParams={{
           ...(status !== undefined ? { status } : {}),
+          ...(search !== undefined ? { search } : {}),
+          ...(sort !== undefined ? { sort } : {}),
           ...(companyIdParam !== undefined ? { companyId: companyIdParam } : {}),
         }}
       />

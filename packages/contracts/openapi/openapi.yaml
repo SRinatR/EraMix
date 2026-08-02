@@ -348,6 +348,11 @@ paths:
           in: query
           required: false
           schema: { type: string, format: date-time }
+        - name: search
+          in: query
+          required: false
+          description: Substring match against the public orderNumber.
+          schema: { type: string }
         - name: sort
           in: query
           required: false
@@ -1801,6 +1806,10 @@ paths:
       summary: >-
         Search audit events for one entity (audit.read.limited or
         audit.read.full — Manager/Administrator/Auditor).
+      description: >-
+        ADM-002/DB-005: a hot entity's audit trail grows unbounded over
+        time, so this is bounded, paginated, filterable by action/actor/
+        date, and sortable.
       tags: [Admin]
       parameters:
         - name: entityType
@@ -1811,19 +1820,50 @@ paths:
           in: query
           required: true
           schema: { type: string }
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+        - name: actorUserId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: createdFrom
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: createdTo
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_desc }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         '200':
-          description: Audit events for the given entity, newest first.
+          description: Paginated audit events for the given entity.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, offset]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/AuditEvent'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

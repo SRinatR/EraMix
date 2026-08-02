@@ -1,9 +1,20 @@
+import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
+import {
+  parseAllowlistedParam,
+  parsePaginationParams,
+  parseStringParam,
+} from '@/server/pagination';
 import { getServerActor } from '@/server/session';
-import { hasPermission } from '@eramix/application';
+import { hasPermission, type AuditEventListFilter } from '@eramix/application';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
+const SORTS: readonly NonNullable<AuditEventListFilter['sort']>[] = [
+  'createdAt_asc',
+  'createdAt_desc',
+];
 
 /**
  * Search-by-entity only (AuditEventRepository.listByEntity has no
@@ -14,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ entityType?: string; entityId?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const actor = await getServerActor();
   if (!actor) {
@@ -27,11 +38,21 @@ export default async function AdminAuditPage({
     notFound();
   }
 
-  const { entityType, entityId } = await searchParams;
+  const resolved = await searchParams;
+  const entityType = parseStringParam(resolved, 'entityType');
+  const entityId = parseStringParam(resolved, 'entityId');
+  const action = parseStringParam(resolved, 'action');
+  const actorUserId = parseStringParam(resolved, 'actorUserId');
+  const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
   const container = getContainer();
-  const events =
-    entityType && entityId
-      ? await container.auditEvents.listByEntity(entityType, entityId)
+  const page =
+    entityType !== undefined && entityId !== undefined
+      ? await container.auditEvents.listByEntity(entityType, entityId, {
+          ...parsePaginationParams(resolved),
+          ...(action !== undefined ? { action } : {}),
+          ...(actorUserId !== undefined ? { actorUserId } : {}),
+          ...(sort !== undefined ? { sort } : {}),
+        })
       : undefined;
 
   return (
@@ -46,39 +67,69 @@ export default async function AdminAuditPage({
           Entity ID
           <input name="entityId" defaultValue={entityId} required />
         </label>
+        <label>
+          Action
+          <input name="action" defaultValue={action ?? ''} placeholder="category.created" />
+        </label>
+        <label>
+          Actor user ID
+          <input name="actorUserId" defaultValue={actorUserId ?? ''} />
+        </label>
+        <label>
+          Sort
+          <select name="sort" defaultValue={sort ?? 'createdAt_desc'}>
+            {SORTS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="submit">Search</button>
       </form>
 
-      {events && (
-        <table>
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Metadata</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
-              <tr>
-                <td colSpan={4}>No audit events found for this entity.</td>
-              </tr>
-            ) : (
-              events.map((event) => (
-                <tr key={event.id}>
-                  <td>{event.createdAt.toISOString()}</td>
-                  <td>{event.actorUserId ?? '(system)'}</td>
-                  <td>{event.action}</td>
-                  <td>
-                    <pre>{JSON.stringify(event.metadata ?? {}, null, 2)}</pre>
-                  </td>
+      {page &&
+        (page.items.length === 0 ? (
+          <p>No audit events match this filter.</p>
+        ) : (
+          <>
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Actor</th>
+                  <th>Action</th>
+                  <th>Metadata</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      )}
+              </thead>
+              <tbody>
+                {page.items.map((event) => (
+                  <tr key={event.id}>
+                    <td>{event.createdAt.toISOString()}</td>
+                    <td>{event.actorUserId ?? '(system)'}</td>
+                    <td>{event.action}</td>
+                    <td>
+                      <pre>{JSON.stringify(event.metadata ?? {}, null, 2)}</pre>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <PaginationControls
+              basePath="/admin/audit"
+              total={page.total}
+              limit={page.limit}
+              offset={page.offset}
+              extraParams={{
+                ...(entityType !== undefined ? { entityType } : {}),
+                ...(entityId !== undefined ? { entityId } : {}),
+                ...(action !== undefined ? { action } : {}),
+                ...(actorUserId !== undefined ? { actorUserId } : {}),
+                ...(sort !== undefined ? { sort } : {}),
+              }}
+            />
+          </>
+        ))}
     </main>
   );
 }

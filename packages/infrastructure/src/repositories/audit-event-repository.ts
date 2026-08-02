@@ -1,4 +1,9 @@
-import type { AuditEventRepository } from '@eramix/application';
+import {
+  clampPagination,
+  type AuditEventListFilter,
+  type AuditEventRepository,
+  type Page,
+} from '@eramix/application';
 import type { AuditEvent } from '@eramix/domain';
 import type { AuditEvent as AuditEventRow } from '../generated/prisma/client.js';
 import { nullableJsonToRecord, nullToUndefined } from '../prisma-json.js';
@@ -22,12 +27,34 @@ export class PrismaAuditEventRepository implements AuditEventRepository {
     return toDomain(row);
   }
 
-  async listByEntity(entityType: string, entityId: string): Promise<readonly AuditEvent[]> {
-    const rows = await resolveClient(this.prisma).auditEvent.findMany({
-      where: { entityType, entityId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(toDomain);
+  async listByEntity(
+    entityType: string,
+    entityId: string,
+    input: { limit?: number; offset?: number } & AuditEventListFilter = {},
+  ): Promise<Page<AuditEvent>> {
+    const { limit, offset } = clampPagination(input);
+    const where: Record<string, unknown> = { entityType, entityId };
+    if (input.action !== undefined) {
+      where['action'] = input.action;
+    }
+    if (input.actorUserId !== undefined) {
+      where['actorUserId'] = input.actorUserId;
+    }
+    if (input.createdFrom !== undefined || input.createdTo !== undefined) {
+      where['createdAt'] = {
+        ...(input.createdFrom !== undefined ? { gte: input.createdFrom } : {}),
+        ...(input.createdTo !== undefined ? { lte: input.createdTo } : {}),
+      };
+    }
+    const orderBy = {
+      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
+    };
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.auditEvent.findMany({ where, orderBy, take: limit, skip: offset }),
+      client.auditEvent.count({ where }),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 }
 

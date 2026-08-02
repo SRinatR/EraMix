@@ -42,6 +42,7 @@ export type {
   OrderListFilter,
   OrderCommentRepository,
   AuditEventRepository,
+  AuditEventListFilter,
   OutboxMessageRepository,
 } from './repositories.js';
 export {

@@ -1743,6 +1743,66 @@ companies/{companyId}/memberships` were still documented with their
   by `pagination.test.ts`). Production build and any Postgres-backed
   behaviour verified by CI only.
 
+### Rich search/sort for orders (admin+customer); pagination added to audit search (closes item 1's list)
+
+Completes the "rich search/sort/filter" pass named across categories,
+products, content, memberships/users, companies, orders, and audit events —
+this is the last two.
+
+- **Orders**: `OrderListFilter.search` (substring match against the public
+  `orderNumber`) threads through `listOrdersForActor` (no change needed
+  there — it already forwards unknown filter fields verbatim) to both
+  `/api/orders` and `/admin/orders`/`/account/orders`'s UI, which each
+  gained an "Order number" search box alongside their existing status
+  filter and a new sort `<select>` (`createdAt_asc|createdAt_desc` — the
+  repository already sorted by `createdAt` unconditionally; this exposes
+  the direction as a real choice for the first time).
+- **Audit events — closes a genuine DB-005 gap, not just a UX one**:
+  `AuditEventRepository.listByEntity` had **zero pagination** — a hot
+  entity's audit trail (e.g. an `Order` transitioned many times, or a
+  heavily-edited `Product`) grows unbounded over time, the exact class of
+  bug DB-005 exists to prevent. Now takes `AuditEventListFilter`
+  (`action`/`actorUserId`/`createdFrom`/`createdTo`/`sort`) and returns
+  `Page<AuditEvent>` like every other list method. Updated every in-memory
+  `AuditEventRepository` test double across the application package (7
+  test files — `authoring.test.ts`, `order-comments.test.ts`,
+  `order-lifecycle.test.ts`, `product-assets.test.ts`,
+  `publication.test.ts`, `slug-change.test.ts`, `translation-edit.test.ts`
+  — all previously stubbed `listByEntity: () => Promise.resolve([])`, now
+  returning the `Page` shape) — a real, mechanical, TypeScript-compiler-
+  driven audit of every call site, not a guess at what needed updating.
+  `/admin/audit` gained action/actor-user-ID filters, a sort control, and
+  pagination controls; the "entity-scoped search only, no list-everything
+  method" scope named in Phase 6 is unchanged (still a deliberate,
+  TZ-consistent boundary, not something this slice revisits).
+- **OpenAPI**: `GET /api/orders` gained the `search` parameter;
+  `GET /api/admin/audit` gained `action`/`actorUserId`/`createdFrom`/
+  `createdTo`/`sort`/`limit`/`offset` and its response now correctly
+  documents `{items, total, limit, offset}` instead of the stale
+  `{items}`-only shape from before pagination existed at all. `redocly
+lint` passes.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy): `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck`/`test` all exit 0 — 289 unit tests unchanged (the
+  `listOrdersForActor`/`clampPagination`/`parseAllowlistedParam` tests
+  already added in prior slices exercise the same generic filter-
+  passthrough and allowlist-rejection logic this slice reuses verbatim;
+  no new distinct branches to cover). Production build and any
+  Postgres-backed behaviour verified by CI only.
+
+**Item 1 status**: categories, products, content, memberships/users,
+companies, orders, and audit events all now have bounded, paginated,
+explicit-allowlist-sorted list endpoints with real filter/search/sort UI
+and RFC 9457 error rendering (every route already went through
+`withApiHandler`/`problemResponse` before this pass; nothing about
+search/sort/filter changed that). Media/documents is the one deliberate,
+documented exemption (see the earlier entry). Full per-column search on
+every conceivable field (e.g. searching products by description text, or
+categories by `sortOrder` range) was not attempted — search is scoped to
+the field an admin would actually type into a "find this thing" box
+(name/SKU/title/legalName/email/orderNumber), consistent with what was
+actually built, not a name-matching exercise against every string column.
+
 ## Required task format for the CLI agent
 
 For every task, report:
