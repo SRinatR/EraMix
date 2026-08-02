@@ -3,6 +3,16 @@
 This is the execution plan for the CLI agent. Work phases in order. A phase is
 complete only when its exit criteria and quality gates pass.
 
+## Business priority and decision rule
+
+Sustainable qualified organic traffic, conversion, sales enablement, and
+measurement are the highest business priority across every phase below (see
+CLAUDE.md's "Business priority and decision rule"). When sequencing work or
+choosing between several compliant options within a phase or slice, choose
+the one that maximizes qualified organic traffic, conversion, measurement
+quality, and durable search visibility — never at the expense of the
+fail-closed delivery policy, security, or RBAC rules a phase also requires.
+
 ## Phase 0 — repository bootstrap and decisions
 
 Deliver:

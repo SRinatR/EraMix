@@ -21,6 +21,21 @@ Do not invent requirements that contradict these documents. If a requirement is
 ambiguous or a product decision is missing, record it in an ADR or open-question
 file and stop before implementing the affected irreversible behaviour.
 
+## Business priority and decision rule
+
+Sustainable qualified organic traffic, conversion (RFQs and other qualified
+leads), sales enablement, and rigorous measurement are the highest business
+priority for the public site and every system that supports it — ranking
+above secondary polish, non-essential features, and speculative scope. This
+priority governs sequencing and design choices; it never overrides the
+fail-closed delivery policy, security/identity rules, RBAC/authorization,
+legal/privacy constraints, or any other non-negotiable rule elsewhere in this
+document.
+
+Decision rule: when several compliant options exist, choose the one that
+maximizes qualified organic traffic, conversion, measurement quality, and
+durable search visibility.
+
 ## Operating mode
 
 1. Start each task by reading the relevant phase in

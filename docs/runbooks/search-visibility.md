@@ -6,6 +6,13 @@ This is the mandatory launch and operations contract for organic search. It
 implements legitimate technical SEO; it does not promise positions, bypass
 ranking systems, or authorize deceptive optimisation.
 
+Sustainable qualified organic traffic, conversion, sales enablement, and
+measurement are the highest business priority this runbook serves (see
+CLAUDE.md's "Business priority and decision rule"). Decision rule: when
+several compliant options exist, choose the one that maximizes qualified
+organic traffic, conversion, measurement quality, and durable search
+visibility.
+
 The Product Owner owns Google Search Console and Yandex Webmaster access.
 Credentials, verification tokens, OAuth refresh tokens, and exported query data
 are secrets: use the deployment secret store, never source control or logs.
