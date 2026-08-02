@@ -2,6 +2,10 @@ import {
   ResourceNotFoundError,
   ValidationFailedError,
   validateRetirementReason,
+  articleUrl,
+  categoryUrl,
+  pageUrl,
+  productUrl,
   type PlatformRole,
   type PublicationStatus,
 } from '@eramix/domain';
@@ -90,6 +94,48 @@ function assertCategoryPublishable(category: CategoryWithTranslations): void {
   }
 }
 
+/**
+ * Canonical URLs affected by a transition *into* PUBLISHED — the P1
+ * IndexNow adapter (apps/worker) submits exactly these, never a
+ * client-supplied or bulk-derived list (CLAUDE.md: "publish only canonical
+ * URLs after a successful public content/redirect state transition").
+ * Relative paths only; the worker prefixes the live canonical host at
+ * submission time (packages/application has no notion of the deployment's
+ * PlatformSettings-configured host).
+ */
+function categoryCanonicalUrls(category: CategoryWithTranslations): readonly string[] {
+  const urls: string[] = [];
+  for (const translation of category.translations) {
+    const canonical = translation.routes.find((route) => route.isCanonical);
+    if (canonical) {
+      urls.push(categoryUrl({ locale: translation.locale, slug: canonical.slug }));
+    }
+  }
+  return urls;
+}
+
+/** FAQ_ITEM has no per-item route (ContentRouteNamespace only covers ARTICLES/PAGES) — never included. */
+function contentCanonicalUrls(content: ContentWithTranslations): readonly string[] {
+  if (content.type !== 'ARTICLE' && content.type !== 'PAGE') {
+    return [];
+  }
+  const buildUrl = content.type === 'ARTICLE' ? articleUrl : pageUrl;
+  const urls: string[] = [];
+  for (const translation of content.translations) {
+    const canonical = translation.routes.find((route) => route.isCanonical);
+    if (canonical) {
+      urls.push(buildUrl({ locale: translation.locale, slug: canonical.slug }));
+    }
+  }
+  return urls;
+}
+
+function productCanonicalUrls(product: ProductWithTranslations): readonly string[] {
+  return product.translations.map((translation) =>
+    productUrl({ locale: translation.locale, publicId: product.publicId, slug: translation.slug }),
+  );
+}
+
 export async function transitionCategoryStatus(
   deps: {
     categoryRepo: CategoryRepository;
@@ -126,7 +172,13 @@ export async function transitionCategoryStatus(
       aggregateType: 'Category',
       aggregateId: input.id,
       eventType: 'category.status_changed',
-      payload: { previousStatus: current.status, newStatus: input.toStatus },
+      payload: {
+        previousStatus: current.status,
+        newStatus: input.toStatus,
+        ...(input.toStatus === 'PUBLISHED'
+          ? { canonicalUrls: categoryCanonicalUrls(updated) }
+          : {}),
+      },
     });
     return updated;
   });
@@ -145,7 +197,13 @@ function assertContentPublishable(content: ContentWithTranslations): void {
         { contentId: content.id, translationId: translation.id, locale: translation.locale },
       );
     }
-    if (!translation.routes.some((route) => route.isCanonical)) {
+    // FAQ_ITEM has no per-item route at all (ContentRouteNamespace only
+    // covers ARTICLES/PAGES — packages/application/src/authoring.ts rejects
+    // a FAQ_ITEM translation that even supplies a slug), so requiring a
+    // canonical route here would make a FAQ_ITEM permanently unpublishable.
+    // Found and fixed while adding IndexNow's canonicalUrls computation,
+    // which surfaced this real pre-existing gap.
+    if (content.type !== 'FAQ_ITEM' && !translation.routes.some((route) => route.isCanonical)) {
       throw new ValidationFailedError(
         `Content translation "${translation.locale}" has no canonical route.`,
         { contentId: content.id, translationId: translation.id, locale: translation.locale },
@@ -190,7 +248,11 @@ export async function transitionContentStatus(
       aggregateType: 'Content',
       aggregateId: input.id,
       eventType: 'content.status_changed',
-      payload: { previousStatus: current.status, newStatus: input.toStatus },
+      payload: {
+        previousStatus: current.status,
+        newStatus: input.toStatus,
+        ...(input.toStatus === 'PUBLISHED' ? { canonicalUrls: contentCanonicalUrls(updated) } : {}),
+      },
     });
     return updated;
   });
@@ -256,7 +318,11 @@ export async function transitionProductStatus(
       aggregateType: 'Product',
       aggregateId: input.id,
       eventType: 'product.status_changed',
-      payload: { previousStatus: current.status, newStatus: input.toStatus },
+      payload: {
+        previousStatus: current.status,
+        newStatus: input.toStatus,
+        ...(input.toStatus === 'PUBLISHED' ? { canonicalUrls: productCanonicalUrls(updated) } : {}),
+      },
     });
     return updated;
   });

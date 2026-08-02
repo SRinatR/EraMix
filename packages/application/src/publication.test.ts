@@ -241,7 +241,10 @@ describe('transitionCategoryStatus', () => {
       metadata: { previousStatus: 'DRAFT', newStatus: 'PUBLISHED' },
     });
     expect(outboxRepo.calls).toHaveLength(1);
-    expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'category.status_changed' });
+    expect(outboxRepo.calls[0]).toMatchObject({
+      eventType: 'category.status_changed',
+      payload: { canonicalUrls: ['/en/catalog/chairs'] },
+    });
   });
 
   it('never gates a transition to ARCHIVED (unpublish must always work)', async () => {
@@ -538,6 +541,40 @@ describe('transitionContentStatus', () => {
     expect(result.status).toBe('PUBLISHED');
     expect(auditRepo.calls).toHaveLength(1);
     expect(outboxRepo.calls).toHaveLength(1);
+    expect(outboxRepo.calls[0]).toMatchObject({
+      payload: { canonicalUrls: ['/en/articles/friendship-festival'] },
+    });
+  });
+
+  it('never includes canonicalUrls for a FAQ_ITEM (no per-item route)', async () => {
+    const content = makeContent({
+      type: 'FAQ_ITEM',
+      translations: [makeContentTranslation({ routes: [] })],
+    });
+    const published = { ...content, status: 'PUBLISHED' as const, version: 1 };
+    const contentRepo = {
+      findById: () => Promise.resolve(content),
+      updateStatus: () => Promise.resolve(published),
+    };
+    const outboxRepo = fakeOutboxRepo();
+
+    await transitionContentStatus(
+      {
+        contentRepo: contentRepo as never,
+        auditRepo: fakeAuditRepo(),
+        outboxRepo,
+        uow: new InMemoryUnitOfWork(),
+      },
+      {
+        id: 'content-1',
+        expectedVersion: 0,
+        toStatus: 'PUBLISHED',
+        actorUserId: 'editor-1',
+        actorRole: 'CONTENT_EDITOR',
+      },
+    );
+
+    expect(outboxRepo.calls[0]).toMatchObject({ payload: { canonicalUrls: [] } });
   });
 });
 
@@ -619,7 +656,7 @@ function makeProductTranslation(overrides: Partial<ProductTranslation> = {}): Pr
 function makeProduct(overrides: Partial<ProductWithTranslations> = {}): ProductWithTranslations {
   return {
     id: 'product-1',
-    publicId: 'PUB123',
+    publicId: 'P8K4F2M9',
     sku: 'SKU-1',
     categoryId: 'category-1',
     status: 'DRAFT',
@@ -711,6 +748,9 @@ describe('transitionProductStatus', () => {
     expect(result.status).toBe('PUBLISHED');
     expect(auditRepo.calls).toHaveLength(1);
     expect(outboxRepo.calls).toHaveLength(1);
+    expect(outboxRepo.calls[0]).toMatchObject({
+      payload: { canonicalUrls: ['/en/catalog/P8K4F2M9-oak-table'] },
+    });
   });
 });
 

@@ -1,7 +1,15 @@
-import type { Clock, EmailSender, OutboxMessageRepository } from '@eramix/application';
-import type { OutboxMessage } from '@eramix/domain';
+import type {
+  Clock,
+  EmailSender,
+  IndexNowNotifier,
+  IndexNowSubmissionInput,
+  IndexNowSubmissionResult,
+  OutboxMessageRepository,
+  PlatformSettingsRepository,
+} from '@eramix/application';
+import type { OutboxMessage, PlatformSettings } from '@eramix/domain';
 import type { Logger } from '@eramix/infrastructure';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MAX_OUTBOX_ATTEMPTS, processOutboxBatch } from './outbox-worker.js';
 
 class InMemoryOutbox implements OutboxMessageRepository {
@@ -80,6 +88,37 @@ function fixedClock(time: Date): Clock {
   return { now: () => time };
 }
 
+function makePlatformSettings(overrides: Partial<PlatformSettings> = {}): PlatformSettings {
+  return {
+    id: 'singleton',
+    canonicalHost: 'eramix.example',
+    forceHttps: true,
+    stripTrailingSlash: true,
+    crawlerGlobalNoindex: false,
+    googleExtendedAllowed: true,
+    aiCompatibilityFilesEnabled: false,
+    analyticsConsentRequired: true,
+    ga4Enabled: false,
+    yandexMetricaEnabled: false,
+    rustAnalyticsEnabled: false,
+    indexNowEnabled: true,
+    merchantCenterEnabled: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    version: 0,
+    ...overrides,
+  };
+}
+
+function fakeSettingsRepo(settings: PlatformSettings): PlatformSettingsRepository {
+  return {
+    get: () => Promise.resolve(settings),
+    update: () => {
+      throw new Error('not needed for these tests');
+    },
+  };
+}
+
 describe('processOutboxBatch', () => {
   it('marks a successfully dispatched message SENT', async () => {
     const outbox = new InMemoryOutbox();
@@ -155,5 +194,148 @@ describe('processOutboxBatch', () => {
     });
 
     expect(result.claimed).toBe(0);
+  });
+});
+
+describe('processOutboxBatch — IndexNow (P1 adapter)', () => {
+  const SUCCESS_RESULT: readonly IndexNowSubmissionResult[] = [
+    { engine: 'bing', succeeded: true, statusCode: 200 },
+    { engine: 'yandex', succeeded: true, statusCode: 200 },
+  ];
+
+  function fakeIndexNow(
+    submit: (input: IndexNowSubmissionInput) => Promise<readonly IndexNowSubmissionResult[]>,
+  ): IndexNowNotifier {
+    return { submit };
+  }
+
+  it('submits canonical URLs for a category.status_changed PUBLISHED transition when enabled', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledWith({
+      host: 'eramix.example',
+      key: 'a1b2c3d4e5f6',
+      keyLocation: 'https://eramix.example/api/seo/indexnow-key.txt',
+      urlList: ['https://eramix.example/en/catalog/chairs'],
+    });
+  });
+
+  it('never submits when PlatformSettings.indexNowEnabled is false (live check, not cached)', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'product.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/P8K4F2M9-oak-table'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings({ indexNowEnabled: false })),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('never submits for an ineligible event type (e.g. order.submitted)', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({ eventType: 'order.submitted', payload: {} });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('never submits for a status_changed event that did not transition to PUBLISHED', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'content.status_changed',
+      payload: { newStatus: 'ARCHIVED' },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('never submits when the deployment secret (indexNowKey) is not configured', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      // indexNowKey deliberately omitted
+    });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('an IndexNow submission failure never affects the outbox message SENT outcome (best-effort, not the source of truth)', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockRejectedValue(new Error('network unreachable'));
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(result.sent).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('SENT');
   });
 });

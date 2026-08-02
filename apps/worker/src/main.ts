@@ -1,8 +1,10 @@
 import { SystemClock } from '@eramix/application';
 import {
   DevEmailSender,
+  HttpIndexNowNotifier,
   JsonLogger,
   PrismaOutboxMessageRepository,
+  PrismaPlatformSettingsRepository,
   createPrismaClient,
   loadEnv,
   startTelemetry,
@@ -29,6 +31,13 @@ const deps = {
   email: new DevEmailSender(logger),
   logger,
   clock: new SystemClock(),
+  // IndexNow (CLAUDE.md: P1, Bing/Yandex-only). Settings/enablement are
+  // re-checked live every batch inside processOutboxBatch, not cached here
+  // — this only wires the notifier/repository/secret, all three of which
+  // are required together before any submission is attempted.
+  indexNow: new HttpIndexNowNotifier(),
+  settingsRepo: new PrismaPlatformSettingsRepository(prisma),
+  ...(env.INDEXNOW_KEY !== undefined ? { indexNowKey: env.INDEXNOW_KEY } : {}),
 };
 
 let stopped = false;

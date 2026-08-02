@@ -12,6 +12,9 @@ export type {
   EmailSender,
   MalwareScanResult,
   MalwareScanner,
+  IndexNowSubmissionInput,
+  IndexNowSubmissionResult,
+  IndexNowNotifier,
 } from './ports.js';
 export { SystemClock } from './system-clock.js';
 export type { CursorPage, CursorPaginationInput, DecodedCursor } from './pagination.js';

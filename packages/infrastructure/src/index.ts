@@ -24,6 +24,8 @@ export type { Logger, LogLevel, LogFields } from './logger.js';
 export { InMemoryRateLimiter } from './rate-limiter.js';
 export type { RateLimiter, RateLimitResult } from './rate-limiter.js';
 export { DevEmailSender } from './dev-email-sender.js';
+export { HttpIndexNowNotifier } from './indexnow-notifier.js';
+export type { HttpIndexNowNotifierOptions } from './indexnow-notifier.js';
 export { DevMalwareScanner } from './dev-malware-scanner.js';
 export { LocalFilesystemStorageProvider } from './local-storage-provider.js';
 export { startTelemetry } from './telemetry.js';

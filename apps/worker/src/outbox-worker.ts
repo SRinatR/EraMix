@@ -1,4 +1,11 @@
-import type { Clock, EmailSender, OutboxMessageRepository } from '@eramix/application';
+import type {
+  Clock,
+  EmailSender,
+  IndexNowNotifier,
+  OutboxMessageRepository,
+  PlatformSettingsRepository,
+} from '@eramix/application';
+import { buildCanonicalOrigin } from '@eramix/application';
 import type { OutboxMessage } from '@eramix/domain';
 import type { Logger } from '@eramix/infrastructure';
 
@@ -7,6 +14,17 @@ export interface OutboxWorkerDeps {
   readonly email: EmailSender;
   readonly logger: Logger;
   readonly clock: Clock;
+  /**
+   * IndexNow (CLAUDE.md: P1, Bing/Yandex-only). All three optional and only
+   * used together — submission only happens when the deployment secret
+   * (indexNowKey), a live PlatformSettings row, and its admin-controlled
+   * indexNowEnabled kill switch all agree. Live settings are re-fetched
+   * every batch (not cached at worker startup) so disabling the switch in
+   * admin takes effect on the next poll cycle without a worker restart.
+   */
+  readonly indexNow?: IndexNowNotifier;
+  readonly settingsRepo?: PlatformSettingsRepository;
+  readonly indexNowKey?: string;
 }
 
 export interface OutboxWorkerResult {
@@ -40,6 +58,64 @@ function toEmailMessage(message: OutboxMessage): { to: string; subject: string; 
     subject: `[${message.aggregateType}] ${message.eventType}`,
     textBody: JSON.stringify(message.payload),
   };
+}
+
+const CANONICAL_URL_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'category.status_changed',
+  'content.status_changed',
+  'product.status_changed',
+]);
+
+function eligibleCanonicalUrls(message: OutboxMessage): readonly string[] | undefined {
+  if (!CANONICAL_URL_EVENT_TYPES.has(message.eventType)) {
+    return undefined;
+  }
+  const payload = message.payload as { newStatus?: unknown; canonicalUrls?: unknown };
+  if (payload.newStatus !== 'PUBLISHED' || !Array.isArray(payload.canonicalUrls)) {
+    return undefined;
+  }
+  const urls = payload.canonicalUrls.filter((url): url is string => typeof url === 'string');
+  return urls.length > 0 ? urls : undefined;
+}
+
+/**
+ * Best-effort, independent of the message's own SENT/FAILED/DEAD_LETTER
+ * outcome (CLAUDE.md: IndexNow "never replaces sitemap/canonical
+ * correctness" — it is a secondary notification, not the source of truth).
+ * Never throws: a submission failure is logged, not retried through the
+ * outbox's own retry/backoff state machine (HttpIndexNowNotifier already
+ * bounds its own per-engine retry).
+ */
+async function maybeSubmitIndexNow(deps: OutboxWorkerDeps, message: OutboxMessage): Promise<void> {
+  const urlPaths = eligibleCanonicalUrls(message);
+  if (!urlPaths || !deps.indexNow || !deps.settingsRepo || !deps.indexNowKey) {
+    return;
+  }
+  try {
+    const settings = await deps.settingsRepo.get();
+    if (!settings.indexNowEnabled) {
+      return;
+    }
+    const origin = buildCanonicalOrigin(settings);
+    const results = await deps.indexNow.submit({
+      host: settings.canonicalHost,
+      key: deps.indexNowKey,
+      keyLocation: `${origin}/api/seo/indexnow-key.txt`,
+      urlList: urlPaths.map((path) => `${origin}${path}`),
+    });
+    deps.logger.log('info', 'indexnow_submitted', {
+      messageId: message.id,
+      eventType: message.eventType,
+      urlCount: urlPaths.length,
+      results,
+    });
+  } catch (error) {
+    deps.logger.log('warn', 'indexnow_submission_failed', {
+      messageId: message.id,
+      eventType: message.eventType,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**
@@ -86,6 +162,8 @@ export async function processOutboxBatch(
         retried += 1;
       }
     }
+
+    await maybeSubmitIndexNow(deps, message);
   }
 
   return { claimed: messages.length, sent, retried, deadLettered };

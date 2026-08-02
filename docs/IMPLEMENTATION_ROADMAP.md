@@ -2141,6 +2141,110 @@ domain/src/public-id.ts` gained `splitCatalogSlug` (extracted from the
   real browser/crawler receives `410` (Pi-pending, same standing gap as every
   other Postgres-backed public page in this repository).
 
+## Phase B slice 3: IndexNow adapter (Bing/Yandex, P1)
+
+CLAUDE.md/`docs/runbooks/search-visibility.md`: "IndexNow is a P1,
+secret-managed notification adapter for Bing/Yandex only... never used as a
+Google indexing mechanism." Roadmap deliverable: "publish only canonical
+URLs after a successful public content/redirect state transition, store the
+key in the deployment secret store, expose the required verification file,
+test bounded retry/error observability."
+
+- **Domain** (`packages/domain/src/indexnow.ts`, 8 unit tests):
+  `validateIndexNowSubmission` — same-host/https-prefix string check (no
+  `URL` global, matching `platform-settings.ts`'s existing
+  `HTTPS_URL_PATTERN` convention, since this package has no DOM/Node lib), a
+  bounded key charset/length check, a non-empty/≤10,000-URL `urlList`
+  bound. Throws before any network call — a caller bug, never conflated
+  with a network-layer failure.
+- **Application** (`packages/application/src/ports.ts`): new
+  `IndexNowNotifier` port — `submit` never throws for a single engine's
+  failure (each engine's outcome, including its own bounded retry, is
+  reported in the returned array), so a transient IndexNow failure can
+  never affect the outbox message's own SENT/FAILED/DEAD_LETTER state.
+  `packages/application/src/publication.ts`'s `transitionCategoryStatus`/
+  `transitionContentStatus`/`transitionProductStatus` now compute
+  `canonicalUrls` (relative paths, via the existing typed URL builder) into
+  the `*.status_changed` outbox payload exactly when `toStatus ===
+'PUBLISHED'` — the one and only IndexNow-eligibility signal, decided at the
+  moment of transition, never derived later from a stale read.
+  **Found and fixed a real pre-existing bug while wiring this**:
+  `assertContentPublishable` required every translation to have a canonical
+  route, but `FAQ_ITEM` translations never have one (no
+  `ContentRouteNamespace` covers FAQ) — a `FAQ_ITEM` could never actually be
+  published. Now exempted; `contentCanonicalUrls` also returns `[]` for
+  `FAQ_ITEM` (no per-item URL to submit).
+- **Infrastructure** (`packages/infrastructure/src/indexnow-notifier.ts`,
+  6 unit tests): `HttpIndexNowNotifier` submits the same payload to Bing's
+  and Yandex's IndexNow endpoints in parallel, each with its own bounded
+  (default 3-attempt, capped-exponential-backoff) retry — verified with a
+  fake `fetchImpl`/`sleepImpl` (no real network/timers in tests) that a
+  persistently-failing engine is retried exactly `maxAttemptsPerEngine`
+  times, never more, and never throws.
+- **Env** (`packages/infrastructure/src/env.ts`): new optional
+  `INDEXNOW_KEY` (8-128 alphanumeric/hyphen, matching the domain
+  validator's key-shape check) — the real key is a deployment secret, never
+  invented; `.env.example`/`env-example.test.ts` updated to match the
+  existing SESSION_SECRET/MEDIA_SIGNING_SECRET "documented but never a real
+  value" convention.
+- **Delivery — verification file**: `GET /api/seo/indexnow-key.txt`
+  (`apps/web`) serves the raw `INDEXNOW_KEY` as `text/plain`, 404s (never a
+  fabricated placeholder) when unconfigured. `apps/worker`'s submissions
+  always pass this exact URL as `keyLocation`, so no root-relative
+  `/{key}.txt` auto-discovery convention is relied upon.
+- **Delivery — dispatch** (`apps/worker/src/outbox-worker.ts`, 6 new unit
+  tests): `processOutboxBatch` gained a best-effort, independent
+  `maybeSubmitIndexNow` step per claimed message — eligible only for
+  `category.status_changed`/`content.status_changed`/`product.status_changed`
+  messages whose payload has `newStatus: 'PUBLISHED'` and a non-empty
+  `canonicalUrls`. Live-checks `PlatformSettingsRepository.get().
+indexNowEnabled` on every batch (never cached at worker startup), so the
+  existing admin kill switch (`/admin/settings`, built in slice 1) takes
+  effect on the next poll cycle with no worker restart. A submission
+  failure is logged (`indexnow_submission_failed`) but never affects the
+  message's own SENT/FAILED/DEAD_LETTER outcome — verified directly (a
+  rejecting fake notifier still leaves the message `SENT`).
+  `apps/worker/src/main.ts` wires `HttpIndexNowNotifier`/
+  `PrismaPlatformSettingsRepository`/`env.INDEXNOW_KEY` together; submission
+  only ever happens when all three preconditions (enabled, key configured,
+  eligible event) hold.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **365 unit tests** (up from 340: +8 `indexnow.test.ts`, +1
+  `productCanonicalUrls`/FAQ_ITEM fix regression test in
+  `publication.test.ts`, +6 `indexnow-notifier.test.ts`, +6 IndexNow cases
+  in `outbox-worker.test.ts`, +1 `INDEXNOW_KEY` case in `env.test.ts`).
+- **Not yet verified — a real, disk-space platform-prerequisite failure,
+  not a code defect**: `next build` could not be completed locally this
+  session. `tsc -b` (plain workspace typecheck, unaffected) passed cleanly
+  in every attempt; `next build`'s own bundler step ("Compiled successfully
+  in 11.9s") and its own TypeScript pass ("Finished TypeScript in 2.3s")
+  both succeeded, but the subsequent "Collecting page data using 11
+  workers" step crashed twice — once with a `typescript-go` native-checker
+  goroutine panic, once with a plain Node.js `FATAL ERROR: ... JavaScript
+heap out of memory` — immediately after `Get-PSDrive C` showed free space
+  falling from ~554 MB to ~151-195 MB across the attempts (this laptop's
+  C: drive is a pre-existing, chronic constraint independent of this
+  session — Phase B slice 1's own status block already noted "2.3 GB free
+  at the start of this session" as the working baseline months earlier).
+  Per CLAUDE.md's fail-closed policy ("stop the affected gate and report
+  the exact error... do not replace the required behaviour with a
+  workaround"), this was not forced past with a reduced build, a smaller
+  Node heap flag, or a partial/incremental workaround — `.next` was cleaned
+  up after each failed attempt to avoid leaving broken scaffolding, and CI's
+  own `Production build` job (unaffected — proven green on every push so
+  far, including this slice's predecessor) is the verification of record
+  for this slice, exactly the precedent Phase B slice 1 already established
+  when it explicitly deferred "Production build... verified by CI only for
+  this slice." No dev-server/browser confirmation of the new
+  `/api/seo/indexnow-key.txt` route or the worker's live dispatch was
+  possible for the same reason.
+- **Not yet built — explicitly scoped out of this slice**: resubmission on
+  slug change / unpublish / route-history change (this slice only submits
+  on the publish transition, the single most common and valuable case);
+  the advertising-provider control plane and the unified GA4/Yandex-Metrica
+  analytics event registry are separate, already-named next slices.
+
 ## Required task format for the CLI agent
 
 For every task, report:

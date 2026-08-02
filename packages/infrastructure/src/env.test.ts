@@ -32,6 +32,15 @@ describe('loadEnv', () => {
     );
   });
 
+  it('accepts a well-formed INDEXNOW_KEY and rejects a malformed one', () => {
+    expect(loadEnv({ DATABASE_URL, INDEXNOW_KEY: 'a1b2c3d4e5f6' }).INDEXNOW_KEY).toBe(
+      'a1b2c3d4e5f6',
+    );
+    expect(() => loadEnv({ DATABASE_URL, INDEXNOW_KEY: 'too short!' })).toThrow(
+      /Invalid environment configuration/,
+    );
+  });
+
   describe('secret redaction', () => {
     const SECRET_VALUE = 'sup3r-s3cr3t-value-too-short';
 

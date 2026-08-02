@@ -28,6 +28,17 @@ const envSchema = z.object({
    */
   MEDIA_STORAGE_DIR: z.string().min(1).default('.var/media'),
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
+  /**
+   * IndexNow (CLAUDE.md: "P1, secret-managed notification adapter for Bing/
+   * Yandex only"). Optional — apps/worker only submits when both this and
+   * PlatformSettings.indexNowEnabled are set. Never invented; obtained from
+   * https://www.bing.com/indexnow (any 8-128 char alphanumeric/hyphen
+   * value the operator generates).
+   */
+  INDEXNOW_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9-]{8,128}$/, 'INDEXNOW_KEY must be 8-128 alphanumeric/hyphen characters.')
+    .optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

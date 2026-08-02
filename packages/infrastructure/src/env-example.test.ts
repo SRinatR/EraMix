@@ -26,7 +26,12 @@ describe('.env.example', () => {
     const raw = readFileSync(envExamplePath, 'utf8');
     const parsed = parseEnv(raw);
 
-    for (const key of ['SESSION_SECRET', 'MEDIA_SIGNING_SECRET', 'OIDC_CLIENT_SECRET']) {
+    for (const key of [
+      'SESSION_SECRET',
+      'MEDIA_SIGNING_SECRET',
+      'OIDC_CLIENT_SECRET',
+      'INDEXNOW_KEY',
+    ]) {
       expect(parsed[key], `${key} must stay unset/commented in .env.example`).toBeUndefined();
     }
   });

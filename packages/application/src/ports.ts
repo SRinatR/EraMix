@@ -126,3 +126,29 @@ export interface MalwareScanResult {
 export interface MalwareScanner {
   scan(content: Uint8Array): Promise<MalwareScanResult>;
 }
+
+export interface IndexNowSubmissionInput {
+  readonly host: string;
+  readonly key: string;
+  readonly keyLocation: string;
+  readonly urlList: readonly string[];
+}
+
+export interface IndexNowSubmissionResult {
+  readonly engine: string;
+  readonly succeeded: boolean;
+  readonly statusCode?: number;
+  readonly error?: string;
+}
+
+/**
+ * IndexNow (CLAUDE.md: "P1, secret-managed notification adapter for Bing/
+ * Yandex only... never a Google indexing mechanism"). `submit` never throws
+ * for a single engine's failure — each engine's outcome (including a
+ * bounded number of internal retries) is reported in the returned array, so
+ * the caller (apps/worker) can log per-engine observability without that
+ * failure affecting the outbox message's own SENT/FAILED/DEAD_LETTER state.
+ */
+export interface IndexNowNotifier {
+  submit(input: IndexNowSubmissionInput): Promise<readonly IndexNowSubmissionResult[]>;
+}
