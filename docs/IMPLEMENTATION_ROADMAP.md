@@ -1627,6 +1627,53 @@ companyId IN (...)` with a single `ORDER BY`/`LIMIT`/`OFFSET`/`COUNT`),
   `order-queries.test.ts`, +5 `session.test.ts`). Production build and any
   Postgres-backed behaviour verified by CI only.
 
+### Rich search/sort/filter: admin categories + products (ADM-002/DB-005 continuation)
+
+Product Owner instruction: close the remaining ADM-002/DB-005 gap the
+earlier pagination slice explicitly left open — "full per-resource
+search/sort UI on categories/products/content/memberships... is a residual
+gap." This slice closes it for categories and products.
+
+- **Explicit allowlists, never a raw sort passthrough** (DB-005: "no raw
+  query-to-SQL/Prisma passthrough"): `CategoryListFilter.sort` is one of
+  `sortOrder_asc|sortOrder_desc|createdAt_asc|createdAt_desc`;
+  `ProductListFilter.sort` is one of
+  `createdAt_asc|createdAt_desc|sku_asc|sku_desc`. Both the Prisma adapter
+  (`buildCategoryOrderBy`/`buildProductOrderBy`, a `switch` with an
+  explicit default, never `orderBy: {[field]: direction}` from a raw
+  string) and the delivery layer (`apps/web/src/server/pagination.ts`'s
+  new `parseAllowlistedParam` — a query param is silently dropped, not
+  passed through, unless it is an exact member of the caller-supplied
+  allowlist) enforce the same allowlist independently — defense-in-depth,
+  not a single point of failure. 9 new unit tests
+  (`pagination.test.ts`) include the explicit adversarial cases (a SQL
+  fragment and an unrelated-but-plausible column name are both rejected,
+  not merely "an invalid enum value").
+- **Search**: `CategoryListFilter.search` matches any locale's translation
+  name (`translations.some.name.contains`); `ProductListFilter.search`
+  reuses `ProductRepository`'s existing PUBLISHED-only search predicate
+  (`buildSearchWhere`, extracted from the pre-existing `buildPublishedWhere`
+  so the admin all-statuses path and the public published-only path share
+  one implementation instead of two copies) against SKU and translation
+  name.
+- **Status filter**: both gained `status?: PublicationStatus` alongside the
+  pre-existing pagination.
+- **UI**: `/admin/catalog` (which lists categories and products on one
+  page, already independently paginated per the previous slice) gained a
+  `<form method="get">` per section with a search box, status `<select>`,
+  and sort `<select>` — each form carries hidden inputs preserving the
+  _other_ section's current page/search/status/sort so applying one
+  section's filter never resets the other's.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy): `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck`/`test` all exit 0 — 289 unit tests (up from 272: +9
+  `pagination.test.ts`). No new Prisma-adapter-level unit tests for the
+  `where`/`orderBy` builders themselves — consistent with this codebase's
+  existing convention (`buildOrderFilterWhere`/`buildPublishedWhere`
+  aren't unit-tested in isolation either; real behaviour against Postgres
+  is Pi-gated integration territory). Production build and any
+  Postgres-backed behaviour verified by CI only.
+
 ## Required task format for the CLI agent
 
 For every task, report:

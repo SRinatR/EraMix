@@ -1,6 +1,7 @@
 import {
   clampPagination,
   type Page,
+  type ProductListFilter,
   type ProductRepository,
   type ProductTranslationEditPatch,
   type ProductWithTranslations,
@@ -207,27 +208,48 @@ export class PrismaProductRepository implements ProductRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } = {},
+    input: { limit?: number; offset?: number } & ProductListFilter = {},
   ): Promise<Page<ProductWithTranslations>> {
     const { limit, offset } = clampPagination(input);
+    const where = {
+      ...buildSearchWhere(input),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+    };
+    const orderBy = buildProductOrderBy(input.sort);
     const client = resolveClient(this.prisma);
     const [rows, total] = await Promise.all([
       client.product.findMany({
+        where,
         include: WITH_TRANSLATIONS,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         take: limit,
         skip: offset,
       }),
-      client.product.count(),
+      client.product.count({ where }),
     ]);
     return { items: rows.map(toDomain), total, limit, offset };
   }
 }
 
-function buildPublishedWhere(input: { categoryId?: string; search?: string }) {
+/** DB-005: an explicit allowlist, never a raw client-supplied sort field passed straight into Prisma's `orderBy`. */
+function buildProductOrderBy(sort: ProductListFilter['sort']): Record<string, 'asc' | 'desc'> {
+  switch (sort) {
+    case 'sku_asc':
+      return { sku: 'asc' };
+    case 'sku_desc':
+      return { sku: 'desc' };
+    case 'createdAt_asc':
+      return { createdAt: 'asc' };
+    case 'createdAt_desc':
+    default:
+      return { createdAt: 'desc' };
+  }
+}
+
+/** Shared by the public PUBLISHED-only search and the admin all-statuses listing — category/search matching is identical, only the status scope differs. */
+function buildSearchWhere(input: { categoryId?: string; search?: string }) {
   const search = input.search;
   return {
-    status: 'PUBLISHED' as const,
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     ...(search !== undefined && search.length > 0
       ? {
@@ -240,6 +262,10 @@ function buildPublishedWhere(input: { categoryId?: string; search?: string }) {
         }
       : {}),
   };
+}
+
+function buildPublishedWhere(input: { categoryId?: string; search?: string }) {
+  return { status: 'PUBLISHED' as const, ...buildSearchWhere(input) };
 }
 
 function toDomain(row: ProductRowWithTranslations): ProductWithTranslations {

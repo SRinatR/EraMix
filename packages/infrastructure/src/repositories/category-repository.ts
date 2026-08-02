@@ -1,5 +1,6 @@
 import {
   clampPagination,
+  type CategoryListFilter,
   type CategoryRepository,
   type CategoryTranslationEditPatch,
   type CategoryWithTranslations,
@@ -245,21 +246,52 @@ export class PrismaCategoryRepository implements CategoryRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } = {},
+    input: { limit?: number; offset?: number } & CategoryListFilter = {},
   ): Promise<Page<CategoryWithTranslations>> {
     const { limit, offset } = clampPagination(input);
+    const where = buildCategoryWhere(input);
+    const orderBy = buildCategoryOrderBy(input.sort);
     const client = resolveClient(this.prisma);
     const [rows, total] = await Promise.all([
       client.category.findMany({
+        where,
         include: WITH_TRANSLATIONS_AND_ROUTES,
-        orderBy: { sortOrder: 'asc' },
+        orderBy,
         take: limit,
         skip: offset,
       }),
-      client.category.count(),
+      client.category.count({ where }),
     ]);
     return { items: rows.map(toDomain), total, limit, offset };
   }
+}
+
+/** DB-005: an explicit allowlist, never a raw client-supplied sort field passed straight into Prisma's `orderBy`. */
+function buildCategoryOrderBy(sort: CategoryListFilter['sort']): Record<string, 'asc' | 'desc'> {
+  switch (sort) {
+    case 'createdAt_asc':
+      return { createdAt: 'asc' };
+    case 'createdAt_desc':
+      return { createdAt: 'desc' };
+    case 'sortOrder_desc':
+      return { sortOrder: 'desc' };
+    case 'sortOrder_asc':
+    default:
+      return { sortOrder: 'asc' };
+  }
+}
+
+function buildCategoryWhere(input: CategoryListFilter): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (input.status !== undefined) {
+    where['status'] = input.status;
+  }
+  if (input.search !== undefined && input.search.trim().length > 0) {
+    where['translations'] = {
+      some: { name: { contains: input.search, mode: 'insensitive' } },
+    };
+  }
+  return where;
 }
 
 function toDomain(row: CategoryRowWithTranslations): CategoryWithTranslations {

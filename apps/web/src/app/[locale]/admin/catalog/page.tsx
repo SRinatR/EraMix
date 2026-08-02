@@ -1,7 +1,11 @@
 import { Link } from '@/i18n/navigation';
 import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
-import { parsePaginationParams } from '@/server/pagination';
+import {
+  parseAllowlistedParam,
+  parsePaginationParams,
+  parseStringParam,
+} from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { AddTranslationForm } from './add-translation-form';
 import { ChangeSlugForm } from './change-slug-form';
@@ -9,9 +13,19 @@ import { EditCategoryTranslationForm } from './edit-category-translation-form';
 import { EditProductTranslationForm } from './edit-product-translation-form';
 import { TransitionStatusForm } from './transition-status-form';
 import { requirePermission } from '@eramix/application';
+import type { PublicationStatus } from '@eramix/domain';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
+
+const STATUSES: readonly PublicationStatus[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const CATEGORY_SORTS = [
+  'sortOrder_asc',
+  'sortOrder_desc',
+  'createdAt_asc',
+  'createdAt_desc',
+] as const;
+const PRODUCT_SORTS = ['createdAt_asc', 'createdAt_desc', 'sku_asc', 'sku_desc'] as const;
 
 function firstTranslationName(translations: readonly { locale: string; name: string }[]): string {
   return (
@@ -38,12 +52,58 @@ export default async function AdminCatalogPage({
 
   const container = getContainer();
   const resolvedSearchParams = await searchParams;
+  const categorySearch = parseStringParam(resolvedSearchParams, 'search', 'categories');
+  const categoryStatus = parseAllowlistedParam(
+    resolvedSearchParams,
+    'status',
+    STATUSES,
+    'categories',
+  );
+  const categorySort = parseAllowlistedParam(
+    resolvedSearchParams,
+    'sort',
+    CATEGORY_SORTS,
+    'categories',
+  );
+  const productSearch = parseStringParam(resolvedSearchParams, 'search', 'products');
+  const productStatus = parseAllowlistedParam(resolvedSearchParams, 'status', STATUSES, 'products');
+  const productSort = parseAllowlistedParam(
+    resolvedSearchParams,
+    'sort',
+    PRODUCT_SORTS,
+    'products',
+  );
+
   const [categoryPage, productPage] = await Promise.all([
-    container.categories.listAll(parsePaginationParams(resolvedSearchParams, 'categories')),
-    container.products.listAll(parsePaginationParams(resolvedSearchParams, 'products')),
+    container.categories.listAll({
+      ...parsePaginationParams(resolvedSearchParams, 'categories'),
+      ...(categorySearch !== undefined ? { search: categorySearch } : {}),
+      ...(categoryStatus !== undefined ? { status: categoryStatus } : {}),
+      ...(categorySort !== undefined ? { sort: categorySort } : {}),
+    }),
+    container.products.listAll({
+      ...parsePaginationParams(resolvedSearchParams, 'products'),
+      ...(productSearch !== undefined ? { search: productSearch } : {}),
+      ...(productStatus !== undefined ? { status: productStatus } : {}),
+      ...(productSort !== undefined ? { sort: productSort } : {}),
+    }),
   ]);
   const { items: categories } = categoryPage;
   const { items: products } = productPage;
+  const categoryExtraParams = {
+    productsLimit: String(productPage.limit),
+    productsOffset: String(productPage.offset),
+    ...(productSearch !== undefined ? { productsSearch: productSearch } : {}),
+    ...(productStatus !== undefined ? { productsStatus: productStatus } : {}),
+    ...(productSort !== undefined ? { productsSort: productSort } : {}),
+  };
+  const productExtraParams = {
+    categoriesLimit: String(categoryPage.limit),
+    categoriesOffset: String(categoryPage.offset),
+    ...(categorySearch !== undefined ? { categoriesSearch: categorySearch } : {}),
+    ...(categoryStatus !== undefined ? { categoriesStatus: categoryStatus } : {}),
+    ...(categorySort !== undefined ? { categoriesSort: categorySort } : {}),
+  };
 
   return (
     <main>
@@ -52,6 +112,36 @@ export default async function AdminCatalogPage({
       <h2>
         Categories <Link href="/admin/catalog/categories/new">New category</Link>
       </h2>
+      <form method="get">
+        <input type="hidden" name="productsLimit" value={productPage.limit} />
+        <input type="hidden" name="productsOffset" value={productPage.offset} />
+        <label>
+          Search
+          <input type="search" name="categoriesSearch" defaultValue={categorySearch ?? ''} />
+        </label>
+        <label>
+          Status
+          <select name="categoriesStatus" defaultValue={categoryStatus ?? ''}>
+            <option value="">All</option>
+            {STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort
+          <select name="categoriesSort" defaultValue={categorySort ?? 'sortOrder_asc'}>
+            {CATEGORY_SORTS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+      </form>
       <table>
         <thead>
           <tr>
@@ -119,15 +209,42 @@ export default async function AdminCatalogPage({
         offset={categoryPage.offset}
         limitParamName="categoriesLimit"
         offsetParamName="categoriesOffset"
-        extraParams={{
-          productsLimit: String(productPage.limit),
-          productsOffset: String(productPage.offset),
-        }}
+        extraParams={categoryExtraParams}
       />
 
       <h2>
         Products <Link href="/admin/catalog/products/new">New product</Link>
       </h2>
+      <form method="get">
+        <input type="hidden" name="categoriesLimit" value={categoryPage.limit} />
+        <input type="hidden" name="categoriesOffset" value={categoryPage.offset} />
+        <label>
+          Search
+          <input type="search" name="productsSearch" defaultValue={productSearch ?? ''} />
+        </label>
+        <label>
+          Status
+          <select name="productsStatus" defaultValue={productStatus ?? ''}>
+            <option value="">All</option>
+            {STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort
+          <select name="productsSort" defaultValue={productSort ?? 'createdAt_desc'}>
+            {PRODUCT_SORTS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+      </form>
       <table>
         <thead>
           <tr>
@@ -192,10 +309,7 @@ export default async function AdminCatalogPage({
         offset={productPage.offset}
         limitParamName="productsLimit"
         offsetParamName="productsOffset"
-        extraParams={{
-          categoriesLimit: String(categoryPage.limit),
-          categoriesOffset: String(categoryPage.offset),
-        }}
+        extraParams={productExtraParams}
       />
     </main>
   );

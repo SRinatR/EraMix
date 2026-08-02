@@ -95,6 +95,13 @@ export interface CategoryTranslationEditPatch {
   readonly seoDescription?: string | null;
 }
 
+export interface CategoryListFilter {
+  /** Substring match against any locale's translation name — explicit allowlist, never a raw query passthrough. */
+  readonly search?: string;
+  readonly status?: Category['status'];
+  readonly sort?: 'sortOrder_asc' | 'sortOrder_desc' | 'createdAt_asc' | 'createdAt_desc';
+}
+
 export interface CategoryRepository {
   findById(id: string): Promise<CategoryWithTranslations | undefined>;
   findByCanonicalSlug(
@@ -126,8 +133,8 @@ export interface CategoryRepository {
   /** PUBLISHED categories only — catalog browse and sitemap generation. */
   listPublished(): Promise<readonly CategoryWithTranslations[]>;
   listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]>;
-  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated). */
-  listAll(input?: PaginationInput): Promise<Page<CategoryWithTranslations>>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
+  listAll(input?: PaginationInput & CategoryListFilter): Promise<Page<CategoryWithTranslations>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
     id: string,
@@ -147,6 +154,14 @@ export interface ProductTranslationEditPatch {
   readonly seoTitle?: string | null;
   readonly seoDescription?: string | null;
   readonly indicativePrice?: IndicativePrice | null;
+}
+
+export interface ProductListFilter {
+  readonly categoryId?: string;
+  /** Substring match against SKU or any locale's translation name — explicit allowlist, never a raw query passthrough. */
+  readonly search?: string;
+  readonly status?: Product['status'];
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc' | 'sku_asc' | 'sku_desc';
 }
 
 export interface ProductRepository {
@@ -183,8 +198,8 @@ export interface ProductRepository {
     offset: number;
   }): Promise<readonly ProductWithTranslations[]>;
   countPublished(input: { categoryId?: string; search?: string }): Promise<number>;
-  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated). */
-  listAll(input?: PaginationInput): Promise<Page<ProductWithTranslations>>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
+  listAll(input?: PaginationInput & ProductListFilter): Promise<Page<ProductWithTranslations>>;
 }
 
 /** Patch shape for editing an existing asset's editorial metadata (never storageKey/checksum/scan fields — those are set once at upload time and are otherwise immutable). */
