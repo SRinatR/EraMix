@@ -1,4 +1,6 @@
 import type {
+  AnalyticsDispatchResult,
+  AnalyticsEventSink,
   Clock,
   EmailSender,
   IndexNowNotifier,
@@ -333,6 +335,135 @@ describe('processOutboxBatch — IndexNow (P1 adapter)', () => {
       indexNow: fakeIndexNow(submit),
       settingsRepo: fakeSettingsRepo(makePlatformSettings()),
       indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(result.sent).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('SENT');
+  });
+});
+
+describe('processOutboxBatch — analytics.event_captured dispatch', () => {
+  const VALID_EVENT = {
+    eventId: 'evt-1',
+    schemaVersion: 1,
+    occurredAt: new Date().toISOString(),
+    sessionId: 'session-1',
+    locale: 'en',
+    consent: { analytics: true, advertising: false },
+    eventName: 'page_view',
+    pageType: 'product',
+    canonicalPath: '/en/catalog/chairs',
+  };
+
+  function fakeAnalyticsSink(
+    name: string,
+    requiredConsent: 'analytics' | 'advertising' = 'analytics',
+  ): AnalyticsEventSink & { dispatch: ReturnType<typeof vi.fn> } {
+    return {
+      name,
+      requiredConsent,
+      dispatch: vi
+        .fn()
+        .mockResolvedValue({ sink: name, succeeded: true } satisfies AnalyticsDispatchResult),
+    };
+  }
+
+  it('never sends the generic email placeholder for an analytics event', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({ eventType: 'analytics.event_captured', payload: VALID_EVENT });
+    const send = vi.fn().mockResolvedValue(undefined);
+    const ga4 = fakeAnalyticsSink('ga4');
+
+    await processOutboxBatch({
+      outbox,
+      email: { send },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      analyticsSinks: [ga4],
+      settingsRepo: fakeSettingsRepo(makePlatformSettings({ ga4Enabled: true })),
+    });
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('dispatches to every registered sink and marks the message SENT', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({ eventType: 'analytics.event_captured', payload: VALID_EVENT });
+    const ga4 = fakeAnalyticsSink('ga4');
+    const yandex = fakeAnalyticsSink('yandex_metrica');
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      analyticsSinks: [ga4, yandex],
+      settingsRepo: fakeSettingsRepo(
+        makePlatformSettings({ ga4Enabled: true, yandexMetricaEnabled: true }),
+      ),
+    });
+
+    expect(ga4.dispatch).toHaveBeenCalled();
+    expect(yandex.dispatch).toHaveBeenCalled();
+    expect(result.sent).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('SENT');
+  });
+
+  it('marks SENT even when consent withholds every sink (nothing to dispatch is not a failure)', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({
+      eventType: 'analytics.event_captured',
+      payload: { ...VALID_EVENT, consent: { analytics: false, advertising: false } },
+    });
+    const ga4 = fakeAnalyticsSink('ga4');
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      analyticsSinks: [ga4],
+      settingsRepo: fakeSettingsRepo(makePlatformSettings({ ga4Enabled: true })),
+    });
+
+    expect(ga4.dispatch).not.toHaveBeenCalled();
+    expect(result.sent).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('SENT');
+  });
+
+  it('a malformed payload (schema drift) is retried through the normal backoff path, not silently dropped', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({
+      eventType: 'analytics.event_captured',
+      payload: { ...VALID_EVENT, eventId: '' },
+      attempts: 1,
+    });
+    const ga4 = fakeAnalyticsSink('ga4');
+    const now = new Date('2026-08-03T00:00:00Z');
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(now),
+      analyticsSinks: [ga4],
+      settingsRepo: fakeSettingsRepo(makePlatformSettings({ ga4Enabled: true })),
+    });
+
+    expect(ga4.dispatch).not.toHaveBeenCalled();
+    expect(result.retried).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('FAILED');
+  });
+
+  it('marks SENT with nothing dispatched when no analyticsSinks are registered', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({ eventType: 'analytics.event_captured', payload: VALID_EVENT });
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
     });
 
     expect(result.sent).toBe(1);

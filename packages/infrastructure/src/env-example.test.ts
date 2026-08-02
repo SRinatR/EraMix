@@ -31,6 +31,7 @@ describe('.env.example', () => {
       'MEDIA_SIGNING_SECRET',
       'OIDC_CLIENT_SECRET',
       'INDEXNOW_KEY',
+      'GA4_API_SECRET',
     ]) {
       expect(parsed[key], `${key} must stay unset/commented in .env.example`).toBeUndefined();
     }

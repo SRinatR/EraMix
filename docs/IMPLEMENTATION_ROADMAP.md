@@ -2339,6 +2339,130 @@ and CLAUDE.md itself lists that registry as the higher (P0) priority.
   Product Owner correction). No script/pixel is ever loaded on any public
   page yet — this slice is configuration-only, by design.
 
+## Phase B slice 5: GA4/Yandex Metrica consent-gated event registry (P0)
+
+Product Owner correction, 2026-08-03: "Treat GA4/Yandex Metrica consent-
+gated event registry as P0, because RFQ and commercial conversion
+measurement are essential." CLAUDE.md/docs/runbooks/search-visibility.md's
+shared, versioned event library — the P0 event set the runbook names
+explicitly (line 453-454): `page_view`, `view_item`, `view_item_list`,
+inquiry/CTA initiation (`rfq_start`), `rfq_submit`, and telephone click
+(`phone_click`).
+
+- **Domain** (`packages/domain/src/analytics.ts`, 13 unit tests): a closed,
+  exhaustive discriminated union on `eventName` for all 6 P0 events — no
+  free-text field anywhere a caller could smuggle PII into (a stronger
+  guarantee than detecting PII after the fact). `validateAnalyticsEvent`
+  enforces a bounded clock-skew window on `occurredAt` (rejects stale-replay
+  and future-tampered timestamps), a bare-relative-path check on
+  `canonicalPath`, and a defense-in-depth rejection of any PII-shaped query
+  parameter even though the schema has no free-text field to carry one.
+  Consent travels _with_ each event (the same pattern Google's own Consent
+  Mode uses) since the ingestion endpoint is anonymous/unauthenticated and
+  has no other way to know a visitor's choice.
+- **Application** (`packages/application/src/analytics.ts`, 8 unit tests):
+  `recordAnalyticsEvents` — all-or-nothing batch validation, one outbox
+  message per valid event (EraMix does not persist events itself;
+  search-visibility.md: the Rust service "owns collection/storage").
+  `dispatchAnalyticsEvent` — the consent-gating engine: a sink is only ever
+  called when the event's own self-reported consent state grants that
+  sink's required category _and_ the live `PlatformSettings` enablement
+  flag agrees; both are re-checked fresh per event, never cached, so
+  disabling GA4/Yandex Metrica in admin takes effect on the very next
+  event. A sink's own delivery failure is isolated — verified directly that
+  one sink failing never affects another sink's dispatch or result.
+- **Schema**: no new tables. Analytics events are transient outbox-message
+  payloads only, dispatched best-effort by `apps/worker` — consistent with
+  "EraMix owns event semantics... not first-party storage" (that remains
+  the Rust service's future job).
+- **Infrastructure** (`packages/infrastructure/src/analytics/`, 15 unit
+  tests): `Ga4EventSink` — a real, documented, stable Measurement Protocol
+  client (bounded retry, never throws, same convention as
+  `HttpIndexNowNotifier`); `measurementId` is read fresh from
+  `PlatformSettings.ga4MeasurementId` on every dispatch (never cached at
+  worker startup), `apiSecret` is the new `GA4_API_SECRET` deployment
+  secret (`packages/infrastructure/src/env.ts`, `.env.example`) — a real
+  credential, never a database column. `YandexMetricaEventSink` — CLAUDE.md
+  forbids inventing an endpoint/delivery behavior, and unlike GA4's
+  Measurement Protocol, Yandex Metrica has no equally well-documented
+  realtime custom-event/goal API this session could verify with confidence
+  (goal-reaching is typically client-side `ym()` calls or a separate
+  offline-conversion CSV upload); this sink only ever reports real
+  `page_view` hits (via Yandex's stable, documented `mc.yandex.ru/watch/
+{counterId}` server-reportable-hit endpoint) and explicitly declines every
+  other event name with a clear "not yet supported" result rather than
+  fabricating a request — a documented, honest gap, not silently pretended
+  parity. `RustAnalyticsEventSink` — per the existing "disabled by default,
+  typed boundary only" instruction, `dispatch` never makes a network call
+  under any configuration (no known real endpoint exists yet).
+- **Delivery**: `POST /api/analytics/events` (`apps/web`) — public,
+  unauthenticated (an anonymous visitor's browser calls it directly; the
+  first public POST endpoint in this codebase, `security: []` in
+  `openapi.yaml`), its own rate-limit bucket (120/min/IP), and a strict
+  per-variant zod schema (`apps/web/src/server/analytics-event-schema.ts`,
+  11 unit tests) that rejects any unknown/extra field outright — verified
+  directly that an attempted `email`/`creditCardNumber` field on any event
+  variant fails validation. `apps/worker/src/outbox-worker.ts` gained a
+  branch: an `analytics.event_captured` message is dispatched to every
+  registered sink instead of the generic email placeholder (verified this
+  never sends the placeholder email for an analytics event), re-validates
+  the payload as a last gate before ever reaching a third-party
+  destination, and is marked `SENT` regardless of how many sinks were
+  skipped/failed (a per-sink failure is diagnostic, not an outbox-level
+  failure) — only a genuinely unexpected error (e.g. a settings-read
+  failure) goes through the normal retry/backoff/dead-letter path, verified
+  with a deliberately malformed stored payload.
+- **Public-site wiring** (real emission, not just typed scaffolding):
+  `apps/web/src/components/analytics-client.ts`'s `sendAnalyticsEvent`
+  (fire-and-forget, `keepalive: true`, never throws into the caller's UI
+  flow) and `AnalyticsEventTracker` (a tiny client-island wrapper for
+  Server Component pages) are wired into the home page (`page_view`),
+  `catalog/[slug]` (`view_item` for a product, `view_item_list` for a
+  category — includes the real `resultCount`), `articles/[slug]` and
+  `pages/[slug]` (`page_view`), and `SubmitOrderButton` (`rfq_submit` on a
+  successful submit — search-visibility.md: "Measure `rfq_submit` as the
+  primary organic conversion"; the event carries `orderNumber`, the public
+  identifier, never the internal order UUID). Session identity is a
+  `crypto.randomUUID()` stored in `sessionStorage`, never a cookie — no
+  tracking identifier is ever set without consent.
+- **The one deliberate, documented gap**: consent is hardcoded to
+  `{analytics: false, advertising: false}` everywhere on the client — this
+  repository has no cookie-consent-banner UI yet, so there is no real user
+  choice to read. Events are still captured/validated/enqueued end to end
+  (proving the whole pipeline genuinely works, verified live against the
+  dev server below), but `dispatchAnalyticsEvent` will never forward any of
+  them to GA4/Yandex Metrica while consent is withheld — the safe,
+  privacy-by-default posture until a real consent mechanism exists. A
+  cookie-consent-banner UI (and threading its real choice into
+  `sendAnalyticsEvent`) is the next, separate, not-yet-scoped slice before
+  any real GA4/Yandex Metrica traffic can flow. `phone_click` and
+  `rfq_start` are fully supported by the schema/pipeline/sinks but have no
+  wired UI trigger yet (no phone-number CTA exists on the public site; no
+  distinct "RFQ start" moment exists separate from viewing the order-
+  creation form) — both are one-line additions once that UI exists.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **427 unit tests** (up from 378). `pnpm run build` succeeded this
+  session (disk space recovered mid-slice — see the incident note below)
+  and registered `/api/analytics/events` alongside every existing route.
+  **Real dev-server verification**: started `next dev`, confirmed `GET /`
+  still 307-redirects to `/en` (unaffected); `POST /api/analytics/events`
+  with an empty body correctly `422`s; a structurally valid single-event
+  batch passes CSRF/rate-limit/zod/domain validation and reaches the real
+  Prisma outbox-enqueue call, failing only with the expected `ECONNREFUSED`
+  (no local Postgres) — the same "reaches the DB layer, blocked only by no
+  real Postgres on this laptop" evidence pattern used throughout this
+  document. Killed the dev server via `taskkill //F //PID <pid> //T`
+  (confirmed via `tasklist` afterward) rather than `pkill`, applying the
+  previous slice's own documented lesson.
+- **Not yet verified**: the actual GA4/Yandex Metrica HTTP dispatch against
+  a real measurement ID/counter/account (no live credentials, no browser,
+  CI/Pi-pending per standing policy); no cookie-consent-banner UI exists,
+  so no real end-user consent choice has ever been exercised end to end;
+  dashboards aggregating captured events (search-visibility.md names these,
+  explicitly deferred, same as the cross-platform reconciliation dashboards
+  named in earlier slices).
+
 ## Required task format for the CLI agent
 
 For every task, report:

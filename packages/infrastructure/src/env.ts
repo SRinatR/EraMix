@@ -39,6 +39,13 @@ const envSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9-]{8,128}$/, 'INDEXNOW_KEY must be 8-128 alphanumeric/hyphen characters.')
     .optional(),
+  /**
+   * GA4 Measurement Protocol API secret (a real credential — never the
+   * non-secret PlatformSettings.ga4MeasurementId). Optional — apps/worker
+   * only dispatches to GA4 when this, PlatformSettings.ga4Enabled, and a
+   * per-event analytics consent grant all agree.
+   */
+  GA4_API_SECRET: z.string().min(8).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

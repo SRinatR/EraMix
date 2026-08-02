@@ -144,7 +144,12 @@ export default async function OrderDetailPage({
       </ul>
 
       {canEditDraft && order.lines.length > 0 && (
-        <SubmitOrderButton orderId={order.id} expectedVersion={order.version} />
+        <SubmitOrderButton
+          orderId={order.id}
+          orderNumber={order.orderNumber}
+          locale={locale}
+          expectedVersion={order.version}
+        />
       )}
       {canCustomerCancel && (
         <CancelOrderButton orderId={order.id} expectedVersion={order.version} />

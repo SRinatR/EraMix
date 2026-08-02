@@ -63,6 +63,14 @@ tags:
       mapping, attribution/UTM rules, and server-side conversion dispatch
       are a later slice. credentialSecretRef is always a deployment-secret-
       store reference name, never a credential value.
+  - name: Analytics
+    description: >-
+      Public, consent-gated product-interest/conversion event ingestion
+      (CLAUDE.md/docs/runbooks/search-visibility.md's shared event
+      library). No PII: every event variant is a closed, strict schema —
+      an unknown field is rejected, not silently dropped. GA4/Yandex
+      Metrica/Rust analytics dispatch is consent- and admin-enablement-
+      gated per event, never automatic.
 security:
   - sessionCookie: []
 paths:
@@ -2211,6 +2219,38 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/analytics/events:
+    post:
+      operationId: recordAnalyticsEvents
+      summary: >-
+        Ingest a batch of consent-gated product-interest/conversion events
+        (CLAUDE.md/docs/runbooks/search-visibility.md's shared event
+        library). Public and unauthenticated — the caller is an anonymous
+        visitor's browser. All-or-nothing: the first invalid event in the
+        batch rejects the whole request. Each event's own self-reported
+        `consent` state (not this endpoint) decides whether apps/worker
+        later forwards it to GA4/Yandex Metrica/Rust analytics — this
+        endpoint only validates and durably enqueues.
+      tags: [Analytics]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAnalyticsEventsRequest'
+      responses:
+        '202':
+          description: Accepted for asynchronous dispatch (no response body).
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          description: Rate limit exceeded for the "analytics" bucket.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -3209,3 +3249,96 @@ components:
         pixelId: { type: [string, 'null'] }
         credentialSecretRef: { type: [string, 'null'] }
         testMode: { type: boolean }
+    AnalyticsConsentState:
+      type: object
+      required: [analytics, advertising]
+      additionalProperties: false
+      properties:
+        analytics: { type: boolean }
+        advertising: { type: boolean }
+    AnalyticsEventBase:
+      type: object
+      required: [eventId, schemaVersion, occurredAt, sessionId, locale, consent, eventName]
+      properties:
+        eventId: { type: string, minLength: 1, maxLength: 128 }
+        schemaVersion: { type: integer, enum: [1] }
+        occurredAt: { type: string, format: date-time }
+        sessionId:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Anonymous, stable per browser-tab session — never a user identity.
+        locale: { type: string, enum: [en, ru, uz] }
+        consent:
+          $ref: '#/components/schemas/AnalyticsConsentState'
+    AnalyticsEvent:
+      description: >-
+        A closed, strict discriminated union on `eventName` — no
+        unknown/extra field is accepted on any variant (never PII).
+      oneOf:
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, pageType, canonicalPath]
+              additionalProperties: false
+              properties:
+                eventName: { const: page_view }
+                pageType:
+                  type: string
+                  enum: [home, category, product, article, page, faq, catalog, other]
+                canonicalPath: { type: string, minLength: 1, maxLength: 2048 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, productPublicId]
+              additionalProperties: false
+              properties:
+                eventName: { const: view_item }
+                productPublicId: { type: string, minLength: 1, maxLength: 64 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, resultCount]
+              additionalProperties: false
+              properties:
+                eventName: { const: view_item_list }
+                categoryId: { type: string, minLength: 1, maxLength: 64 }
+                resultCount: { type: integer, minimum: 0 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName]
+              additionalProperties: false
+              properties:
+                eventName: { const: rfq_start }
+                productPublicId: { type: string, minLength: 1, maxLength: 64 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, orderNumber]
+              additionalProperties: false
+              properties:
+                eventName: { const: rfq_submit }
+                orderNumber:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  description: The public order identifier — never the internal order UUID.
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, context]
+              additionalProperties: false
+              properties:
+                eventName: { const: phone_click }
+                context: { type: string, enum: [header, footer, contact_page, product] }
+    RecordAnalyticsEventsRequest:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/AnalyticsEvent'

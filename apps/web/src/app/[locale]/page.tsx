@@ -1,3 +1,4 @@
+import { AnalyticsEventTracker } from '@/components/analytics-event-tracker';
 import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { staticPageAlternates } from '@/server/seo';
@@ -53,6 +54,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   return (
     <>
+      <AnalyticsEventTracker
+        locale={locale}
+        fields={{ eventName: 'page_view', pageType: 'home', canonicalPath: `/${locale}` }}
+      />
       {organizationJsonLd && (
         <JsonLd
           data={{

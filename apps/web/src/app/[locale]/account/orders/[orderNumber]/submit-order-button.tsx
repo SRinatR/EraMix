@@ -1,6 +1,8 @@
 'use client';
 
+import { sendAnalyticsEvent } from '@/components/analytics-client';
 import { useRouter } from '@/i18n/navigation';
+import type { LocaleCode } from '@eramix/domain';
 import { useState, type FormEvent } from 'react';
 
 /**
@@ -15,9 +17,13 @@ import { useState, type FormEvent } from 'react';
  */
 export function SubmitOrderButton({
   orderId,
+  orderNumber,
+  locale,
   expectedVersion,
 }: {
   readonly orderId: string;
+  readonly orderNumber: string;
+  readonly locale: LocaleCode;
   readonly expectedVersion: number;
 }) {
   const router = useRouter();
@@ -47,6 +53,9 @@ export function SubmitOrderButton({
         setError(problem.detail ?? problem.title ?? 'Failed to submit the order.');
         return;
       }
+      // The primary organic conversion (docs/runbooks/search-visibility.md:
+      // "Measure rfq_submit as the primary organic conversion").
+      sendAnalyticsEvent(locale, { eventName: 'rfq_submit', orderNumber });
       router.refresh();
     } finally {
       setPending(false);

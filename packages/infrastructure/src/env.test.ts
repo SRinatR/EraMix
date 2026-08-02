@@ -41,6 +41,15 @@ describe('loadEnv', () => {
     );
   });
 
+  it('fails fast on a too-short GA4_API_SECRET instead of accepting a weak credential', () => {
+    expect(() => loadEnv({ DATABASE_URL, GA4_API_SECRET: 'short' })).toThrow(
+      /Invalid environment configuration/,
+    );
+    expect(loadEnv({ DATABASE_URL, GA4_API_SECRET: 'a-real-looking-secret' }).GA4_API_SECRET).toBe(
+      'a-real-looking-secret',
+    );
+  });
+
   describe('secret redaction', () => {
     const SECRET_VALUE = 'sup3r-s3cr3t-value-too-short';
 

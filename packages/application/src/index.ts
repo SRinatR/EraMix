@@ -15,6 +15,10 @@ export type {
   IndexNowSubmissionInput,
   IndexNowSubmissionResult,
   IndexNowNotifier,
+  AnalyticsDispatchResult,
+  AnalyticsEventSink,
+  AnalyticsEventLike,
+  AnalyticsDispatchContext,
 } from './ports.js';
 export { SystemClock } from './system-clock.js';
 export type { CursorPage, CursorPaginationInput, DecodedCursor } from './pagination.js';
@@ -179,3 +183,5 @@ export type {
   AdvertisingProviderDeps,
   UpdateAdvertisingProviderConfigInput,
 } from './advertising.js';
+export { recordAnalyticsEvents, dispatchAnalyticsEvent } from './analytics.js';
+export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';

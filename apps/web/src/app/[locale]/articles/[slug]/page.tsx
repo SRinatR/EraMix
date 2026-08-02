@@ -1,3 +1,4 @@
+import { AnalyticsEventTracker } from '@/components/analytics-event-tracker';
 import { ContentBody } from '@/components/content-body';
 import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
@@ -55,6 +56,14 @@ export default async function ArticlePage({ params }: { params: Promise<PagePara
   const { content, translation } = resolution;
   return (
     <main>
+      <AnalyticsEventTracker
+        locale={locale}
+        fields={{
+          eventName: 'page_view',
+          pageType: 'article',
+          canonicalPath: `/${locale}/articles/${slug}`,
+        }}
+      />
       <JsonLd
         data={{
           '@context': 'https://schema.org',

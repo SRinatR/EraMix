@@ -1,3 +1,4 @@
+import { AnalyticsEventTracker } from '@/components/analytics-event-tracker';
 import { formatIndicativePrice } from '@/components/indicative-price';
 import { JsonLd } from '@/components/json-ld';
 import { PaginationControls } from '@/components/pagination-controls';
@@ -93,6 +94,10 @@ export default async function CatalogEntryPage({
 
     return (
       <main>
+        <AnalyticsEventTracker
+          locale={locale}
+          fields={{ eventName: 'view_item', productPublicId: product.publicId }}
+        />
         {/* schema.org Product — deliberately no "offers"/price: ADR-0005's
             quote-only model means indicativePrice is explicitly non-binding,
             and an Offer/price in structured data risks a search engine
@@ -155,6 +160,14 @@ export default async function CatalogEntryPage({
 
   return (
     <main>
+      <AnalyticsEventTracker
+        locale={locale}
+        fields={{
+          eventName: 'view_item_list',
+          categoryId: category.id,
+          resultCount: productPage.data.length,
+        }}
+      />
       <JsonLd
         data={{
           '@context': 'https://schema.org',

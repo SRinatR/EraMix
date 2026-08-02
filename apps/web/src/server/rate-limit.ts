@@ -14,6 +14,10 @@ const limiters = {
   orderSubmit: new InMemoryRateLimiter(20, 60_000),
   upload: new InMemoryRateLimiter(20, 60_000),
   admin: new InMemoryRateLimiter(100, 60_000),
+  // Unauthenticated, higher-volume: a single page view can fire several
+  // events in one batch (CLAUDE.md: "Apply rate limits to... search" — the
+  // same "public, abuse-prone surface" reasoning applies here).
+  analytics: new InMemoryRateLimiter(120, 60_000),
 } as const;
 
 export type RateLimitBucket = keyof typeof limiters;

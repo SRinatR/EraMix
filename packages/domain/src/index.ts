@@ -45,6 +45,14 @@ export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
 export { sanitizeFilenameForStorage, sanitizeDisplayName } from './filename.js';
 export { validateEffectivePlatformSettings } from './platform-settings.js';
 export { validateEffectiveAdvertisingProviderConfig } from './advertising.js';
+export { validateAnalyticsEvent, ANALYTICS_SCHEMA_VERSION } from './analytics.js';
+export type {
+  AnalyticsEvent,
+  AnalyticsEventName,
+  AnalyticsConsentState,
+  PageType,
+  PhoneClickContext,
+} from './analytics.js';
 export { validateRetirementReason } from './retirement.js';
 export { validateIndexNowSubmission } from './indexnow.js';
 export type { IndexNowSubmissionInput } from './indexnow.js';

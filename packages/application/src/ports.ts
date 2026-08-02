@@ -152,3 +152,62 @@ export interface IndexNowSubmissionResult {
 export interface IndexNowNotifier {
   submit(input: IndexNowSubmissionInput): Promise<readonly IndexNowSubmissionResult[]>;
 }
+
+export interface AnalyticsDispatchResult {
+  readonly sink: string;
+  readonly succeeded: boolean;
+  /** True when the sink was never even called — consent or admin enablement was absent, not a delivery failure. */
+  readonly skipped?: boolean;
+  readonly error?: string;
+}
+
+/**
+ * A GA4/Yandex Metrica destination (docs/runbooks/search-visibility.md:
+ * "one semantic event to Rust analytics, GA4 and Yandex Metrica adapters").
+ * `dispatch` never throws — a network/API failure is reported in the
+ * returned result, so a flaky provider can never block the caller or the
+ * outbox message's own retry state (same "never throw for a single
+ * destination's failure" convention as IndexNowNotifier). Consent/
+ * enablement gating happens one layer up (packages/application/src/
+ * analytics.ts's dispatchAnalyticsEvent) — a sink only ever sees an event
+ * it has already been cleared to receive.
+ */
+/**
+ * The live, site-wide facts a sink may need — never re-derived or
+ * hardcoded inside a sink itself. `ga4MeasurementId`/`yandexMetricaCounterId`
+ * are PlatformSettings' existing non-secret columns, read fresh on every
+ * dispatch (not cached at worker startup) so an admin changing them in
+ * /admin/settings takes effect on the very next event, matching every
+ * other settings-driven behavior in this codebase — a sink receiving
+ * `undefined` for its own ID must decline rather than dispatch with an
+ * empty/placeholder value.
+ */
+export interface AnalyticsDispatchContext {
+  readonly canonicalOrigin: string;
+  readonly ga4MeasurementId?: string;
+  readonly yandexMetricaCounterId?: string;
+}
+
+export interface AnalyticsEventSink {
+  readonly name: string;
+  readonly requiredConsent: 'analytics' | 'advertising';
+  dispatch(
+    event: AnalyticsEventLike,
+    context: AnalyticsDispatchContext,
+  ): Promise<AnalyticsDispatchResult>;
+}
+
+/**
+ * Structural alias so ports.ts doesn't need a hard dependency on
+ * packages/domain/src/analytics.ts's full discriminated union — every
+ * field a sink could plausibly need is already on the shared base shape.
+ */
+export interface AnalyticsEventLike {
+  readonly eventId: string;
+  readonly schemaVersion: number;
+  readonly eventName: string;
+  readonly occurredAt: string;
+  readonly sessionId: string;
+  readonly locale: string;
+  readonly consent: { readonly analytics: boolean; readonly advertising: boolean };
+}

@@ -1,12 +1,13 @@
 import type {
+  AnalyticsEventSink,
   Clock,
   EmailSender,
   IndexNowNotifier,
   OutboxMessageRepository,
   PlatformSettingsRepository,
 } from '@eramix/application';
-import { buildCanonicalOrigin } from '@eramix/application';
-import type { OutboxMessage } from '@eramix/domain';
+import { buildCanonicalOrigin, dispatchAnalyticsEvent } from '@eramix/application';
+import { validateAnalyticsEvent, type AnalyticsEvent, type OutboxMessage } from '@eramix/domain';
 import type { Logger } from '@eramix/infrastructure';
 
 export interface OutboxWorkerDeps {
@@ -25,6 +26,8 @@ export interface OutboxWorkerDeps {
   readonly indexNow?: IndexNowNotifier;
   readonly settingsRepo?: PlatformSettingsRepository;
   readonly indexNowKey?: string;
+  /** GA4/Yandex Metrica/Rust sinks (packages/application/src/analytics.ts's dispatchAnalyticsEvent does the consent/enablement gating per sink). Empty/omitted means analytics.event_captured messages are simply marked SENT with nothing dispatched. */
+  readonly analyticsSinks?: readonly AnalyticsEventSink[];
 }
 
 export interface OutboxWorkerResult {
@@ -119,6 +122,37 @@ async function maybeSubmitIndexNow(deps: OutboxWorkerDeps, message: OutboxMessag
 }
 
 /**
+ * Dispatches one `analytics.event_captured` message to every registered
+ * sink (packages/application/src/analytics.ts's dispatchAnalyticsEvent does
+ * the per-sink consent/enablement gating). Sinks never throw for their own
+ * delivery failure, so this only throws for a genuinely unexpected error
+ * (e.g. a settings-read failure) — which the caller's normal retry/backoff/
+ * dead-letter handling then applies, same as any other message type.
+ */
+async function dispatchAnalyticsEventMessage(
+  deps: OutboxWorkerDeps,
+  message: OutboxMessage,
+): Promise<void> {
+  if (!deps.analyticsSinks || deps.analyticsSinks.length === 0 || !deps.settingsRepo) {
+    return;
+  }
+  const event = message.payload as unknown as AnalyticsEvent;
+  // Re-validated here (not just trusted from the ingestion endpoint): the
+  // outbox is a durable queue a message can sit in for a while, and this is
+  // the last gate before an event ever reaches a third-party destination.
+  validateAnalyticsEvent(event, deps.clock.now());
+  const results = await dispatchAnalyticsEvent(
+    { sinks: deps.analyticsSinks, settingsRepo: deps.settingsRepo },
+    event,
+  );
+  deps.logger.log('info', 'analytics_event_dispatched', {
+    messageId: message.id,
+    eventName: event.eventName,
+    results,
+  });
+}
+
+/**
  * Claims one batch of due outbox messages (PENDING or backed-off FAILED)
  * and dispatches each: SENT on success; FAILED with exponential backoff on
  * a retryable failure; DEAD_LETTER once MAX_OUTBOX_ATTEMPTS is reached
@@ -135,7 +169,11 @@ export async function processOutboxBatch(
 
   for (const message of messages) {
     try {
-      await deps.email.send(toEmailMessage(message));
+      if (message.eventType === 'analytics.event_captured') {
+        await dispatchAnalyticsEventMessage(deps, message);
+      } else {
+        await deps.email.send(toEmailMessage(message));
+      }
       await deps.outbox.markSent(message.id);
       sent += 1;
     } catch (error) {
