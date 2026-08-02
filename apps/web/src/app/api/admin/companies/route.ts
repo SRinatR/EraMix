@@ -22,17 +22,28 @@ export const GET = withApiHandler('admin.companies.list', async (request) => {
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'users.manage');
 
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get('limit');
+  const offsetParam = url.searchParams.get('offset');
+  const searchParam = url.searchParams.get('search');
   const container = getContainer();
-  const companies = await container.companies.listAll();
+  const { items, total, limit, offset } = await container.companies.listAll({
+    ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
+    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
+    ...(searchParam !== null ? { search: searchParam } : {}),
+  });
 
   return NextResponse.json({
-    items: companies.map((company) => ({
+    items: items.map((company) => ({
       id: company.id,
       legalName: company.legalName,
       status: company.status,
       metadata: company.metadata,
       version: company.version,
     })),
+    total,
+    limit,
+    offset,
   });
 });
 

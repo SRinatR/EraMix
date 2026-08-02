@@ -1,4 +1,4 @@
-import type { MembershipRepository } from '@eramix/application';
+import { clampPagination, type MembershipRepository, type Page } from '@eramix/application';
 import { ResourceNotFoundError, type Membership } from '@eramix/domain';
 import type { Membership as MembershipRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
@@ -25,12 +25,22 @@ export class PrismaMembershipRepository implements MembershipRepository {
     return rows.map(toDomain);
   }
 
-  async listByCompany(companyId: string): Promise<readonly Membership[]> {
-    const rows = await resolveClient(this.prisma).membership.findMany({
-      where: { companyId },
-      orderBy: { createdAt: 'asc' },
-    });
-    return rows.map(toDomain);
+  async listByCompany(
+    companyId: string,
+    input: { limit?: number; offset?: number } = {},
+  ): Promise<Page<Membership>> {
+    const { limit, offset } = clampPagination(input);
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.membership.findMany({
+        where: { companyId },
+        orderBy: { createdAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      client.membership.count({ where: { companyId } }),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 
   async create(

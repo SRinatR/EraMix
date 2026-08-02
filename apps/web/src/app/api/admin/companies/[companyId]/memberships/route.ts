@@ -20,10 +20,16 @@ export const GET = withApiHandler<{ companyId: string }>(
     requirePermission(actor.platformRole, 'users.manage');
 
     const { companyId } = await params;
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
     const container = getContainer();
-    const memberships = await container.memberships.listByCompany(companyId);
+    const { items, total, limit, offset } = await container.memberships.listByCompany(companyId, {
+      ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
+      ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
+    });
 
-    return NextResponse.json({ items: memberships });
+    return NextResponse.json({ items, total, limit, offset });
   },
 );
 

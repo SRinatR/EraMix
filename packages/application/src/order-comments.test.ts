@@ -12,6 +12,7 @@ import {
   listOrderCommentsForActor,
   visibleOrderComments,
 } from './order-comments.js';
+import type { Page } from './pagination.js';
 import type {
   AuditEventRepository,
   OrderCommentRepository,
@@ -45,11 +46,11 @@ class InMemoryOrderRepository implements OrderRepository {
   findByIdempotencyKey(): Promise<OrderWithLines | undefined> {
     return Promise.resolve(undefined);
   }
-  listByCompany(): Promise<readonly OrderWithLines[]> {
-    return Promise.resolve([]);
+  listByCompany(): Promise<Page<OrderWithLines>> {
+    return Promise.resolve({ items: [], total: 0, limit: 0, offset: 0 });
   }
-  listAll(): Promise<readonly OrderWithLines[]> {
-    return Promise.resolve([]);
+  listAll(): Promise<Page<OrderWithLines>> {
+    return Promise.resolve({ items: [], total: 0, limit: 0, offset: 0 });
   }
   create(): Promise<OrderWithLines> {
     throw new Error('not implemented');

@@ -1,4 +1,10 @@
-import type { OrderRepository, OrderWithLines } from '@eramix/application';
+import {
+  clampPagination,
+  type OrderListFilter,
+  type OrderRepository,
+  type Page,
+  type OrderWithLines,
+} from '@eramix/application';
 import {
   IdempotencyConflictError,
   ResourceNotFoundError,
@@ -97,21 +103,39 @@ export class PrismaOrderRepository implements OrderRepository {
     return toDomain(row);
   }
 
-  async listByCompany(companyId: string): Promise<readonly OrderWithLines[]> {
-    const rows = await resolveClient(this.prisma).order.findMany({
-      where: { companyId },
-      include: WITH_LINES_AND_HISTORY,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(toDomain);
+  async listByCompany(
+    companyId: string,
+    input: { limit?: number; offset?: number } & OrderListFilter = {},
+  ): Promise<Page<OrderWithLines>> {
+    return this.listWhere({ companyId, ...buildOrderFilterWhere(input) }, input);
   }
 
-  async listAll(): Promise<readonly OrderWithLines[]> {
-    const rows = await resolveClient(this.prisma).order.findMany({
-      include: WITH_LINES_AND_HISTORY,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number } & OrderListFilter = {},
+  ): Promise<Page<OrderWithLines>> {
+    return this.listWhere(buildOrderFilterWhere(input), input);
+  }
+
+  private async listWhere(
+    where: Record<string, unknown>,
+    input: { limit?: number; offset?: number; sort?: OrderListFilter['sort'] },
+  ): Promise<Page<OrderWithLines>> {
+    const { limit, offset } = clampPagination(input);
+    const orderBy = {
+      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
+    };
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.order.findMany({
+        where,
+        include: WITH_LINES_AND_HISTORY,
+        orderBy,
+        take: limit,
+        skip: offset,
+      }),
+      client.order.count({ where }),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 
   async addLine(
@@ -220,6 +244,20 @@ export class PrismaOrderRepository implements OrderRepository {
     }
     return updated;
   }
+}
+
+function buildOrderFilterWhere(input: OrderListFilter): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (input.status !== undefined) {
+    where['status'] = input.status;
+  }
+  if (input.createdFrom !== undefined || input.createdTo !== undefined) {
+    where['createdAt'] = {
+      ...(input.createdFrom !== undefined ? { gte: input.createdFrom } : {}),
+      ...(input.createdTo !== undefined ? { lte: input.createdTo } : {}),
+    };
+  }
+  return where;
 }
 
 function toDomain(row: OrderRowWithLines): OrderWithLines {

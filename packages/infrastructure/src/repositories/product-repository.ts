@@ -1,7 +1,9 @@
-import type {
-  ProductRepository,
-  ProductTranslationEditPatch,
-  ProductWithTranslations,
+import {
+  clampPagination,
+  type Page,
+  type ProductRepository,
+  type ProductTranslationEditPatch,
+  type ProductWithTranslations,
 } from '@eramix/application';
 import {
   ResourceNotFoundError,
@@ -204,12 +206,21 @@ export class PrismaProductRepository implements ProductRepository {
     return resolveClient(this.prisma).product.count({ where: buildPublishedWhere(input) });
   }
 
-  async listAll(): Promise<readonly ProductWithTranslations[]> {
-    const rows = await resolveClient(this.prisma).product.findMany({
-      include: WITH_TRANSLATIONS,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number } = {},
+  ): Promise<Page<ProductWithTranslations>> {
+    const { limit, offset } = clampPagination(input);
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.product.findMany({
+        include: WITH_TRANSLATIONS,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      client.product.count(),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 }
 

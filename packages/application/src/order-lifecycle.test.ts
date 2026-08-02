@@ -20,6 +20,7 @@ import {
   submitOrder,
   transitionOrderStatus,
 } from './order-lifecycle.js';
+import type { Page } from './pagination.js';
 import type {
   AuditEventRepository,
   OrderRepository,
@@ -124,12 +125,14 @@ class InMemoryOrderRepository implements OrderRepository {
     );
   }
 
-  listByCompany(companyId: string): Promise<readonly OrderWithLines[]> {
-    return Promise.resolve([...this.orders.values()].filter((o) => o.companyId === companyId));
+  listByCompany(companyId: string): Promise<Page<OrderWithLines>> {
+    const items = [...this.orders.values()].filter((o) => o.companyId === companyId);
+    return Promise.resolve({ items, total: items.length, limit: items.length, offset: 0 });
   }
 
-  listAll(): Promise<readonly OrderWithLines[]> {
-    return Promise.resolve([...this.orders.values()]);
+  listAll(): Promise<Page<OrderWithLines>> {
+    const items = [...this.orders.values()];
+    return Promise.resolve({ items, total: items.length, limit: items.length, offset: 0 });
   }
 
   create(

@@ -1,7 +1,9 @@
-import type {
-  ContentRepository,
-  ContentTranslationEditPatch,
-  ContentWithTranslations,
+import {
+  clampPagination,
+  type ContentRepository,
+  type ContentTranslationEditPatch,
+  type ContentWithTranslations,
+  type Page,
 } from '@eramix/application';
 import {
   ResourceNotFoundError,
@@ -257,12 +259,21 @@ export class PrismaContentRepository implements ContentRepository {
     return rows.map(toDomain);
   }
 
-  async listAll(): Promise<readonly ContentWithTranslations[]> {
-    const rows = await resolveClient(this.prisma).content.findMany({
-      include: WITH_TRANSLATIONS_AND_ROUTES,
-      orderBy: { createdAt: 'desc' },
-    });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number } = {},
+  ): Promise<Page<ContentWithTranslations>> {
+    const { limit, offset } = clampPagination(input);
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.content.findMany({
+        include: WITH_TRANSLATIONS_AND_ROUTES,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      client.content.count(),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 }
 

@@ -1,4 +1,4 @@
-import type { CompanyRepository } from '@eramix/application';
+import { clampPagination, type CompanyRepository, type Page } from '@eramix/application';
 import { ResourceNotFoundError, type Company } from '@eramix/domain';
 import type { Company as CompanyRow } from '../generated/prisma/client.js';
 import { nullableJsonToRecord } from '../prisma-json.js';
@@ -26,11 +26,20 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return toDomain(row);
   }
 
-  async listAll(): Promise<readonly Company[]> {
-    const rows = await resolveClient(this.prisma).company.findMany({
-      orderBy: { createdAt: 'asc' },
-    });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number; search?: string } = {},
+  ): Promise<Page<Company>> {
+    const { limit, offset } = clampPagination(input);
+    const where =
+      input.search !== undefined && input.search.trim().length > 0
+        ? { legalName: { contains: input.search, mode: 'insensitive' as const } }
+        : {};
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.company.findMany({ where, orderBy: { createdAt: 'asc' }, take: limit, skip: offset }),
+      client.company.count({ where }),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 
   async updateStatus(

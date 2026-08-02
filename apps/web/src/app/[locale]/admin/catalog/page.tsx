@@ -1,5 +1,7 @@
 import { Link } from '@/i18n/navigation';
+import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
+import { parsePaginationParams } from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { AddTranslationForm } from './add-translation-form';
 import { ChangeSlugForm } from './change-slug-form';
@@ -19,7 +21,11 @@ function firstTranslationName(translations: readonly { locale: string; name: str
   );
 }
 
-export default async function AdminCatalogPage() {
+export default async function AdminCatalogPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const actor = await getServerActor();
   if (!actor) {
     notFound();
@@ -31,10 +37,13 @@ export default async function AdminCatalogPage() {
   }
 
   const container = getContainer();
-  const [categories, products] = await Promise.all([
-    container.categories.listAll(),
-    container.products.listAll(),
+  const resolvedSearchParams = await searchParams;
+  const [categoryPage, productPage] = await Promise.all([
+    container.categories.listAll(parsePaginationParams(resolvedSearchParams, 'categories')),
+    container.products.listAll(parsePaginationParams(resolvedSearchParams, 'products')),
   ]);
+  const { items: categories } = categoryPage;
+  const { items: products } = productPage;
 
   return (
     <main>
@@ -103,6 +112,18 @@ export default async function AdminCatalogPage() {
           ))}
         </tbody>
       </table>
+      <PaginationControls
+        basePath="/admin/catalog"
+        total={categoryPage.total}
+        limit={categoryPage.limit}
+        offset={categoryPage.offset}
+        limitParamName="categoriesLimit"
+        offsetParamName="categoriesOffset"
+        extraParams={{
+          productsLimit: String(productPage.limit),
+          productsOffset: String(productPage.offset),
+        }}
+      />
 
       <h2>
         Products <Link href="/admin/catalog/products/new">New product</Link>
@@ -164,6 +185,18 @@ export default async function AdminCatalogPage() {
           ))}
         </tbody>
       </table>
+      <PaginationControls
+        basePath="/admin/catalog"
+        total={productPage.total}
+        limit={productPage.limit}
+        offset={productPage.offset}
+        limitParamName="productsLimit"
+        offsetParamName="productsOffset"
+        extraParams={{
+          categoriesLimit: String(categoryPage.limit),
+          categoriesOffset: String(categoryPage.offset),
+        }}
+      />
     </main>
   );
 }

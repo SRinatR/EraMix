@@ -1,12 +1,20 @@
 import { Link } from '@/i18n/navigation';
+import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
+import { parsePaginationParams } from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { requirePermission } from '@eramix/application';
 import { notFound } from 'next/navigation';
 import { CompanyStatusForm } from './company-status-form';
 import { CreateCompanyForm } from './create-company-form';
 
-export default async function AdminCompaniesPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function AdminCompaniesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const actor = await getServerActor();
   if (!actor) {
     notFound();
@@ -18,7 +26,8 @@ export default async function AdminCompaniesPage() {
   }
 
   const container = getContainer();
-  const companies = await container.companies.listAll();
+  const pagination = parsePaginationParams(await searchParams);
+  const { items: companies, total, limit, offset } = await container.companies.listAll(pagination);
 
   return (
     <main>
@@ -49,6 +58,7 @@ export default async function AdminCompaniesPage() {
           ))}
         </tbody>
       </table>
+      <PaginationControls basePath="/admin/companies" total={total} limit={limit} offset={offset} />
 
       <h2>Create a company</h2>
       <CreateCompanyForm />

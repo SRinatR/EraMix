@@ -1,5 +1,7 @@
 import { Link } from '@/i18n/navigation';
+import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
+import { parsePaginationParams } from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { AddContentTranslationForm } from './add-content-translation-form';
 import { EditContentTranslationForm } from './edit-content-translation-form';
@@ -24,7 +26,11 @@ function firstTranslationTitle(translations: readonly { locale: string; title: s
   );
 }
 
-export default async function AdminContentPage() {
+export default async function AdminContentPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const actor = await getServerActor();
   if (!actor) {
     notFound();
@@ -36,7 +42,8 @@ export default async function AdminContentPage() {
   }
 
   const container = getContainer();
-  const items = await container.content.listAll();
+  const pagination = parsePaginationParams(await searchParams);
+  const { items, total, limit, offset } = await container.content.listAll(pagination);
 
   return (
     <main>
@@ -111,6 +118,7 @@ export default async function AdminContentPage() {
           })}
         </tbody>
       </table>
+      <PaginationControls basePath="/admin/content" total={total} limit={limit} offset={offset} />
     </main>
   );
 }

@@ -10,11 +10,19 @@ export const GET = withApiHandler('admin.users.list', async (request) => {
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'users.manage');
 
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get('limit');
+  const offsetParam = url.searchParams.get('offset');
+  const searchParam = url.searchParams.get('search');
   const container = getContainer();
-  const users = await container.users.listAll();
+  const { items, total, limit, offset } = await container.users.listAll({
+    ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
+    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
+    ...(searchParam !== null ? { search: searchParam } : {}),
+  });
 
   return NextResponse.json({
-    items: users.map((user) => ({
+    items: items.map((user) => ({
       id: user.id,
       email: user.email,
       displayName: user.displayName,
@@ -22,5 +30,8 @@ export const GET = withApiHandler('admin.users.list', async (request) => {
       status: user.status,
       version: user.version,
     })),
+    total,
+    limit,
+    offset,
   });
 });

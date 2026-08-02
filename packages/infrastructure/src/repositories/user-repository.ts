@@ -1,4 +1,4 @@
-import type { UserRepository } from '@eramix/application';
+import { clampPagination, type Page, type UserRepository } from '@eramix/application';
 import { ResourceNotFoundError, type PlatformRole, type User } from '@eramix/domain';
 import type { User as UserRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
@@ -35,9 +35,25 @@ export class PrismaUserRepository implements UserRepository {
     return toDomain(row);
   }
 
-  async listAll(): Promise<readonly User[]> {
-    const rows = await resolveClient(this.prisma).user.findMany({ orderBy: { createdAt: 'asc' } });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number; search?: string } = {},
+  ): Promise<Page<User>> {
+    const { limit, offset } = clampPagination(input);
+    const where =
+      input.search !== undefined && input.search.trim().length > 0
+        ? {
+            OR: [
+              { email: { contains: input.search, mode: 'insensitive' as const } },
+              { displayName: { contains: input.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {};
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.user.findMany({ where, orderBy: { createdAt: 'asc' }, take: limit, skip: offset }),
+      client.user.count({ where }),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 
   async updatePlatformRole(

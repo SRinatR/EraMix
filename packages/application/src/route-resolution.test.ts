@@ -7,6 +7,7 @@ import type {
   ProductTranslation,
 } from '@eramix/domain';
 import { describe, expect, it } from 'vitest';
+import type { Page } from './pagination.js';
 import type {
   ContentRepository,
   ContentWithTranslations,
@@ -104,7 +105,7 @@ class InMemoryContentRepository implements ContentRepository {
     throw new Error('not needed for these tests');
   }
 
-  listAll(): Promise<readonly ContentWithTranslations[]> {
+  listAll(): Promise<Page<ContentWithTranslations>> {
     throw new Error('not needed for these tests');
   }
 
@@ -377,7 +378,7 @@ class InMemoryProductRepository implements ProductRepository {
     return Promise.resolve(this.product ? 1 : 0);
   }
 
-  listAll(): Promise<readonly (Product & { translations: ProductTranslation[] })[]> {
+  listAll(): Promise<Page<Product & { translations: ProductTranslation[] }>> {
     throw new Error('not needed for these tests');
   }
 }

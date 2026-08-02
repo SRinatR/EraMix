@@ -1,4 +1,5 @@
 import type { ContentType } from '@eramix/domain';
+import { clampPagination } from './pagination.js';
 import type {
   CategoryRepository,
   CategoryWithTranslations,
@@ -30,8 +31,7 @@ export async function listCatalogProducts(
   productRepo: ProductRepository,
   input: { categoryId?: string; search?: string; limit?: number; offset?: number },
 ): Promise<ProductSearchResult> {
-  const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
-  const offset = Math.max(input.offset ?? 0, 0);
+  const { limit, offset } = clampPagination(input);
   const query = {
     ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     ...(input.search !== undefined ? { search: input.search } : {}),

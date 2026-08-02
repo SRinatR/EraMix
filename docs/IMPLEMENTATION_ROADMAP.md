@@ -1308,6 +1308,92 @@ exact wording rather than assuming scope. Full detail, including live
   `pnpm run check` exit 0 — 254 unit tests (up from 248: +6 `csrf.test.ts`),
   `next build` unaffected (headers/CSRF are cross-cutting, not new routes).
 
+### Pagination and filtering on every list endpoint (ADM-002/DB-005/ACC-003)
+
+Extracted and read the TZ v1.3 `.docx` text directly (not assumed) for
+ADM-002 ("Все списки имеют серверную пагинацию, поиск, фильтры,
+сортировку, явные loading/empty/error states"), DB-005 ("все list endpoints
+имеют bounded queries и пагинацию" — load profile up to 100k products,
+1M orders), and ACC-003 ("Список заказов поддерживает фильтр по
+статусу/дате, сортировку, пагинацию и пустые состояния"). Before this
+slice, 7 repository methods (`UserRepository.listAll`,
+`CompanyRepository.listAll`, `MembershipRepository.listByCompany`,
+`CategoryRepository.listAll`, `ProductRepository.listAll`,
+`ContentRepository.listAll`, `OrderRepository.listAll`/`listByCompany`)
+returned every row with no `LIMIT`, unbounded — a genuine correctness gap
+at TZ's own named scale, not merely a UX one.
+
+- **Shared primitive** (`packages/application/src/pagination.ts`,
+  5 unit tests): `Page<T>` (`{items, total, limit, offset}`) and
+  `clampPagination` (limit 1–100, default 20; offset ≥0) — every list
+  method funnels through this, so no caller can request an unbounded
+  result set. `catalog-queries.ts`'s pre-existing `listCatalogProducts`
+  (Phase 3) refactored to reuse it instead of duplicating the clamp logic.
+- **Repository ports + Prisma adapters**: all 7 methods above now take
+  `{limit?, offset?}` and return `Page<T>`; `OrderRepository` additionally
+  takes `OrderListFilter` (`status`, `createdFrom`, `createdTo`, `sort:
+'createdAt_asc'|'createdAt_desc'`) for ACC-003's filter/sort requirement.
+  `User`/`Company.listAll` also accept an optional `search` substring
+  (email/displayName, legalName) for part of ADM-002's "поиск". Every
+  Prisma adapter now issues a `findMany({take, skip})` + `count()` pair
+  instead of an unbounded `findMany()`.
+- **Routes**: `GET /api/admin/users`, `/api/admin/companies`,
+  `/api/admin/companies/{companyId}/memberships`, `/api/orders` all parse
+  `limit`/`offset` (+ `search` or `status`/`createdFrom`/`createdTo`/`sort`
+  where applicable) and return `{items, total, limit, offset}`. **Found and
+  fixed a real bug while wiring this**: the memberships list route
+  (`apps/web/src/app/api/admin/companies/[companyId]/memberships/route.ts`)
+  still compiled after the port signature changed (`NextResponse.json`
+  accepts anything JSON-serializable) but silently double-wrapped the
+  response as `{items: {items, total, limit, offset}}` — caught by
+  auditing every remaining raw `.listAll(`/`.listByCompany(` call site
+  after the port change, not by the type checker.
+- **UI**: new `apps/web/src/components/pagination-controls.tsx` (plain
+  links, no client JS, supports parameterized `limit`/`offset` query-param
+  names for a page with more than one independently-paginated list) and
+  `apps/web/src/server/pagination.ts`'s `parsePaginationParams` (same
+  prefix support). Wired into `/admin/users`, `/admin/companies`,
+  `/admin/companies/{companyId}/memberships`, `/admin/content`,
+  `/admin/catalog` (categories and products paginated independently on one
+  page, each preserving the other's current window via `extraParams`),
+  `/admin/orders`, and `/account/orders`. The latter two also gained a
+  plain `<form method="get">` status filter (ACC-003) and an explicit
+  "No orders match this filter." empty state distinct from the unfiltered
+  case. Category/user pickers used only to populate a dropdown in an
+  authoring form (`/admin/catalog/categories/new`, `/admin/catalog/
+products/new`, the membership picker on `/admin/companies/{id}/
+memberships`) are deliberately bounded (`{limit: 200}`) rather than given
+  Prev/Next controls — documented inline as an option-picker, not a "list"
+  screen in ADM-002's sense; a true search-based picker at 100k+ scale is a
+  named residual gap, not implemented here.
+- **Known, honestly-stated simplification**: a customer with memberships in
+  more than one company (`/api/orders`, `/account/orders`) applies the same
+  page window to each company and concatenates results/sums totals rather
+  than computing one true cross-company page — documented inline at both
+  call sites. The overwhelmingly common case (one company) is exact.
+  Full ADM-002 "поиск, фильтры, сортировку" on every remaining admin list
+  (categories/products/content/memberships beyond what's implemented above)
+  is not attempted in this slice — only pagination/bounded-queries (DB-005,
+  the safety-critical half) is universal; per-resource search/sort UI
+  remains a residual, explicitly named gap for a follow-up session.
+- **Verified locally** (laptop; **no local `next build`/dev-server run this
+  slice** — see the disk-space note below): `pnpm run format`/`lint`
+  (incl. `redocly lint`)/`typecheck`/`test` all exit 0 — 259 unit tests (up
+  from 254: +5 `pagination.test.ts`). The production build and any
+  Postgres-backed behaviour are verified by CI only for this slice (see the
+  commit's CI run).
+- **Disk-space incident, same session**: mid-verification, the laptop's `C:`
+  drive was found to have 0 bytes free (unrelated to this task — the
+  EraMix repository and its build artifacts total ~1.2 GB; investigation
+  traced the exhaustion to prior-session system-wide installs, e.g. Docker
+  Desktop/PostgreSQL installer/WinGet package cache, not anything this
+  slice created). `apps/web/.next` (0.28 GB, gitignored, fully regenerable)
+  was deleted as the one verified disposable EraMix artifact. Per explicit
+  Product Owner instruction, local `next build`/dev-server verification is
+  suspended for the remainder of this session; GitHub Actions (which runs
+  on its own runner, unaffected) is the production-build and
+  Postgres-integration gate until more local disk space is freed.
+
 ## Required task format for the CLI agent
 
 For every task, report:

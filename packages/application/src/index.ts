@@ -14,6 +14,8 @@ export type {
   MalwareScanner,
 } from './ports.js';
 export { SystemClock } from './system-clock.js';
+export type { Page, PaginationInput } from './pagination.js';
+export { clampPagination, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './pagination.js';
 export type {
   UserRepository,
   CompanyRepository,
@@ -31,6 +33,7 @@ export type {
   ContentTranslationEditPatch,
   OrderRepository,
   OrderWithLines,
+  OrderListFilter,
   OrderCommentRepository,
   AuditEventRepository,
   OutboxMessageRepository,

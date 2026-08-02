@@ -1,7 +1,9 @@
-import type {
-  CategoryRepository,
-  CategoryTranslationEditPatch,
-  CategoryWithTranslations,
+import {
+  clampPagination,
+  type CategoryRepository,
+  type CategoryTranslationEditPatch,
+  type CategoryWithTranslations,
+  type Page,
 } from '@eramix/application';
 import {
   ResourceNotFoundError,
@@ -242,12 +244,21 @@ export class PrismaCategoryRepository implements CategoryRepository {
     return rows.map(toDomain);
   }
 
-  async listAll(): Promise<readonly CategoryWithTranslations[]> {
-    const rows = await resolveClient(this.prisma).category.findMany({
-      include: WITH_TRANSLATIONS_AND_ROUTES,
-      orderBy: { sortOrder: 'asc' },
-    });
-    return rows.map(toDomain);
+  async listAll(
+    input: { limit?: number; offset?: number } = {},
+  ): Promise<Page<CategoryWithTranslations>> {
+    const { limit, offset } = clampPagination(input);
+    const client = resolveClient(this.prisma);
+    const [rows, total] = await Promise.all([
+      client.category.findMany({
+        include: WITH_TRANSLATIONS_AND_ROUTES,
+        orderBy: { sortOrder: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      client.category.count(),
+    ]);
+    return { items: rows.map(toDomain), total, limit, offset };
   }
 }
 

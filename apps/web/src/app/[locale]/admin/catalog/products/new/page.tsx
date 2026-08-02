@@ -18,7 +18,9 @@ export default async function NewProductPage() {
   }
 
   const container = getContainer();
-  const categories = await container.categories.listAll();
+  // Category picker, not a list screen — see the identical comment in
+  // admin/catalog/categories/new/page.tsx.
+  const { items: categories } = await container.categories.listAll({ limit: 200 });
 
   return (
     <main>

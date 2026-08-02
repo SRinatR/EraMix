@@ -322,20 +322,50 @@ paths:
       description: >-
         A customer sees only their own company's orders (order.read.own); a
         manager/admin sees all orders (order.read.all) — TZ ORD-008.
+        ACC-003: bounded, paginated, filterable by status/date, sortable.
       tags: [Orders]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: createdFrom
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: createdTo
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_desc }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         '200':
-          description: Orders.
+          description: Paginated orders.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, offset]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/Order'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
@@ -598,20 +628,37 @@ paths:
     get:
       operationId: listAdminUsers
       summary: List platform users (users.manage — Administrator only)
+      description: ADM-002/DB-005 — bounded, paginated, optional email/displayName substring search.
       tags: [Admin]
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         '200':
-          description: Users.
+          description: Paginated users.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, offset]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/AdminUser'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

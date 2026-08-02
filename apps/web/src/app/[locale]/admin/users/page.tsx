@@ -1,10 +1,18 @@
+import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
+import { parsePaginationParams } from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { UpdateRoleForm } from './update-role-form';
 import { requirePermission } from '@eramix/application';
 import { notFound } from 'next/navigation';
 
-export default async function AdminUsersPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const actor = await getServerActor();
   if (!actor) {
     notFound();
@@ -16,7 +24,8 @@ export default async function AdminUsersPage() {
   }
 
   const container = getContainer();
-  const users = await container.users.listAll();
+  const pagination = parsePaginationParams(await searchParams);
+  const { items: users, total, limit, offset } = await container.users.listAll(pagination);
 
   return (
     <main>
@@ -47,6 +56,7 @@ export default async function AdminUsersPage() {
           ))}
         </tbody>
       </table>
+      <PaginationControls basePath="/admin/users" total={total} limit={limit} offset={offset} />
     </main>
   );
 }
