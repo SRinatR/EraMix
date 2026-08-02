@@ -76,8 +76,11 @@ export {
   transitionCategoryStatus,
   transitionContentStatus,
   transitionProductStatus,
+  retireCategory,
+  retireContent,
+  retireProduct,
 } from './publication.js';
-export type { TransitionStatusInput } from './publication.js';
+export type { TransitionStatusInput, RetireInput } from './publication.js';
 export {
   createDraftOrder,
   addOrderLine,

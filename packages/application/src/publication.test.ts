@@ -18,6 +18,9 @@ import {
   transitionCategoryStatus,
   transitionContentStatus,
   transitionProductStatus,
+  retireCategory,
+  retireContent,
+  retireProduct,
 } from './publication.js';
 
 class InMemoryUnitOfWork {
@@ -269,6 +272,150 @@ describe('transitionCategoryStatus', () => {
     );
     expect(result.status).toBe('ARCHIVED');
   });
+
+  it('rejects any status transition once a category is retired', async () => {
+    const category = makeCategory({
+      status: 'ARCHIVED',
+      retiredAt: new Date('2026-08-03T00:00:00Z'),
+      retirementReason: 'Discontinued.',
+    });
+    const categoryRepo = {
+      findById: () => Promise.resolve(category),
+      updateStatus: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      transitionCategoryStatus(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'category-1',
+          expectedVersion: 0,
+          toStatus: 'DRAFT',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+});
+
+describe('retireCategory', () => {
+  it('denies a CONTENT_EDITOR (no catalog.write permission)', async () => {
+    const categoryRepo = {
+      findById: () => Promise.resolve(makeCategory({ status: 'ARCHIVED' })),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'category-1',
+          expectedVersion: 0,
+          reason: 'Discontinued.',
+          actorUserId: 'user-1',
+          actorRole: 'CONTENT_EDITOR',
+        },
+      ),
+    ).rejects.toThrow(AccessDeniedError);
+  });
+
+  it('rejects an empty reason', async () => {
+    const categoryRepo = {
+      findById: () => Promise.resolve(makeCategory({ status: 'ARCHIVED' })),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'category-1',
+          expectedVersion: 0,
+          reason: '   ',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+
+  it('rejects retiring a category that is not ARCHIVED', async () => {
+    const categoryRepo = {
+      findById: () => Promise.resolve(makeCategory({ status: 'PUBLISHED' })),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'category-1',
+          expectedVersion: 0,
+          reason: 'Discontinued.',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+
+  it('retires an ARCHIVED category and records audit + outbox', async () => {
+    const category = makeCategory({ status: 'ARCHIVED' });
+    const retired = {
+      ...category,
+      retiredAt: new Date('2026-08-03T00:00:00Z'),
+      retirementReason: 'Discontinued.',
+      version: 1,
+    };
+    const categoryRepo = {
+      findById: () => Promise.resolve(category),
+      retire: () => Promise.resolve(retired),
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireCategory(
+      { categoryRepo: categoryRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: 'category-1',
+        expectedVersion: 0,
+        reason: 'Discontinued.',
+        actorUserId: 'admin-1',
+        actorRole: 'ADMIN',
+      },
+    );
+
+    expect(result.retiredAt).toBeDefined();
+    expect(auditRepo.calls).toHaveLength(1);
+    expect(auditRepo.calls[0]).toMatchObject({ action: 'category.retired' });
+    expect(outboxRepo.calls).toHaveLength(1);
+    expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'category.retired' });
+  });
 });
 
 const canonicalContentRoute: ContentRoute = {
@@ -394,6 +541,65 @@ describe('transitionContentStatus', () => {
   });
 });
 
+describe('retireContent', () => {
+  it('rejects retiring a content item that is not ARCHIVED', async () => {
+    const contentRepo = {
+      findById: () => Promise.resolve(makeContent({ status: 'PUBLISHED' })),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireContent(
+        {
+          contentRepo: contentRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'content-1',
+          expectedVersion: 0,
+          reason: 'Discontinued.',
+          actorUserId: 'editor-1',
+          actorRole: 'CONTENT_EDITOR',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+
+  it('retires an ARCHIVED content item and records audit + outbox', async () => {
+    const content = makeContent({ status: 'ARCHIVED' });
+    const retired = {
+      ...content,
+      retiredAt: new Date('2026-08-03T00:00:00Z'),
+      retirementReason: 'Discontinued.',
+      version: 1,
+    };
+    const contentRepo = {
+      findById: () => Promise.resolve(content),
+      retire: () => Promise.resolve(retired),
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireContent(
+      { contentRepo: contentRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: 'content-1',
+        expectedVersion: 0,
+        reason: 'Discontinued.',
+        actorUserId: 'editor-1',
+        actorRole: 'CONTENT_EDITOR',
+      },
+    );
+
+    expect(result.retiredAt).toBeDefined();
+    expect(auditRepo.calls[0]).toMatchObject({ action: 'content.retired' });
+    expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'content.retired' });
+  });
+});
+
 function makeProductTranslation(overrides: Partial<ProductTranslation> = {}): ProductTranslation {
   return {
     id: 'translation-1',
@@ -505,5 +711,64 @@ describe('transitionProductStatus', () => {
     expect(result.status).toBe('PUBLISHED');
     expect(auditRepo.calls).toHaveLength(1);
     expect(outboxRepo.calls).toHaveLength(1);
+  });
+});
+
+describe('retireProduct', () => {
+  it('rejects retiring a product that is not ARCHIVED', async () => {
+    const productRepo = {
+      findById: () => Promise.resolve(makeProduct({ status: 'PUBLISHED' })),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireProduct(
+        {
+          productRepo: productRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: 'product-1',
+          expectedVersion: 0,
+          reason: 'Discontinued.',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+
+  it('retires an ARCHIVED product and records audit + outbox', async () => {
+    const product = makeProduct({ status: 'ARCHIVED' });
+    const retired = {
+      ...product,
+      retiredAt: new Date('2026-08-03T00:00:00Z'),
+      retirementReason: 'Discontinued.',
+      version: 1,
+    };
+    const productRepo = {
+      findById: () => Promise.resolve(product),
+      retire: () => Promise.resolve(retired),
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireProduct(
+      { productRepo: productRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: 'product-1',
+        expectedVersion: 0,
+        reason: 'Discontinued.',
+        actorUserId: 'admin-1',
+        actorRole: 'ADMIN',
+      },
+    );
+
+    expect(result.retiredAt).toBeDefined();
+    expect(auditRepo.calls[0]).toMatchObject({ action: 'product.retired' });
+    expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'product.retired' });
   });
 });

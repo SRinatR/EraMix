@@ -1041,6 +1041,128 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/admin/categories/{categoryId}/retire:
+    patch:
+      operationId: retireCategory
+      summary: >-
+        Permanently retire a category (catalog.write — Administrator only).
+        Durable, one-way: the category must already be ARCHIVED, and once
+        retired no further status transition is ever permitted. The public
+        route responds 410 Gone (never a mere unpublish/404) — see
+        docs/adr/0018-http-410-retirement-via-proxy.md.
+      tags: [Admin]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetireRequest'
+      responses:
+        '200':
+          description: The retired category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetireResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or the category is not currently ARCHIVED.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content/{contentId}/retire:
+    patch:
+      operationId: retireContent
+      summary: >-
+        Permanently retire a content item (content.write — Administrator/
+        Content editor). Same ARCHIVED-first, one-way retirement semantics
+        as categories/products.
+      tags: [Admin]
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetireRequest'
+      responses:
+        '200':
+          description: The retired content item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetireResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or the content item is not currently ARCHIVED.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products/{productId}/retire:
+    patch:
+      operationId: retireProduct
+      summary: >-
+        Permanently retire a product (catalog.write — Administrator only).
+        Same ARCHIVED-first, one-way retirement semantics as
+        categories/content.
+      tags: [Admin]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetireRequest'
+      responses:
+        '200':
+          description: The retired product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetireResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or the product is not currently ARCHIVED.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
   /api/admin/categories:
     post:
       operationId: createCategory
@@ -2255,6 +2377,27 @@ components:
         id: { type: string }
         status:
           $ref: '#/components/schemas/PublicationStatus'
+        version: { type: integer }
+    RetireRequest:
+      type: object
+      required: [reason, expectedVersion]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: >-
+            Required, real reason recorded on the audit trail — never blank.
+        expectedVersion: { type: integer }
+    RetireResult:
+      type: object
+      required: [id, status, version]
+      properties:
+        id: { type: string }
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        retiredAt: { type: string, format: date-time }
+        retirementReason: { type: string }
         version: { type: integer }
     AuditEvent:
       type: object

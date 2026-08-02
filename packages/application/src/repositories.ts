@@ -162,6 +162,8 @@ export interface CategoryRepository {
     expectedVersion: number,
     status: Category['status'],
   ): Promise<CategoryWithTranslations>;
+  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(id: string, expectedVersion: number, reason: string): Promise<CategoryWithTranslations>;
 }
 
 export interface ProductWithTranslations extends Product {
@@ -219,6 +221,8 @@ export interface ProductRepository {
   listAll(
     input?: CursorPaginationInput & ProductListFilter,
   ): Promise<CursorPage<ProductWithTranslations>>;
+  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(id: string, expectedVersion: number, reason: string): Promise<ProductWithTranslations>;
 }
 
 /** Patch shape for editing an existing asset's editorial metadata (never storageKey/checksum/scan fields — those are set once at upload time and are otherwise immutable). */
@@ -329,6 +333,8 @@ export interface ContentRepository {
     expectedVersion: number,
     status: Content['status'],
   ): Promise<ContentWithTranslations>;
+  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(id: string, expectedVersion: number, reason: string): Promise<ContentWithTranslations>;
 }
 
 export interface OrderWithLines extends Order {

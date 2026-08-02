@@ -42,7 +42,10 @@ export default async function CmsPage({ params }: { params: Promise<PageParams> 
 
   const container = getContainer();
   const resolution = await resolveContentRoute(container.content, 'PAGES', locale, slug);
-  if (resolution.kind === 'not-found') {
+  if (resolution.kind === 'not-found' || resolution.kind === 'retired') {
+    // A real HTTP 410 for the 'retired' case is served by src/proxy.ts before
+    // this page ever renders (page.tsx/Server Components cannot set a
+    // custom status code — see ADR-0018). This is defense-in-depth only.
     notFound();
   }
   if (resolution.kind === 'redirect') {

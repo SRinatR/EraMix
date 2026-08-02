@@ -11,6 +11,7 @@ import { AddTranslationForm } from './add-translation-form';
 import { ChangeSlugForm } from './change-slug-form';
 import { EditCategoryTranslationForm } from './edit-category-translation-form';
 import { EditProductTranslationForm } from './edit-product-translation-form';
+import { RetireForm } from './retire-form';
 import { TransitionStatusForm } from './transition-status-form';
 import { requirePermission } from '@eramix/application';
 import type { PublicationStatus } from '@eramix/domain';
@@ -159,6 +160,7 @@ export default async function AdminCatalogPage({
             <th>Name</th>
             <th>Status</th>
             <th>Change status</th>
+            <th>Retire</th>
             <th>Add translation</th>
             <th>Edit translations</th>
             <th>Slugs</th>
@@ -175,6 +177,18 @@ export default async function AdminCatalogPage({
                   currentStatus={category.status}
                   expectedVersion={category.version}
                 />
+              </td>
+              <td>
+                {category.retiredAt !== undefined ? (
+                  <span>Retired: {category.retirementReason}</span>
+                ) : category.status === 'ARCHIVED' ? (
+                  <RetireForm
+                    endpoint={`/api/admin/categories/${category.id}/retire`}
+                    expectedVersion={category.version}
+                  />
+                ) : (
+                  '—'
+                )}
               </td>
               <td>
                 <AddTranslationForm
@@ -262,6 +276,7 @@ export default async function AdminCatalogPage({
             <th>Name</th>
             <th>Status</th>
             <th>Change status</th>
+            <th>Retire</th>
             <th>Add translation</th>
             <th>Edit translations</th>
             <th>Media</th>
@@ -279,6 +294,18 @@ export default async function AdminCatalogPage({
                   currentStatus={product.status}
                   expectedVersion={product.version}
                 />
+              </td>
+              <td>
+                {product.retiredAt !== undefined ? (
+                  <span>Retired: {product.retirementReason}</span>
+                ) : product.status === 'ARCHIVED' ? (
+                  <RetireForm
+                    endpoint={`/api/admin/products/${product.id}/retire`}
+                    expectedVersion={product.version}
+                  />
+                ) : (
+                  '—'
+                )}
               </td>
               <td>
                 <AddTranslationForm

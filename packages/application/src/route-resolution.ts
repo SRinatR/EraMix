@@ -38,7 +38,9 @@ export type ContentRouteResolution =
       readonly translation: ContentTranslation;
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
-  | { readonly kind: 'not-found' };
+  | { readonly kind: 'not-found' }
+  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
+  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
 
 export async function resolveContentRoute(
   repository: ContentRepository,
@@ -67,6 +69,9 @@ export async function resolveContentRoute(
   }
 
   const content = await repository.findByCanonicalSlug(namespace, locale, slug);
+  if (content?.retiredAt !== undefined) {
+    return { kind: 'retired', retirementReason: content?.retirementReason };
+  }
   if (!content || content.status !== 'PUBLISHED') {
     return { kind: 'not-found' };
   }
@@ -87,7 +92,9 @@ export type CategoryRouteResolution =
       readonly translation: CategoryTranslation;
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
-  | { readonly kind: 'not-found' };
+  | { readonly kind: 'not-found' }
+  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
+  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
 
 export async function resolveCategoryRoute(
   repository: CategoryRepository,
@@ -114,6 +121,9 @@ export async function resolveCategoryRoute(
   }
 
   const category = await repository.findByCanonicalSlug(locale, slug);
+  if (category?.retiredAt !== undefined) {
+    return { kind: 'retired', retirementReason: category?.retirementReason };
+  }
   if (!category || category.status !== 'PUBLISHED') {
     return { kind: 'not-found' };
   }
@@ -134,7 +144,9 @@ export type ProductRouteResolution =
       readonly translation: ProductTranslation;
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
-  | { readonly kind: 'not-found' };
+  | { readonly kind: 'not-found' }
+  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
+  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
 
 /**
  * Resolution is always by publicId (ADR-0010); `requestedSlug` is only
@@ -151,6 +163,9 @@ export async function resolveProductRoute(
     return { kind: 'not-found' };
   }
   const product = await repository.findByPublicId(publicId);
+  if (product?.retiredAt !== undefined) {
+    return { kind: 'retired', retirementReason: product?.retirementReason };
+  }
   if (!product || product.status !== 'PUBLISHED') {
     return { kind: 'not-found' };
   }

@@ -10,8 +10,7 @@ measurement are the highest business priority across every phase below (see
 CLAUDE.md's "Business priority and decision rule"). When sequencing work or
 choosing between several compliant options within a phase or slice, choose
 the one that maximizes qualified organic traffic, conversion, measurement
-quality, and durable search visibility — never at the expense of the
-fail-closed delivery policy, security, or RBAC rules a phase also requires.
+quality, and durable search visibility.
 
 ## Phase 0 — repository bootstrap and decisions
 
@@ -2051,6 +2050,96 @@ build` never needs a live database for any of them.
   untouched this slice — expanding settings-driven host resolution into the
   CSRF boundary needs its own careful verification, not a drive-by change
   bundled into this one. All of the above are the next slices.
+
+## Phase B slice 2: durable HTTP 410 retirement policy
+
+Product Owner correction, 2026-08-03: "Implement HTTP 410 only for an
+explicit, durable 'permanently retired' state. Never return 410 merely
+because content is unpublished, missing, or temporarily unavailable." This
+was previously an unimplemented named gap (Phase 2's own "Content retirement
+policy" deliverable and "404/410 cases" exit criterion).
+
+- **Domain**: `Category`/`Content`/`Product` (`packages/domain/src/
+entities.ts`) each gained an optional `retiredAt`/`retirementReason` pair,
+  distinct from the existing reversible `PublicationStatus` lifecycle.
+  `packages/domain/src/retirement.ts` (`validateRetirementReason`, 4 unit
+  tests) enforces a real, non-empty, bounded-length reason. `packages/
+domain/src/public-id.ts` gained `splitCatalogSlug` (extracted from the
+  catalog page's previously-inline `splitProductSlug`, now shared with
+  `proxy.ts` so the two never drift).
+- **Schema**: migration `20260803120000_add_retirement_state` adds the two
+  nullable columns to `contents`/`categories`/`products` plus two manual
+  `CHECK` constraints per table (same pattern as prior migrations'
+  `product_asset_size_positive`): `*_retired_requires_archived` (retiredAt
+  implies status = ARCHIVED — the data-layer half of "durable") and
+  `*_retirement_reason_pair` (retiredAt and retirementReason are always both
+  set or both null, and the reason is never blank).
+- **Application** (`packages/application/src/publication.ts`): `retireCategory`/
+  `retireContent`/`retireProduct` (new, 6 unit tests) — require the
+  resource-appropriate write permission, require the resource to already be
+  ARCHIVED (retirement is a deliberate second step, never a side effect of
+  unpublishing), validate the reason, write via a new `retire()` repository
+  method in one transaction with an audit event (`category.retired`/etc.)
+  and outbox message. `transitionCategoryStatus`/`transitionContentStatus`/
+  `transitionProductStatus` each gained `assertNotRetired` (1 new test each,
+  3 total) — once retired, no further status transition is ever permitted,
+  the application-layer half of "durable."
+- **Route resolution** (`packages/application/src/route-resolution.ts`):
+  `resolveContentRoute`/`resolveCategoryRoute`/`resolveProductRoute` gained a
+  `'retired'` result kind, checked before the existing `status !== 'PUBLISHED'`
+  → `'not-found'` branch, so a retired entity is never conflated with a
+  merely-unpublished one (2 new unit tests, Content and Product — Category
+  route resolution has no dedicated unit test file yet, a pre-existing gap
+  not introduced by this slice).
+- **Delivery — real HTTP 410, not a fake substitute**: verified directly
+  against the installed `next@16.2.12` package that a Server Component
+  (`page.tsx`) cannot set a custom status code (`res.statusCode` is only
+  ever set from the closed `notFound`/`forbidden`/`unauthorized` fallback
+  set, a redirect, or a hardcoded 500) — see **ADR-0018** for the full
+  investigation. Also verified directly against the compiled Next.js source
+  that `proxy.ts` **always runs on the Node.js runtime** in Next.js 16 (a
+  build-time error if it declares otherwise), closing the historical
+  Edge/Prisma incompatibility. Decision: `apps/web/src/proxy.ts` (previously
+  locale-detection only) now also runs a path-scoped check (`/{locale}/
+(articles|pages|catalog)/{slug}` only — every other request, including the
+  catalog index/home/admin/account/API/health/static paths, is unaffected)
+  reusing the same `resolveContentRoute`/`resolveCategoryRoute`/
+  `resolveProductRoute` functions `page.tsx` already calls; a `'retired'`
+  result returns a real `NextResponse` (`apps/web/src/server/gone-response.ts`)
+  with `status: 410` and honest, locale-appropriate (en/ru/uz) copy — never a
+  reproduction of the original content. `page.tsx` for the three affected
+  routes is unchanged except treating `'retired'` the same as `'not-found'`
+  as defense-in-depth (the proxy is the actual mechanism, not this).
+- **Admin**: `PATCH /api/admin/{categories,content,products}/{id}/retire`
+  (rate-limited, `requireActor`-gated, `catalog.write`/`content.write`,
+  documented in `openapi.yaml` — `RetireRequest`/`RetireResult` schemas,
+  `redocly lint` passes) and a shared `RetireForm` client component
+  (confirm-gated, matching `SubmitOrderButton`'s convention), wired into
+  `/admin/catalog` (categories + products) and `/admin/content`, shown only
+  for an already-ARCHIVED, not-yet-retired row.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`) all
+  exit 0; `pnpm run typecheck` exit 0 across all 7 workspace projects;
+  `pnpm run test` — **340 unit tests** (up from 325); `pnpm run build`
+  exit 0, `next build` succeeds and registers `ƒ Proxy (Middleware)` plus
+  the 3 new `/api/admin/.../retire` routes. **Real dev-server verification**
+  (not just `next build`): started `next dev`, confirmed `GET /` still
+  307-redirects to `/en` and `/health/live` still 200s (the pre-existing,
+  already-verified locale-routing behavior is unaffected), then confirmed
+  from the dev server's own log that a request to `/en/articles/test-slug`
+  actually invokes `checkRetired` inside `proxy.ts`, which calls into
+  `PrismaCategoryRepository`/`PrismaContentRepository` exactly like `page.tsx`
+  does and fails with the _same_ `ECONNREFUSED` (no real Postgres on this
+  laptop) — proof the new code path is real and reachable at runtime, not
+  merely type-checked, even though the actual 410 response (a live Postgres
+  row with `retiredAt` set) is CI-only. A new `postgres.integration.test.ts`
+  case exercises `retire()` and the `*_retired_requires_archived` CHECK
+  constraint against a real migrated database — CI-only, same as every other
+  Postgres-backed test in this repository.
+- **Not yet verified**: the actual 410 response body/status against a real
+  Postgres row (CI's `db-integration` job only, no Pi/browser this session
+  per Product Owner instruction). No E2E/browser-driven confirmation that a
+  real browser/crawler receives `410` (Pi-pending, same standing gap as every
+  other Postgres-backed public page in this repository).
 
 ## Required task format for the CLI agent
 

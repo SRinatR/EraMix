@@ -105,6 +105,10 @@ class InMemoryContentRepository implements ContentRepository {
     throw new Error('not needed for these tests');
   }
 
+  retire(): Promise<ContentWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
   listAll(): Promise<CursorPage<ContentWithTranslations>> {
     throw new Error('not needed for these tests');
   }
@@ -287,6 +291,37 @@ describe('resolveContentRoute', () => {
     expect(result).toEqual({ kind: 'not-found' });
   });
 
+  it('returns retired (410), not not-found (404), for a durably retired content item', async () => {
+    const repo = new InMemoryContentRepository();
+    const translation = makeTranslation();
+    repo.seed({
+      ...makeContent({
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Discontinued, no successor.',
+      }),
+      translations: [
+        {
+          ...translation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: translation.id,
+              locale: 'en',
+              namespace: 'ARTICLES',
+              slug: 'friendship-festival',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveContentRoute(repo, 'ARTICLES', 'en', 'friendship-festival');
+    expect(result).toEqual({ kind: 'retired', retirementReason: 'Discontinued, no successor.' });
+  });
+
   it('throws CanonicalRouteMissingError if the canonical route points at a translation the content no longer has (data-integrity guard, not a normal 404)', async () => {
     const translation = makeTranslation({ id: 'orphan-translation' });
     const canonicalRoute: ContentRoute = {
@@ -322,6 +357,9 @@ describe('resolveContentRoute', () => {
       },
       listPublished: () => Promise.resolve([]),
       updateStatus: () => {
+        throw new Error('not needed for this test');
+      },
+      retire: () => {
         throw new Error('not needed for this test');
       },
       listAll: () => {
@@ -367,6 +405,10 @@ class InMemoryProductRepository implements ProductRepository {
   }
 
   updateStatus(): Promise<Product & { translations: ProductTranslation[] }> {
+    throw new Error('not needed for these tests');
+  }
+
+  retire(): Promise<Product & { translations: ProductTranslation[] }> {
     throw new Error('not needed for these tests');
   }
 
@@ -447,6 +489,19 @@ describe('resolveProductRoute', () => {
     expect(result).toEqual({ kind: 'not-found' });
   });
 
+  it('returns retired (410), not not-found (404), for a durably retired product', async () => {
+    const repo = new InMemoryProductRepository({
+      ...makeProduct({
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Discontinued by manufacturer.',
+      }),
+      translations: [makeProductTranslation()],
+    });
+    const result = await resolveProductRoute(repo, 'P8K4F2M9', 'en', 'red-t-shirt');
+    expect(result).toEqual({ kind: 'retired', retirementReason: 'Discontinued by manufacturer.' });
+  });
+
   it('returns not-found when the product has no translation for the requested locale', async () => {
     const repo = new InMemoryProductRepository({
       ...makeProduct(),
@@ -488,6 +543,9 @@ describe('CanonicalRouteMissingError', () => {
       },
       listPublished: () => Promise.resolve([]),
       updateStatus: () => {
+        throw new Error('not needed for this test');
+      },
+      retire: () => {
         throw new Error('not needed for this test');
       },
       listAll: () => {

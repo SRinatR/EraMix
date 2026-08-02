@@ -91,6 +91,9 @@ export interface Category extends Versioned, Timestamped {
   readonly parentId?: string | undefined;
   readonly status: PublicationStatus;
   readonly sortOrder: number;
+  /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
+  readonly retiredAt?: Date | undefined;
+  readonly retirementReason?: string | undefined;
 }
 
 export interface ProductTranslation extends Versioned, Timestamped {
@@ -112,6 +115,9 @@ export interface Product extends Versioned, Timestamped {
   readonly categoryId: string;
   readonly status: PublicationStatus;
   readonly publishedAt?: Date | undefined;
+  /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
+  readonly retiredAt?: Date | undefined;
+  readonly retirementReason?: string | undefined;
 }
 
 export interface ContentTranslation extends Versioned, Timestamped {
@@ -140,6 +146,9 @@ export interface Content extends Versioned, Timestamped {
   readonly type: ContentType;
   readonly status: PublicationStatus;
   readonly publishedAt?: Date | undefined;
+  /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
+  readonly retiredAt?: Date | undefined;
+  readonly retirementReason?: string | undefined;
 }
 
 export interface ProductAsset extends Versioned, Timestamped {

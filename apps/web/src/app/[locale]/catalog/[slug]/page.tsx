@@ -11,12 +11,7 @@ import {
   resolveCategoryRoute,
   resolveProductRoute,
 } from '@eramix/application';
-import {
-  isSupportedLocale,
-  isValidPublicId,
-  PUBLIC_ID_LENGTH,
-  type LocaleCode,
-} from '@eramix/domain';
+import { isSupportedLocale, splitCatalogSlug, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, permanentRedirect } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -29,21 +24,9 @@ interface PageParams {
   slug: string;
 }
 
-/** Product URLs are `{publicId}-{slug}` (ADR-0010); category URLs are plain `{slug}`. */
-function splitProductSlug(slug: string): { publicId: string; rest: string } | undefined {
-  if (slug.length <= PUBLIC_ID_LENGTH || slug[PUBLIC_ID_LENGTH] !== '-') {
-    return undefined;
-  }
-  const publicId = slug.slice(0, PUBLIC_ID_LENGTH);
-  if (!isValidPublicId(publicId)) {
-    return undefined;
-  }
-  return { publicId, rest: slug.slice(PUBLIC_ID_LENGTH + 1) };
-}
-
 async function resolve(locale: LocaleCode, slug: string) {
   const container = getContainer();
-  const asProduct = splitProductSlug(slug);
+  const asProduct = splitCatalogSlug(slug);
   if (asProduct) {
     const resolution = await resolveProductRoute(
       container.products,
@@ -89,7 +72,10 @@ export default async function CatalogEntryPage({
   setRequestLocale(locale);
 
   const resolved = await resolve(locale, slug);
-  if (resolved.resolution.kind === 'not-found') {
+  if (resolved.resolution.kind === 'not-found' || resolved.resolution.kind === 'retired') {
+    // A real HTTP 410 for the 'retired' case is served by src/proxy.ts before
+    // this page ever renders (page.tsx/Server Components cannot set a
+    // custom status code — see ADR-0018). This is defense-in-depth only.
     notFound();
   }
   if (resolved.resolution.kind === 'redirect') {

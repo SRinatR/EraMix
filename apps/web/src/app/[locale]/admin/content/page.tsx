@@ -10,6 +10,7 @@ import { getServerActor } from '@/server/session';
 import { AddContentTranslationForm } from './add-content-translation-form';
 import { EditContentTranslationForm } from './edit-content-translation-form';
 import { ChangeSlugForm } from '../catalog/change-slug-form';
+import { RetireForm } from '../catalog/retire-form';
 import { TransitionStatusForm } from '../catalog/transition-status-form';
 import { requirePermission } from '@eramix/application';
 import type { ContentRouteNamespace, ContentType, PublicationStatus } from '@eramix/domain';
@@ -117,6 +118,7 @@ export default async function AdminContentPage({
               <th>Title</th>
               <th>Status</th>
               <th>Change status</th>
+              <th>Retire</th>
               <th>Add translation</th>
               <th>Edit translations</th>
               <th>Slugs</th>
@@ -136,6 +138,18 @@ export default async function AdminContentPage({
                       currentStatus={item.status}
                       expectedVersion={item.version}
                     />
+                  </td>
+                  <td>
+                    {item.retiredAt !== undefined ? (
+                      <span>Retired: {item.retirementReason}</span>
+                    ) : item.status === 'ARCHIVED' ? (
+                      <RetireForm
+                        endpoint={`/api/admin/content/${item.id}/retire`}
+                        expectedVersion={item.version}
+                      />
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td>
                     <AddContentTranslationForm

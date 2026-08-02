@@ -143,4 +143,45 @@ describe('PostgreSQL integration', () => {
     const events = await auditRepo().listByEntity('IntegrationTest', entityId);
     expect(events.data).toHaveLength(1);
   });
+
+  it('retire() sets retiredAt/retirementReason and the CHECK constraint rejects retiring a non-ARCHIVED row', async () => {
+    const category = await categoryRepo().create(
+      { id: randomUUID(), status: 'ARCHIVED', sortOrder: 0 },
+      [
+        {
+          id: randomUUID(),
+          categoryId: '',
+          locale: 'en',
+          name: `Integration test retire ${randomUUID()}`,
+        },
+      ],
+    );
+
+    const retired = await categoryRepo().retire(category.id, 0, 'Discontinued (integration test).');
+    expect(retired.retiredAt).toBeDefined();
+    expect(retired.retirementReason).toBe('Discontinued (integration test).');
+    expect(retired.version).toBe(1);
+
+    // migration 20260803120000_add_retirement_state's category_retired_requires_archived
+    // CHECK constraint is the data-layer half of ADR-0018/CLAUDE.md's "durable
+    // retirement" guarantee — a direct raw write bypassing the application
+    // layer's ARCHIVED-first precondition must still fail.
+    const notArchived = await categoryRepo().create(
+      { id: randomUUID(), status: 'PUBLISHED', sortOrder: 0 },
+      [
+        {
+          id: randomUUID(),
+          categoryId: '',
+          locale: 'en',
+          name: `Integration test not-archived ${randomUUID()}`,
+        },
+      ],
+    );
+    await expect(
+      prisma.category.update({
+        where: { id: notArchived.id },
+        data: { retiredAt: new Date(), retirementReason: 'Should be rejected.' },
+      }),
+    ).rejects.toThrow();
+  });
 });

@@ -260,6 +260,28 @@ export class PrismaContentRepository implements ContentRepository {
     return updated;
   }
 
+  async retire(
+    id: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<ContentWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.content.updateMany({
+      where: { id, version: expectedVersion },
+      data: { retiredAt: new Date(), retirementReason: reason, version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Content ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Content ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+
   async listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]> {
     const rows = await resolveClient(this.prisma).content.findMany({
       where: { type, status: 'PUBLISHED' },
@@ -325,6 +347,8 @@ function toDomain(row: ContentRowWithTranslations): ContentWithTranslations {
     type: row.type,
     status: row.status,
     publishedAt: nullToUndefined(row.publishedAt),
+    retiredAt: nullToUndefined(row.retiredAt),
+    retirementReason: nullToUndefined(row.retirementReason),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,

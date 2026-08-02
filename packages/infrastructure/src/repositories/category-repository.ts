@@ -236,6 +236,28 @@ export class PrismaCategoryRepository implements CategoryRepository {
     return updated;
   }
 
+  async retire(
+    id: string,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<CategoryWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.category.updateMany({
+      where: { id, version: expectedVersion },
+      data: { retiredAt: new Date(), retirementReason: reason, version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Category ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Category ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+
   async listPublished(): Promise<readonly CategoryWithTranslations[]> {
     const rows = await resolveClient(this.prisma).category.findMany({
       where: { status: 'PUBLISHED' },
@@ -311,6 +333,8 @@ function toDomain(row: CategoryRowWithTranslations): CategoryWithTranslations {
     parentId: nullToUndefined(row.parentId),
     status: row.status,
     sortOrder: row.sortOrder,
+    retiredAt: nullToUndefined(row.retiredAt),
+    retirementReason: nullToUndefined(row.retirementReason),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,

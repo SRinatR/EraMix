@@ -170,22 +170,22 @@ enum OutboxStatus {
 // no relation to the identity/catalog/order model tree.)
 
 model User {
-  id          String   @id @default(uuid()) @db.Uuid
-  issuer      String   @db.VarChar(255)
-  subject     String   @db.VarChar(255)
-  email       String   @db.VarChar(320)
-  displayName String   @db.VarChar(255)
-  status      UserStatus @default(ACTIVE)
+  id           String       @id @default(uuid()) @db.Uuid
+  issuer       String       @db.VarChar(255)
+  subject      String       @db.VarChar(255)
+  email        String       @db.VarChar(320)
+  displayName  String       @db.VarChar(255)
+  status       UserStatus   @default(ACTIVE)
   /// See ADR-0014. Defaults to CUSTOMER; promotion to staff roles is an
   /// explicit admin `users.manage` action, never inferred from an OIDC claim.
   platformRole PlatformRole @default(CUSTOMER)
 
-  memberships           Membership[]
-  createdOrders         Order[]              @relation("OrderCreatedBy")
-  orderStatusEvents     OrderStatusHistory[]
-  orderComments         OrderComment[]       @relation("OrderCommentAuthor")
-  auditEvents           AuditEvent[]
-  uploadedProductAssets ProductAsset[]
+  memberships             Membership[]
+  createdOrders           Order[]                   @relation("OrderCreatedBy")
+  orderStatusEvents       OrderStatusHistory[]
+  orderComments           OrderComment[]            @relation("OrderCommentAuthor")
+  auditEvents             AuditEvent[]
+  uploadedProductAssets   ProductAsset[]
   platformSettingsChanges PlatformSettingsHistory[]
 
   createdAt DateTime @default(now())
@@ -216,11 +216,11 @@ model Company {
 }
 
 model Membership {
-  id        String            @id @default(uuid()) @db.Uuid
-  userId    String            @db.Uuid
-  companyId String            @db.Uuid
-  role      CompanyRole       @default(MEMBER)
-  status    MembershipStatus  @default(ACTIVE)
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  companyId String           @db.Uuid
+  role      CompanyRole      @default(MEMBER)
+  status    MembershipStatus @default(ACTIVE)
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -237,10 +237,15 @@ model Membership {
 // ---------- Content: Article / Page / FAQ ----------
 
 model Content {
-  id          String            @id @default(uuid()) @db.Uuid
-  type        ContentType
-  status      PublicationStatus @default(DRAFT)
-  publishedAt DateTime?
+  id               String            @id @default(uuid()) @db.Uuid
+  type             ContentType
+  status           PublicationStatus @default(DRAFT)
+  publishedAt      DateTime?
+  /// Durable, one-way "permanently retired" state (CLAUDE.md: HTTP 410 only
+  /// for this, never merely-unpublished) — see the manual CHECK constraint
+  /// in migration.sql tying retiredAt to status = ARCHIVED.
+  retiredAt        DateTime?
+  retirementReason String?
 
   translations ContentTranslation[]
 
@@ -253,16 +258,16 @@ model Content {
 }
 
 model ContentTranslation {
-  id             String   @id @default(uuid()) @db.Uuid
-  contentId      String   @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  contentId      String  @db.Uuid
   locale         Locale
-  title          String   @db.VarChar(255)
+  title          String  @db.VarChar(255)
   summary        String?
   /// Rich body content (e.g. block-based document JSON); rendering policy is
   /// Phase 3.
   content        Json
-  seoTitle       String?  @db.VarChar(255)
-  seoDescription String?  @db.VarChar(500)
+  seoTitle       String? @db.VarChar(255)
+  seoDescription String? @db.VarChar(500)
 
   contentRef Content        @relation(fields: [contentId], references: [id], onDelete: Cascade)
   routes     ContentRoute[]
@@ -302,10 +307,13 @@ model ContentRoute {
 // ---------- Catalog: Category / Product ----------
 
 model Category {
-  id        String            @id @default(uuid()) @db.Uuid
-  parentId  String?           @db.Uuid
-  status    PublicationStatus @default(DRAFT)
-  sortOrder Int               @default(0)
+  id               String            @id @default(uuid()) @db.Uuid
+  parentId         String?           @db.Uuid
+  status           PublicationStatus @default(DRAFT)
+  sortOrder        Int               @default(0)
+  /// Durable, one-way "permanently retired" state — see Content.retiredAt.
+  retiredAt        DateTime?
+  retirementReason String?
 
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children Category[] @relation("CategoryHierarchy")
@@ -362,14 +370,17 @@ model CategoryRoute {
 }
 
 model Product {
-  id          String            @id @default(uuid()) @db.Uuid
+  id               String            @id @default(uuid()) @db.Uuid
   /// Immutable, cryptographically random, public identifier generated by
   /// packages/domain — never the internal `id` (CLAUDE.md).
-  publicId    String            @unique @db.VarChar(32)
-  sku         String            @unique @db.VarChar(64)
-  categoryId  String            @db.Uuid
-  status      PublicationStatus @default(DRAFT)
-  publishedAt DateTime?
+  publicId         String            @unique @db.VarChar(32)
+  sku              String            @unique @db.VarChar(64)
+  categoryId       String            @db.Uuid
+  status           PublicationStatus @default(DRAFT)
+  publishedAt      DateTime?
+  /// Durable, one-way "permanently retired" state — see Content.retiredAt.
+  retiredAt        DateTime?
+  retirementReason String?
 
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
@@ -386,10 +397,10 @@ model Product {
 }
 
 model ProductTranslation {
-  id             String @id @default(uuid()) @db.Uuid
-  productId      String @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  productId      String  @db.Uuid
   locale         Locale
-  name           String @db.VarChar(255)
+  name           String  @db.VarChar(255)
   /// Localized slug; the canonical product URL is
   /// `/{locale}/catalog/{publicId}-{slug}` — resolution is always by
   /// publicId, a stale slug here 308-redirects rather than 404s, so slug is
@@ -428,8 +439,8 @@ model ProductTranslation {
 /// or any derivative of it that could traverse a path (see uploadProductAsset,
 /// packages/application/src/product-assets.ts).
 model ProductAsset {
-  id        String           @id @default(uuid()) @db.Uuid
-  productId String           @db.Uuid
+  id        String            @id @default(uuid()) @db.Uuid
+  productId String            @db.Uuid
   assetType ProductAssetType
   /// DRAFT assets are visible only in the admin UI; PUBLISHED assets render
   /// on the public product page; ARCHIVED is a soft-remove that keeps the
@@ -462,7 +473,7 @@ model ProductAsset {
   /// about provenance (CLAUDE.md: "do not falsely claim files were
   /// scanned") — e.g. "dev-stub (not production-grade; ADR-0006 pending)"
   /// until a real scanner is wired.
-  malwareScanEngine String @db.VarChar(160)
+  malwareScanEngine String            @db.VarChar(160)
 
   uploadedByUserId String? @db.Uuid
 
@@ -488,9 +499,9 @@ model Order {
   createdByUserId String      @db.Uuid
   status          OrderStatus @default(DRAFT)
 
-  contactName     String?  @db.VarChar(255)
-  contactPhone    String?  @db.VarChar(32)
-  contactEmail    String?  @db.VarChar(320)
+  contactName     String? @db.VarChar(255)
+  contactPhone    String? @db.VarChar(32)
+  contactEmail    String? @db.VarChar(320)
   deliveryAddress Json?
 
   /// Idempotency-Key for the submit-order use case (Phase 5); unset while
@@ -687,7 +698,7 @@ model PlatformSettings {
   /// products."
   merchantCenterEnabled Boolean @default(false)
 
-  updatedByUserId String? @db.Uuid
+  updatedByUserId String?                   @db.Uuid
   history         PlatformSettingsHistory[]
 
   createdAt DateTime @default(now())
@@ -702,10 +713,10 @@ model PlatformSettings {
 /// implemented at the application layer as "apply a past snapshot as a new
 /// update", never as a destructive rewrite of this table.
 model PlatformSettingsHistory {
-  id         String @id @default(uuid()) @db.Uuid
-  settingsId String @default("singleton")
+  id               String  @id @default(uuid()) @db.Uuid
+  settingsId       String  @default("singleton")
   /// The settings row's `version` immediately before this change.
-  previousVersion Int
+  previousVersion  Int
   /// Full settings snapshot as it was before this change (secrets are never
   /// stored here in the first place, so no redaction is needed on read).
   previousSnapshot Json
