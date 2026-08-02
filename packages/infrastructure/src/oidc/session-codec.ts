@@ -4,6 +4,14 @@ import type { PlatformRole } from '@eramix/domain';
 export interface SessionPayload {
   readonly userId: string;
   readonly platformRole: PlatformRole;
+  /**
+   * A login-time snapshot only — not authoritative for order-company
+   * access. `apps/web/src/server/session.ts`'s `getActor`/`getServerActor`
+   * always re-derive the caller's live `ACTIVE` memberships from the
+   * database instead of trusting this field, so a membership revoked
+   * mid-session is denied immediately rather than only after the cookie
+   * expires/refreshes.
+   */
   readonly companyIds: readonly string[];
 }
 

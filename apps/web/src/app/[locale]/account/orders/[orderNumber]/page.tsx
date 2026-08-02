@@ -74,10 +74,15 @@ export default async function OrderDetailPage({
     { orderRepo: container.orders, commentRepo: container.orderComments },
     { orderId: order.id, actorRole: actor.platformRole, actorCompanyIds: actor.companyIds },
   );
+  // Company identity/context — always shown, not only when the actor has
+  // multiple memberships, so it's never ambiguous which company an order
+  // belongs to.
+  const company = await container.companies.findById(order.companyId);
 
   return (
     <main>
       <h1>Order {order.orderNumber}</h1>
+      <p>Company: {company?.legalName ?? order.companyId}</p>
       <p>Status: {order.status}</p>
       <p>
         Prices shown, where available, are non-binding indicative &quot;from&quot; prices — never a

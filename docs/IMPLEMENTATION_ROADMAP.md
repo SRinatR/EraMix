@@ -206,6 +206,12 @@ Evidence, 2026-08-01:
 
 ## Phase 2 — localized URLs, content foundation, and SEO
 
+SEO is the highest delivery priority. The normative Google Search Console and
+Yandex Webmaster launch/operations contract is
+[`docs/runbooks/search-visibility.md`](runbooks/search-visibility.md); its
+canonical, sitemap, robots, hreflang, structured-data, performance, and
+monitoring requirements apply to every public-route change.
+
 Deliver:
 
 - Locale allowlist `ru`, `en`, `uz`, with `en` default and translation-aware
@@ -218,6 +224,66 @@ Deliver:
   change-slug command, audit event, cache invalidation, and outbox event.
 - Typed URL builder plus Next.js public routes, canonical metadata, hreflang,
   x-default, robots, sitemap, Open Graph, JSON-LD, and missing-locale handling.
+- One automatic SEO pipeline driven exclusively by the committed publication
+  model. Publish/unpublish/translation/slug/asset/route-history/SEO-field
+  changes regenerate all affected metadata, hreflang, JSON-LD, sitemap/`lastmod`,
+  cache tags and eligible IndexNow notifications; hand-maintained per-page SEO
+  artifacts are forbidden.
+- Authorized SEO settings and operational views: the Product Owner controls
+  host/redirect policy, locales, templates, entity indexability, sitemap
+  eligibility, organization facts, consent-aware analytics, integrations and
+  feature flags; the UI previews effective metadata/JSON-LD/sitemap/redirect/
+  hreflang output and integration health. Every setting is schema-validated,
+  RBAC/CSRF-protected, concurrency-safe, audited, reversible and secret-redacted.
+- Future Merchant Center preparation (do not enable for current quote-only
+  products): define a separate versioned sellable-offer model and admin flow for
+  exact public price/currency/tax, availability, seller, identifiers, delivery,
+  returns, effective dates and actual checkout eligibility. It must drive one
+  consistent public page, Product/Merchant markup and automatically generated
+  feed, with validation/audit/reconciliation/disable controls. Direct-sale
+  checkout, payment, fulfilment and legal policies remain a separately approved
+  implementation slice before Merchant activation.
+- Server-rendered public navigation: breadcrumbs, contextual product/guide
+  links, related content, and no orphaned indexable pages. Add the data/authoring
+  contract required for categories, products, solutions, guides, comparisons,
+  cases, certificates, and FAQ without inventing pages or using content quotas.
+- Search analytics contract: consent-aware P0 events (`page_view`, `view_item`,
+  `view_item_list`, inquiry initiation, `rfq_submit`, phone click) and P1 events
+  (document download, CAD request, email click, language switch), with no PII
+  in analytics payloads.
+- Shared, typed and versioned interest/behavior event library and dashboards:
+  discovery/attribution, catalog search/filter/sort/compare intent, product and
+  document engagement, internal-link/CTA/contact actions, zero-result/404/error
+  states, RFQ funnel and future cart/checkout/purchase funnel. It fans out the
+  same privacy-safe semantics to Rust first-party analytics (Matomo-class),
+  GA4 and Yandex Metrica. Rust owns transport, heatmaps, session behavior,
+  storage and detailed reporting; GA4/Metriсa support acquisition/advertising
+  and cross-platform reporting. EraMix enforces consent/minimization/identity
+  boundaries and provider code may not receive credentials, tokens, full form or
+  payment values.
+- Rust analytics preparation only: typed adapter boundary, event schemas,
+  fixtures, feature flag, health/diagnostic contract and disabled-by-default
+  settings. It is expected no earlier than October 2026 and must not block MVP
+  launch or independent GA4/Yandex Metrica/advertising/Search integrations.
+- Cross-platform measurement/reconciliation: versioned metric dictionary and
+  source-preserving dashboards for Rust analytics, GA4, Yandex Metrica, ad
+  platforms, Search Console and Yandex Webmaster. Normalize definitions and
+  dimensions, show freshness/sampling/consent/attribution context and surface
+  discrepancies; never silently merge incompatible counts.
+- Advertising/marketing control plane with typed adapters for Google Ads,
+  Yandex Direct, Microsoft Ads, Meta, LinkedIn, TikTok and future
+  approved providers. Admin manages consent-gated provider state, non-secret
+  identifiers, conversion mappings, attribution, test mode, health and kill
+  switches; credentials are secret-store references only. No arbitrary tags,
+  scripts, HTML, iframe injection or provider-specific business logic.
+- P1 IndexNow adapter for Bing/Yandex: publish only canonical URLs after a
+  successful public content/redirect state transition, store the key in the
+  deployment secret store, expose the required verification file, test bounded
+  retry/error observability, and do not use it as a Google indexing mechanism.
+- Content retirement policy: a permanent removal without a suitable successor
+  returns `410`; use a one-hop `301`/`308` only for a materially equivalent
+  canonical replacement. Never bulk-redirect discontinued products to a
+  category merely to avoid a 404.
 
 Exit criteria:
 
@@ -225,6 +291,22 @@ Exit criteria:
   missing locale, unpublished content, product slug mismatch, and 404/410 cases.
 - No public URL is composed manually outside the URL-builder package.
 - Sitemap contains canonical published URLs only.
+- Lifecycle tests cover draft → publish → update → slug/translation change →
+  unpublish/remove, and fail closed when an incomplete/noncanonical/private
+  entity would emit metadata, schema, sitemap data or IndexNow notification.
+- Tests cover settings authorization, validation, effective-output preview,
+  audit/rollback, secret redaction and safe integration disablement.
+- Tests cover event schema/version compatibility, consent gating, PII rejection,
+  attribution, entity/locale dimensions, funnel ordering, provider parity and
+  dashboard aggregation/authorization.
+- Tests cover provider allowlisting, RBAC/CSRF/settings validation, consent
+  gating, secret redaction, script-load policy, conversion idempotency,
+  retry/reconciliation, kill switch and non-blocking provider failure behavior.
+- SEO audit tests cover server-rendered primary content/links, no orphaned
+  indexable templates, filter/indexation decisions, correct quote-only schema,
+  analytics event semantics, and IndexNow's canonical-only notification
+  boundary. Do not make an AI Overview, traffic, rank, or indexing-time target
+  an exit criterion.
 
 ### Phase 2 status: routing/domain/application layer built and dev-server-verified; PostgreSQL-backed pages and full SEO metadata not yet built
 
@@ -1462,6 +1544,88 @@ format`/`lint` (incl. `redocly lint`)/`typecheck`/`test` all exit 0 —
   new business logic to unit-test beyond what `route-resolution.test.ts`/
   `catalog-queries` tests already cover). Production build and real
   rendering are verified by CI only for this commit.
+
+### Multi-company customer order access model (product-owner-directed continuation)
+
+Product Owner instruction: the previous slice's "documented simplification"
+(a customer with more than one company got a per-company page window
+concatenated in memory, not one true cross-company page) and the session's
+reliance on a login-time-cached `companyIds` snapshot were both named as
+gaps to close, not accept. Both are real correctness/authorization issues,
+fixed together since they share one root cause: nothing re-verified company
+membership against the database after login.
+
+- **Session `companyIds` is now always live, not cached** (`apps/web/src/
+server/session.ts`): `getActor`/`getServerActor` re-derive the caller's
+  `ACTIVE` memberships from `MembershipRepository.listByUser` on every
+  request instead of trusting the signed session payload's snapshot. Before
+  this fix, an admin revoking a membership (`PATCH /api/admin/companies/
+{companyId}/memberships/{membershipId}/status`, shipped two sessions ago)
+  had **no effect** on an already-logged-in customer's order access until
+  they logged out and back in — a real, live authorization bug, not a
+  theoretical one. The filter itself is split into a pure, unit-tested
+  `activeCompanyIds` function (`session.test.ts`, 5 tests: ACTIVE included,
+  REVOKED excluded, INVITED excluded, multi-company mixed-status, no
+  memberships) so the security-relevant logic doesn't require a database to
+  verify. `packages/infrastructure/src/oidc/session-codec.ts`'s
+  `SessionPayload.companyIds` field is documented as a login-time snapshot
+  only, no longer authoritative for any read path.
+- **True cross-company order list** (`packages/application/src/
+order-queries.ts`, new, 8 unit tests): `listOrdersForActor` is the single
+  place the multi-company authorization model lives — previously
+  duplicated separately (and inconsistently) between `GET /api/orders` and
+  `/account/orders`'s page component. A manager/admin (`order.read.all`)
+  sees every company unrestricted; a customer sees every `ACTIVE` company
+  they belong to **by default, never silently narrowed to one** — computed
+  as one `OrderRepository.listAll({companyIds: [...]})` call (`WHERE
+companyId IN (...)` with a single `ORDER BY`/`LIMIT`/`OFFSET`/`COUNT`),
+  replacing the previous per-company fan-out entirely. An explicit
+  `companyId` filter (new query/search param on both the API and the
+  account page) narrows to one company but only when it is one of the
+  actor's own live memberships — otherwise `AccessDeniedError`, identical
+  in shape to any other unauthorized resource, never a distinguishable
+  "you're not in this company" message that would leak which companies
+  exist. `OrderListFilter` gained `companyIds?: readonly string[]`
+  end-to-end (port → `PrismaOrderRepository` → OpenAPI).
+- **Company identity always shown**: `/account/orders` (list + a
+  `companyId` filter `<select>`, appearing only when the actor has more
+  than one active company — resolved via `CompanyRepository.findById`, not
+  the raw `companyId`), `/account/orders/{orderNumber}`, and the admin
+  equivalents (`/admin/orders`, `/admin/orders/{orderNumber}`) all now
+  render the company's `legalName` instead of (or in addition to,
+  previously not at all on the admin side) the internal UUID.
+- **Every order use case already threaded `actorCompanyIds` as an explicit
+  parameter** (`order-lifecycle.ts`'s `createDraftOrder`/`addLine`/
+  `removeLine`/`submitOrder`/`transitionOrderStatus`, `order-comments.ts`'s
+  `addOrderComment`/`listOrderCommentsForActor`, all pre-existing) — the
+  session fix alone correctly propagates to list, detail, comments,
+  draft-line-editing, and submission with no changes needed to any of
+  those functions themselves, confirmed by reading every call site (`grep
+-rn "actorCompanyIds\|assertOrderCompanyAccess"`) before concluding this.
+  No dedicated "order documents" feature exists anywhere in the codebase
+  (confirmed by grep — only generic product-asset media exists) despite
+  appearing as a nav-table entry in the TZ (§ account section); this is an
+  honestly-scoped, unbuilt feature, not an authorization bug to fix here —
+  implementing it is a separate, substantial vertical slice this
+  instruction's "authorization model" framing does not itself commission.
+- **Tests, mapped directly to the named scenarios**: one-company customer,
+  multi-company customer (true cross-company, unfiltered), explicit
+  same-company filter, unauthorized-company filter (403), revoked
+  membership (both as an explicit filter and as the default/unfiltered
+  case — an empty `actorCompanyIds` sees nothing), admin/manager
+  unrestricted access, and pagination/status/sort filters passed through
+  unchanged alongside the company scope — all in `order-queries.test.ts`
+  (8 tests) and `session.test.ts` (5 tests). "Direct URL access" to an
+  order outside the actor's live companies is covered by the pre-existing,
+  unchanged `assertOrderCompanyAccess` boundary tests plus this session's
+  live-membership fix making that check itself correct.
+- **OpenAPI**: `GET /api/orders` gained the `companyId` query parameter and
+  a documented `403`; `redocly lint` passes.
+- **Verified locally** (laptop; **no local `next build`/dev-server**, same
+  disk-space policy): `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck`/`test` all exit 0 — 272 unit tests (up from 259: +8
+  `order-queries.test.ts`, +5 `session.test.ts`). Production build and any
+  Postgres-backed behaviour verified by CI only.
 
 ## Required task format for the CLI agent
 

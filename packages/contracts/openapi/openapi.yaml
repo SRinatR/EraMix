@@ -320,11 +320,21 @@ paths:
       operationId: listOrders
       summary: List orders visible to the caller
       description: >-
-        A customer sees only their own company's orders (order.read.own); a
-        manager/admin sees all orders (order.read.all) — TZ ORD-008.
-        ACC-003: bounded, paginated, filterable by status/date, sortable.
+        A customer sees every ACTIVE company they belong to by default (a
+        true cross-company page, never silently narrowed to one company) —
+        order.read.own; a manager/admin sees all orders across every
+        company — order.read.all. TZ ORD-008. ACC-003: bounded, paginated,
+        filterable by status/date, sortable.
       tags: [Orders]
       parameters:
+        - name: companyId
+          in: query
+          required: false
+          description: >-
+            Narrows to one company. For a customer, must be one of the
+            caller's own ACTIVE memberships — otherwise 403, identical to
+            requesting any other unauthorized resource.
+          schema: { type: string }
         - name: status
           in: query
           required: false
@@ -368,6 +378,8 @@ paths:
                   offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
     post:
       operationId: createDraftOrder
       summary: Create a DRAFT order (quote-only, no price snapshot)

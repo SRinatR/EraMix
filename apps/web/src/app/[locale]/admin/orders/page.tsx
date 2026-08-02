@@ -52,6 +52,16 @@ export default async function AdminOrdersPage({
     limit,
     offset,
   } = await container.orders.listAll({ ...parsePaginationParams(resolved), ...filter });
+  const companies = await Promise.all(
+    [...new Set(orders.map((order) => order.companyId))].map((id) =>
+      container.companies.findById(id),
+    ),
+  );
+  const companyNameById = new Map(
+    companies
+      .filter((company): company is NonNullable<typeof company> => company !== undefined)
+      .map((company) => [company.id, company.legalName] as const),
+  );
 
   return (
     <main>
@@ -89,7 +99,7 @@ export default async function AdminOrdersPage({
                   <Link href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link>
                 </td>
                 <td>{order.status}</td>
-                <td>{order.companyId}</td>
+                <td>{companyNameById.get(order.companyId) ?? order.companyId}</td>
                 <td>{order.lines.length}</td>
               </tr>
             ))}

@@ -257,6 +257,12 @@ function buildOrderFilterWhere(input: OrderListFilter): Record<string, unknown> 
       ...(input.createdTo !== undefined ? { lte: input.createdTo } : {}),
     };
   }
+  if (input.companyIds !== undefined) {
+    // An empty array must still exclude every order (a customer with no
+    // ACTIVE memberships sees nothing) — Prisma's `in: []` already does
+    // this correctly, never falls through to "no filter."
+    where['companyId'] = { in: input.companyIds };
+  }
   return where;
 }
 

@@ -297,6 +297,15 @@ export interface OrderListFilter {
   readonly createdFrom?: Date;
   readonly createdTo?: Date;
   readonly sort?: 'createdAt_asc' | 'createdAt_desc';
+  /**
+   * Restricts to a `WHERE companyId IN (...)` set in a single query — the
+   * multi-company customer order list's true cross-company page (one
+   * ORDER BY + LIMIT + OFFSET + COUNT over every company the actor
+   * belongs to), never a per-company fan-out merged in memory. Admin
+   * `listAll` omits this (sees every company); the customer-facing caller
+   * always passes the actor's live `ACTIVE` membership company ids.
+   */
+  readonly companyIds?: readonly string[];
 }
 
 export interface OrderRepository {
@@ -308,7 +317,7 @@ export interface OrderRepository {
     companyId: string,
     input?: PaginationInput & OrderListFilter,
   ): Promise<Page<OrderWithLines>>;
-  /** Manager/admin queue (`order.read.all`) — same ACC-003/ADM-002/DB-005 pagination/filter/sort contract. */
+  /** Manager/admin queue (`order.read.all`), or — when `companyIds` is set — a true cross-company customer view. Same ACC-003/ADM-002/DB-005 pagination/filter/sort contract. */
   listAll(input?: PaginationInput & OrderListFilter): Promise<Page<OrderWithLines>>;
   create(
     order: Omit<Order, 'version' | 'createdAt' | 'updatedAt'>,

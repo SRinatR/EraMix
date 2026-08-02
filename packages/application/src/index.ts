@@ -77,6 +77,8 @@ export {
   visibleOrderComments,
 } from './order-comments.js';
 export type { AddOrderCommentInput, OrderCommentDeps } from './order-comments.js';
+export { listOrdersForActor } from './order-queries.js';
+export type { ListOrdersForActorInput } from './order-queries.js';
 export {
   listCatalogCategories,
   listCatalogProducts,

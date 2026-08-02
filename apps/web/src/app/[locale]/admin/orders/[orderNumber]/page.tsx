@@ -37,12 +37,13 @@ export default async function AdminOrderDetailPage({
     { orderId: order.id, actorRole: actor.platformRole, actorCompanyIds: actor.companyIds },
   );
   const canPostInternal = hasPermission(actor.platformRole, 'order.transition');
+  const company = await container.companies.findById(order.companyId);
 
   return (
     <main>
       <h1>Order {order.orderNumber}</h1>
       <p>Status: {order.status}</p>
-      <p>Company: {order.companyId}</p>
+      <p>Company: {company?.legalName ?? order.companyId}</p>
 
       <h2>Lines</h2>
       <table>

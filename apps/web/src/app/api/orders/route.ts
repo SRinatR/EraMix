@@ -2,7 +2,7 @@ import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
 import { withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
-import { createDraftOrder, hasPermission, type OrderListFilter } from '@eramix/application';
+import { createDraftOrder, listOrdersForActor, type OrderListFilter } from '@eramix/application';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -63,24 +63,16 @@ function parseOrderListQuery(url: URL): {
 export const GET = withApiHandler('orders.list', async (request) => {
   const actor = await requireActor(request);
   const container = getContainer();
-  const query = parseOrderListQuery(new URL(request.url));
+  const url = new URL(request.url);
+  const query = parseOrderListQuery(url);
+  const companyIdParam = url.searchParams.get('companyId');
 
-  if (hasPermission(actor.platformRole, 'order.read.all')) {
-    const { items, total, limit, offset } = await container.orders.listAll(query);
-    return NextResponse.json({ items: items.map(orderToDto), total, limit, offset });
-  }
-
-  // A customer's memberships almost always span exactly one company (TZ's
-  // "активная компания" wording); for the rare multi-company customer this
-  // applies the same page window to each company and concatenates rather
-  // than computing one true cross-company page — a documented, honest
-  // simplification, not a silent approximation.
-  const perCompany = await Promise.all(
-    actor.companyIds.map((companyId) => container.orders.listByCompany(companyId, query)),
-  );
-  const items = perCompany.flatMap((page) => page.items);
-  const total = perCompany.reduce((sum, page) => sum + page.total, 0);
-  const { limit, offset } = perCompany[0] ?? { limit: 20, offset: 0 };
+  const { items, total, limit, offset } = await listOrdersForActor(container.orders, {
+    ...query,
+    actorRole: actor.platformRole,
+    actorCompanyIds: actor.companyIds,
+    ...(companyIdParam !== null ? { companyId: companyIdParam } : {}),
+  });
   return NextResponse.json({ items: items.map(orderToDto), total, limit, offset });
 });
 

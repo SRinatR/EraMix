@@ -1,4 +1,4 @@
-import { AuthRequiredError, type PlatformRole } from '@eramix/domain';
+import { AuthRequiredError, type Membership, type PlatformRole } from '@eramix/domain';
 import type { SessionPayload } from '@eramix/infrastructure';
 import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
@@ -13,11 +13,38 @@ export interface Actor {
   readonly companyIds: readonly string[];
 }
 
-function toActor(payload: SessionPayload): Actor {
+/**
+ * Only `ACTIVE` memberships grant order-company access — `INVITED` (not
+ * yet accepted) and `REVOKED` never do. Split out as a pure function so the
+ * filter itself is unit-testable without a database (see
+ * `session.test.ts`); `liveActiveCompanyIds` below is the thin DB-fetching
+ * wrapper actually used by every request.
+ */
+export function activeCompanyIds(memberships: readonly Membership[]): readonly string[] {
+  return memberships
+    .filter((membership) => membership.status === 'ACTIVE')
+    .map((membership) => membership.companyId);
+}
+
+/**
+ * `companyIds` is deliberately re-derived from the database on every
+ * request, never trusted from the signed session payload: the session
+ * cookie is only refreshed on login, so a membership an admin revokes
+ * mid-session would otherwise stay silently granted until the customer
+ * next logs out and back in. Enforced here once for every consumer
+ * (list/detail/comments/line-edit/submit all read `actor.companyIds`)
+ * rather than at each call site.
+ */
+async function liveActiveCompanyIds(userId: string): Promise<readonly string[]> {
+  const memberships = await getContainer().memberships.listByUser(userId);
+  return activeCompanyIds(memberships);
+}
+
+function toActor(payload: SessionPayload, companyIds: readonly string[]): Actor {
   return {
     userId: payload.userId,
     platformRole: payload.platformRole,
-    companyIds: payload.companyIds,
+    companyIds,
   };
 }
 
@@ -28,7 +55,10 @@ export async function getActor(request: NextRequest): Promise<Actor | undefined>
     return undefined;
   }
   const payload = await getContainer().sessionCodec.decode(token);
-  return payload ? toActor(payload) : undefined;
+  if (!payload) {
+    return undefined;
+  }
+  return toActor(payload, await liveActiveCompanyIds(payload.userId));
 }
 
 /** IAM-008: every protected route handler calls this — hidden UI is never the authorization control. */
@@ -53,5 +83,8 @@ export async function getServerActor(): Promise<Actor | undefined> {
     return undefined;
   }
   const payload = await getContainer().sessionCodec.decode(token);
-  return payload ? toActor(payload) : undefined;
+  if (!payload) {
+    return undefined;
+  }
+  return toActor(payload, await liveActiveCompanyIds(payload.userId));
 }
