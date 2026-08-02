@@ -51,6 +51,9 @@ export type {
   AuditEventRepository,
   AuditEventListFilter,
   OutboxMessageRepository,
+  PlatformSettingsPatch,
+  PlatformSettingsRepository,
+  PlatformSettingsHistoryRepository,
 } from './repositories.js';
 export {
   resolveContentRoute,
@@ -147,3 +150,19 @@ export type {
   UpdateProductTranslationInput,
   UpdateContentTranslationInput,
 } from './translation-edit.js';
+export {
+  getPlatformSettings,
+  updatePlatformSettings,
+  listPlatformSettingsHistory,
+  rollbackPlatformSettings,
+  buildPlatformSettingsPreview,
+  buildCanonicalOrigin,
+  buildOrganizationJsonLd,
+} from './settings.js';
+export type {
+  PlatformSettingsDeps,
+  UpdatePlatformSettingsInput,
+  RollbackPlatformSettingsInput,
+  PlatformSettingsPreview,
+  OrganizationJsonLd,
+} from './settings.js';

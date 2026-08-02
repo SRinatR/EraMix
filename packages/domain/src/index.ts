@@ -38,6 +38,7 @@ export {
 } from './upload-validation.js';
 export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
 export { sanitizeFilenameForStorage, sanitizeDisplayName } from './filename.js';
+export { validateEffectivePlatformSettings } from './platform-settings.js';
 export type {
   Versioned,
   Timestamped,
@@ -72,4 +73,6 @@ export type {
   Order,
   AuditEvent,
   OutboxMessage,
+  PlatformSettings,
+  PlatformSettingsHistoryEntry,
 } from './entities.js';

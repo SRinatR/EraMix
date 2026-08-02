@@ -75,6 +75,19 @@ async function main(): Promise<void> {
     });
   }
 
+  // PlatformSettings is a singleton row that must exist before any request
+  // reads it (getPlatformSettings/robots.ts/sitemap.ts all throw
+  // ResourceNotFoundError otherwise, by design — see
+  // packages/infrastructure/src/repositories/platform-settings-repository.ts).
+  // A conservative, no-organization-facts default: Organization JSON-LD stays
+  // absent (CLAUDE.md: "only when real and maintained") until a Product Owner
+  // sets a real name via /admin/settings.
+  await prisma.platformSettings.upsert({
+    where: { id: 'singleton' },
+    create: { id: 'singleton', canonicalHost: 'eramix.example' },
+    update: {},
+  });
+
   console.log(JSON.stringify({ msg: 'seed complete', categoryId: category.id, sampleSku }));
 }
 

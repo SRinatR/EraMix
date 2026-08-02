@@ -18,6 +18,8 @@ import type {
   OrderStatusHistoryEntry,
   OutboxMessage,
   PlatformRole,
+  PlatformSettings,
+  PlatformSettingsHistoryEntry,
   Product,
   ProductAsset,
   ProductTranslation,
@@ -427,4 +429,64 @@ export interface OutboxMessageRepository {
   markFailed(id: string, error: string, nextAvailableAt: Date): Promise<void>;
   /** Terminal failure after exhausting retries — never retried again automatically. */
   markDeadLetter(id: string, error: string): Promise<void>;
+}
+
+/**
+ * Tri-state field patch (same idiom as CategoryTranslationEditPatch/
+ * ProductAssetMetadataPatch): a field omitted from the patch is left
+ * unchanged; an optional field set to `null` is cleared; any other value
+ * replaces the current one. Required (non-nullable) fields never accept
+ * `null`. `id`/`createdAt`/`updatedAt`/`version`/`updatedByUserId` are never
+ * patchable directly — `updatedByUserId` is always the caller's own actor id.
+ */
+export type PlatformSettingsPatch = Partial<
+  Pick<
+    PlatformSettings,
+    | 'canonicalHost'
+    | 'forceHttps'
+    | 'stripTrailingSlash'
+    | 'crawlerGlobalNoindex'
+    | 'googleExtendedAllowed'
+    | 'aiCompatibilityFilesEnabled'
+    | 'analyticsConsentRequired'
+    | 'ga4Enabled'
+    | 'yandexMetricaEnabled'
+    | 'rustAnalyticsEnabled'
+    | 'indexNowEnabled'
+    | 'merchantCenterEnabled'
+  >
+> & {
+  readonly organizationName?: string | null;
+  readonly organizationLegalName?: string | null;
+  readonly organizationEmail?: string | null;
+  readonly organizationPhone?: string | null;
+  readonly organizationAddress?: string | null;
+  readonly organizationSameAs?: readonly string[] | null;
+  readonly seoDefaultTitleTemplate?: string | null;
+  readonly seoDefaultDescriptionFallback?: string | null;
+  readonly ogFallbackImageUrl?: string | null;
+  readonly ga4MeasurementId?: string | null;
+  readonly yandexMetricaCounterId?: string | null;
+  readonly searchConsoleVerificationToken?: string | null;
+  readonly yandexWebmasterVerificationToken?: string | null;
+  readonly bingVerificationToken?: string | null;
+};
+
+export interface PlatformSettingsRepository {
+  /** Throws ResourceNotFoundError if the singleton row is missing (created only by prisma/seed.ts — never implicitly materialized on read). */
+  get(): Promise<PlatformSettings>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  update(
+    expectedVersion: number,
+    patch: PlatformSettingsPatch,
+    updatedByUserId: string | undefined,
+  ): Promise<PlatformSettings>;
+}
+
+export interface PlatformSettingsHistoryRepository {
+  record(
+    entry: Omit<PlatformSettingsHistoryEntry, 'id' | 'createdAt'>,
+  ): Promise<PlatformSettingsHistoryEntry>;
+  /** Newest first — ADM-002/DB-005: bounded, paginated. */
+  list(input?: CursorPaginationInput): Promise<CursorPage<PlatformSettingsHistoryEntry>>;
 }

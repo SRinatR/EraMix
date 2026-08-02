@@ -44,6 +44,16 @@ tags:
       key. Malware-scan status/engine are recorded honestly — the current
       scanner is a documented dev stand-in, never claimed as production
       antivirus coverage (see ADR-0006).
+  - name: Settings
+    description: >-
+      Product Owner / platform-administrator control plane (settings.manage,
+      ADMIN-only — docs/runbooks/search-visibility.md's "Settings, controls
+      and recovery" table). Never returns a secret: only non-secret
+      verification tokens/IDs and enabled/disabled flags. External
+      integrations (GA4, Yandex Metrica, Rust analytics, Search Console,
+      Yandex Webmaster, Bing, IndexNow, Merchant Center) are configuration
+      scaffolding only in this phase — merchantCenterEnabled is rejected at
+      write time until a real versioned Offer model exists.
 security:
   - sessionCookie: []
 paths:
@@ -1829,6 +1839,172 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/admin/settings:
+    get:
+      operationId: getPlatformSettings
+      summary: Read the current control-plane settings (settings.manage — ADMIN only)
+      tags: [Settings]
+      responses:
+        '200':
+          description: The current settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    patch:
+      operationId: updatePlatformSettings
+      summary: >-
+        Update control-plane settings (settings.manage — ADMIN only).
+        Tri-state fields: omitted = unchanged, null = clear, value = set.
+        Every write is validated, audited, and recorded to history in one
+        transaction — a failed validation writes nothing.
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlatformSettingsRequest'
+      responses:
+        '200':
+          description: The updated settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: A stale expectedVersion was supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/settings/history:
+    get:
+      operationId: listPlatformSettingsHistory
+      summary: List committed settings changes, newest first (settings.manage — ADMIN only)
+      tags: [Settings]
+      parameters:
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated settings-change history.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlatformSettingsHistoryEntry'
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+  /api/admin/settings/history/{historyEntryId}/rollback:
+    post:
+      operationId: rollbackPlatformSettings
+      summary: >-
+        Apply the settings state from before a past change as a new,
+        audited update (settings.manage — ADMIN only). Never rewrites the
+        history table — the rollback itself becomes a new history entry.
+      tags: [Settings]
+      parameters:
+        - name: historyEntryId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedVersion]
+              properties:
+                expectedVersion: { type: integer }
+      responses:
+        '200':
+          description: The restored settings (summary).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [canonicalHost, version]
+                properties:
+                  canonicalHost: { type: string }
+                  version: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A stale expectedVersion was supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/admin/settings/preview:
+    get:
+      operationId: previewCurrentPlatformSettings
+      summary: >-
+        Effective-output preview of the currently saved settings
+        (settings.manage — ADMIN only): canonical origin, sitewide-noindex
+        state, rendered Organization JSON-LD, and integration health.
+      tags: [Settings]
+      responses:
+        '200':
+          description: The effective-output preview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettingsPreview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: previewHypotheticalPlatformSettings
+      summary: >-
+        Preview the effective output of a hypothetical patch before saving
+        it (settings.manage — ADMIN only). Validates but never persists.
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewPlatformSettingsRequest'
+      responses:
+        '200':
+          description: The effective-output preview the patch would produce.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformSettingsPreview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -2592,3 +2768,181 @@ components:
           anyOf:
             - $ref: '#/components/schemas/LocaleCode'
             - type: 'null'
+    PlatformSettings:
+      type: object
+      description: >-
+        Never includes a secret value — only non-secret verification
+        tokens/IDs and enabled/disabled flags (docs/runbooks/
+        search-visibility.md's settings table).
+      required:
+        - canonicalHost
+        - forceHttps
+        - stripTrailingSlash
+        - crawlerGlobalNoindex
+        - googleExtendedAllowed
+        - aiCompatibilityFilesEnabled
+        - analyticsConsentRequired
+        - ga4Enabled
+        - yandexMetricaEnabled
+        - rustAnalyticsEnabled
+        - indexNowEnabled
+        - merchantCenterEnabled
+        - updatedAt
+        - version
+      properties:
+        canonicalHost: { type: string }
+        forceHttps: { type: boolean }
+        stripTrailingSlash: { type: boolean }
+        organizationName: { type: [string, 'null'] }
+        organizationLegalName: { type: [string, 'null'] }
+        organizationEmail: { type: [string, 'null'] }
+        organizationPhone: { type: [string, 'null'] }
+        organizationAddress: { type: [string, 'null'] }
+        organizationSameAs:
+          type: [array, 'null']
+          items: { type: string }
+        seoDefaultTitleTemplate: { type: [string, 'null'] }
+        seoDefaultDescriptionFallback: { type: [string, 'null'] }
+        ogFallbackImageUrl: { type: [string, 'null'] }
+        crawlerGlobalNoindex: { type: boolean }
+        googleExtendedAllowed: { type: boolean }
+        aiCompatibilityFilesEnabled: { type: boolean }
+        analyticsConsentRequired: { type: boolean }
+        ga4Enabled: { type: boolean }
+        ga4MeasurementId: { type: [string, 'null'] }
+        yandexMetricaEnabled: { type: boolean }
+        yandexMetricaCounterId: { type: [string, 'null'] }
+        rustAnalyticsEnabled:
+          type: boolean
+          description: >-
+            Must stay false until the Rust analytics service's contract
+            lands (not expected before October 2026) — flipping this true
+            does not by itself make anything happen; no adapter exists yet.
+        searchConsoleVerificationToken: { type: [string, 'null'] }
+        yandexWebmasterVerificationToken: { type: [string, 'null'] }
+        bingVerificationToken: { type: [string, 'null'] }
+        indexNowEnabled: { type: boolean }
+        merchantCenterEnabled:
+          type: boolean
+          description: >-
+            Always false — rejected at write time until a real versioned
+            sellable-offer (Merchant) model exists.
+        updatedByUserId: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer }
+    UpdatePlatformSettingsRequest:
+      type: object
+      required: [expectedVersion]
+      description: >-
+        Tri-state per field: omitted = unchanged, null = clears an optional
+        field, a value replaces it.
+      properties:
+        expectedVersion: { type: integer }
+        changeReason: { type: string, minLength: 1, maxLength: 500 }
+        canonicalHost: { type: string, minLength: 1, maxLength: 255 }
+        forceHttps: { type: boolean }
+        stripTrailingSlash: { type: boolean }
+        organizationName: { type: [string, 'null'] }
+        organizationLegalName: { type: [string, 'null'] }
+        organizationEmail: { type: [string, 'null'], format: email }
+        organizationPhone: { type: [string, 'null'] }
+        organizationAddress: { type: [string, 'null'] }
+        organizationSameAs:
+          type: [array, 'null']
+          items: { type: string, format: uri }
+        seoDefaultTitleTemplate: { type: [string, 'null'] }
+        seoDefaultDescriptionFallback: { type: [string, 'null'] }
+        ogFallbackImageUrl: { type: [string, 'null'], format: uri }
+        crawlerGlobalNoindex: { type: boolean }
+        googleExtendedAllowed: { type: boolean }
+        aiCompatibilityFilesEnabled: { type: boolean }
+        analyticsConsentRequired: { type: boolean }
+        ga4Enabled: { type: boolean }
+        ga4MeasurementId: { type: [string, 'null'] }
+        yandexMetricaEnabled: { type: boolean }
+        yandexMetricaCounterId: { type: [string, 'null'] }
+        rustAnalyticsEnabled: { type: boolean }
+        searchConsoleVerificationToken: { type: [string, 'null'] }
+        yandexWebmasterVerificationToken: { type: [string, 'null'] }
+        bingVerificationToken: { type: [string, 'null'] }
+        indexNowEnabled: { type: boolean }
+        merchantCenterEnabled:
+          type: boolean
+          description: Rejected (422) if set to true — see PlatformSettings.merchantCenterEnabled.
+    PreviewPlatformSettingsRequest:
+      type: object
+      description: Same tri-state patch fields as UpdatePlatformSettingsRequest, minus expectedVersion/changeReason — this endpoint never writes.
+      properties:
+        canonicalHost: { type: string, minLength: 1, maxLength: 255 }
+        forceHttps: { type: boolean }
+        stripTrailingSlash: { type: boolean }
+        organizationName: { type: [string, 'null'] }
+        organizationLegalName: { type: [string, 'null'] }
+        organizationEmail: { type: [string, 'null'], format: email }
+        organizationPhone: { type: [string, 'null'] }
+        organizationAddress: { type: [string, 'null'] }
+        organizationSameAs:
+          type: [array, 'null']
+          items: { type: string, format: uri }
+        seoDefaultTitleTemplate: { type: [string, 'null'] }
+        seoDefaultDescriptionFallback: { type: [string, 'null'] }
+        ogFallbackImageUrl: { type: [string, 'null'], format: uri }
+        crawlerGlobalNoindex: { type: boolean }
+        googleExtendedAllowed: { type: boolean }
+        aiCompatibilityFilesEnabled: { type: boolean }
+        analyticsConsentRequired: { type: boolean }
+        ga4Enabled: { type: boolean }
+        ga4MeasurementId: { type: [string, 'null'] }
+        yandexMetricaEnabled: { type: boolean }
+        yandexMetricaCounterId: { type: [string, 'null'] }
+        rustAnalyticsEnabled: { type: boolean }
+        searchConsoleVerificationToken: { type: [string, 'null'] }
+        yandexWebmasterVerificationToken: { type: [string, 'null'] }
+        bingVerificationToken: { type: [string, 'null'] }
+        indexNowEnabled: { type: boolean }
+        merchantCenterEnabled: { type: boolean }
+    PlatformSettingsHistoryEntry:
+      type: object
+      required: [id, previousVersion, createdAt, previousCanonicalHost]
+      properties:
+        id: { type: string }
+        previousVersion: { type: integer }
+        changeReason: { type: [string, 'null'] }
+        changedByUserId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        previousCanonicalHost:
+          type: string
+          description: A summary field from the stored snapshot, not the full previous settings state.
+    PlatformSettingsPreview:
+      type: object
+      description: >-
+        Read-only effective-output preview (search-visibility.md: "the UI
+        previews effective metadata/JSON-LD/sitemap/redirect/hreflang
+        output").
+      required: [canonicalOrigin, robotsGlobalNoindex, integrationHealth]
+      properties:
+        canonicalOrigin: { type: string, format: uri }
+        robotsGlobalNoindex: { type: boolean }
+        organizationJsonLd:
+          type: object
+          description: Rendered Organization JSON-LD, or omitted when no organization name is set.
+        integrationHealth:
+          type: object
+          required:
+            - ga4
+            - yandexMetrica
+            - rustAnalytics
+            - searchConsole
+            - yandexWebmaster
+            - bing
+            - indexNow
+            - merchantCenter
+          properties:
+            ga4: { type: string, enum: [enabled, disabled] }
+            yandexMetrica: { type: string, enum: [enabled, disabled] }
+            rustAnalytics: { type: string, enum: [enabled, disabled] }
+            searchConsole: { type: string, enum: [verified, not_verified] }
+            yandexWebmaster: { type: string, enum: [verified, not_verified] }
+            bing: { type: string, enum: [verified, not_verified] }
+            indexNow: { type: string, enum: [enabled, disabled] }
+            merchantCenter: { type: string, enum: [enabled, disabled] }

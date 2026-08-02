@@ -235,3 +235,62 @@ export interface OutboxMessage {
   readonly availableAt: Date;
   readonly lastError?: string | undefined;
 }
+
+/**
+ * Product Owner / admin control-plane singleton (CLAUDE.md "Public URL and
+ * localization policy" + docs/runbooks/search-visibility.md's settings
+ * table). Never carries a secret value — only non-secret verification
+ * tokens/IDs and boolean "configured"/"enabled" flags; real secrets (the
+ * IndexNow key, any future OAuth token) live in the deployment secret store.
+ */
+export interface PlatformSettings {
+  readonly id: 'singleton';
+  readonly canonicalHost: string;
+  readonly forceHttps: boolean;
+  readonly stripTrailingSlash: boolean;
+
+  readonly organizationName?: string | undefined;
+  readonly organizationLegalName?: string | undefined;
+  readonly organizationEmail?: string | undefined;
+  readonly organizationPhone?: string | undefined;
+  readonly organizationAddress?: string | undefined;
+  readonly organizationSameAs?: readonly string[] | undefined;
+
+  readonly seoDefaultTitleTemplate?: string | undefined;
+  readonly seoDefaultDescriptionFallback?: string | undefined;
+  readonly ogFallbackImageUrl?: string | undefined;
+
+  readonly crawlerGlobalNoindex: boolean;
+  readonly googleExtendedAllowed: boolean;
+  readonly aiCompatibilityFilesEnabled: boolean;
+
+  readonly analyticsConsentRequired: boolean;
+  readonly ga4Enabled: boolean;
+  readonly ga4MeasurementId?: string | undefined;
+  readonly yandexMetricaEnabled: boolean;
+  readonly yandexMetricaCounterId?: string | undefined;
+  readonly rustAnalyticsEnabled: boolean;
+
+  readonly searchConsoleVerificationToken?: string | undefined;
+  readonly yandexWebmasterVerificationToken?: string | undefined;
+  readonly bingVerificationToken?: string | undefined;
+  readonly indexNowEnabled: boolean;
+
+  readonly merchantCenterEnabled: boolean;
+
+  readonly updatedByUserId?: string | undefined;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly version: number;
+}
+
+/** One committed change to PlatformSettings — see PlatformSettingsHistory in schema.prisma. */
+export interface PlatformSettingsHistoryEntry {
+  readonly id: string;
+  readonly settingsId: 'singleton';
+  readonly previousVersion: number;
+  readonly previousSnapshot: PlatformSettings;
+  readonly changeReason?: string | undefined;
+  readonly changedByUserId?: string | undefined;
+  readonly createdAt: Date;
+}

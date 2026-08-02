@@ -43,6 +43,7 @@ describe('hasPermission (TZ §3.1 RBAC matrix)', () => {
       'users.manage',
       'audit.read.limited',
       'audit.read.full',
+      'settings.manage',
     ] as const) {
       expect(hasPermission('ADMIN', permission)).toBe(true);
     }
@@ -52,6 +53,13 @@ describe('hasPermission (TZ §3.1 RBAC matrix)', () => {
     expect(hasPermission('AUDITOR', 'audit.read.full')).toBe(true);
     expect(hasPermission('AUDITOR', 'catalog.read')).toBe(false);
     expect(hasPermission('AUDITOR', 'content.read')).toBe(false);
+  });
+
+  it('grants settings.manage to ADMIN only (Product Owner/platform-administrator control plane)', () => {
+    expect(hasPermission('ADMIN', 'settings.manage')).toBe(true);
+    for (const role of ['CUSTOMER', 'MANAGER', 'CONTENT_EDITOR', 'AUDITOR'] as const) {
+      expect(hasPermission(role, 'settings.manage')).toBe(false);
+    }
   });
 });
 

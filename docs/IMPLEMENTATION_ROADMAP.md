@@ -1895,6 +1895,153 @@ cursorWhere]`, never a naive spread, so a filter's own `OR`, e.g.
   `apps/worker` 6); `redocly lint` clean. Production build and
   Postgres-backed `test:integration` verified by CI only.
 
+## Phase B: SEO/analytics/advertising/Merchant control-plane initiative — slice 1: `PlatformSettings`
+
+Product Owner instruction, 2026-08-02/03: implement the full SEO control
+plane, first-party-analytics contract, advertising-integration control plane,
+and Merchant-readiness scaffolding CLAUDE.md and
+`docs/runbooks/search-visibility.md` name as mandatory scope. A baseline audit
+(reading the full roadmap plus a live grep of `packages/*`/`apps/*`) confirmed
+**none of it existed in code yet** — zero `Settings`/`FeatureFlag`/`Offer`
+model, zero analytics/IndexNow/advertising code anywhere; only requirements
+text. Everything downstream (consent mode, provider enablement, kill
+switches) needs an admin settings/feature-flag control plane as its
+foundation, so that is this session's slice.
+
+- **Schema** (`packages/infrastructure/prisma/schema.prisma`): new
+  `PlatformSettings` (a single well-known-`id: 'singleton'` row — enforced by
+  application-layer convention, the same pragmatic pattern this schema
+  already uses elsewhere, e.g. `Company.metadata`) covering canonical
+  host/HTTPS/trailing-slash policy, organization/NAP facts (published only
+  when set — CLAUDE.md: "only when real and maintained"), SEO
+  defaults/Open-Graph fallback, crawler directives (including an emergency
+  sitewide-noindex kill switch and the Google-Extended/AI-compatibility-file
+  flags), analytics consent mode plus GA4/Yandex-Metrica/Rust-analytics
+  enablement and non-secret identifiers, Search-Console/Yandex-Webmaster/Bing
+  non-secret verification tokens, IndexNow enablement, and a
+  `merchantCenterEnabled` kill switch. **No secret value is ever a column**
+  (IndexNow's real key, any future OAuth token — those stay deployment-secret
+  references, per CLAUDE.md). `PlatformSettingsHistory` is the append-only
+  audit/rollback trail (one row per committed change, storing the full
+  _previous_ snapshot — rollback is "apply a past snapshot as a new audited
+  update," never a destructive rewrite of history). Migration
+  `20260802150000_add_platform_settings` generated fully offline via `prisma
+migrate diff --from-schema <previous committed schema.prisma> --to-schema
+prisma/schema.prisma --script` (Prisma 7.9.1 renamed
+  `--from-schema-datamodel` to `--from-schema`/`--to-schema` — discovered and
+  corrected against the CLI's own error output, not assumed).
+- **Domain** (`packages/domain/src/platform-settings.ts`, 15 unit tests):
+  `validateEffectivePlatformSettings` — pure, framework-free (no `URL` global;
+  this package has no DOM/Node lib, so a regex validates the https-URL fields
+  instead, matching `slug.ts`'s existing deny-by-default-pattern convention
+  rather than adding an ambient declaration) — enforces the two invariants
+  that must hold at the data layer no matter which layer produced the write:
+  `canonicalHost` is a bare hostname (no scheme/path/port/trailing dot), and
+  **`merchantCenterEnabled` is rejected outright** ("do not enable Merchant
+  output for current quote-only products" — CLAUDE.md) until a real versioned
+  Offer model exists. Validates the _effective_ (current merged with patch)
+  state, not the raw patch alone, so a cross-field rule like "GA4 enabled
+  requires a measurement ID" sees a value whether it came from this write or
+  an earlier one.
+- **Application** (`packages/application/src/settings.ts`, 12 unit tests):
+  `getPlatformSettings`/`updatePlatformSettings` (RBAC, optimistic
+  concurrency, validates-then-writes atomically with the history/audit/outbox
+  rows in one transaction — an invalid patch never reaches the database),
+  `listPlatformSettingsHistory`, `rollbackPlatformSettings`,
+  `buildPlatformSettingsPreview`/`buildCanonicalOrigin`/
+  `buildOrganizationJsonLd` (the read-only "effective output" preview
+  search-visibility.md names, and the single producer of Organization JSON-LD
+  reused by both the preview endpoint and the public home page — "one typed
+  SEO/URL service," not two independent implementations). New atomic
+  permission `settings.manage` (`packages/application/src/authorization.ts`)
+  — not a TZ §3.1 table-8 resource (this is new CLAUDE.md-mandated scope with
+  no existing row to reuse, unlike the earlier Companies slice) — granted to
+  `ADMIN` only, matching search-visibility.md's "Product Owner / platform
+  administrator" (and "Product Owner only" for the most sensitive rows, e.g.
+  Merchant Center) ownership.
+- **Infrastructure**
+  (`packages/infrastructure/src/repositories/platform-settings-repository.ts`):
+  `PrismaPlatformSettingsRepository`/`PrismaPlatformSettingsHistoryRepository`,
+  same `updateMany({where: {id, version}}) + assertOptimisticLockAcquired`
+  idiom as every other repository's `updateStatus`. **Found and fixed a real
+  type-safety gap while building this**: a `PlatformSettings` snapshot
+  embedded in a JSONB column round-trips its `createdAt`/`updatedAt` `Date`
+  fields as ISO strings (Postgres JSONB has no native date type) — an `as`
+  cast would have silently typed them as `Date` while actually holding a
+  string at runtime; added explicit `serializeSnapshot`/`deserializeSnapshot`
+  instead.
+- **Delivery**: `GET`/`PATCH /api/admin/settings`, `GET
+/api/admin/settings/history`, `POST /api/admin/settings/history/
+{historyEntryId}/rollback`, `GET`/`POST /api/admin/settings/preview` (`POST`
+  previews a hypothetical patch — validated, never persisted — _before_ it is
+  saved, the "preview before save" search-visibility.md's settings table
+  requires). All rate-limited (`admin` bucket), tri-state patch fields
+  (omitted=unchanged/null=clear/value=set, this codebase's established
+  idiom). New `Settings` OpenAPI tag, 5 paths, 5 schemas; `redocly lint`
+  passes.
+- **Admin UI**: `/admin/settings` (Server Component — `notFound()` without
+  `settings.manage`, matching every other admin page's hidden-UI-is-never-
+  the-control convention) with a full-field form (`settings-form.tsx`,
+  client component — always sends every field as an explicit value rather
+  than tracking 25 fields' individual "touched" state, a deliberate
+  simplification documented inline since this is a singleton row realistically
+  edited by one admin at a time and `expectedVersion` still guards a genuine
+  concurrent edit), a "Preview effective output" button wired to the new
+  preview endpoint, and a change-history table with a confirm-gated
+  `RollbackButton` per entry. Merchant Center's checkbox is rendered inside a
+  disabled `<fieldset>` with an inline explanation, not hidden — CLAUDE.md's
+  "every automatic public behavior has an authorized, audited control
+  surface," even for a control that currently always rejects. New "Settings"
+  nav entry in `/admin/layout.tsx`.
+- **Wired robots.ts/sitemap.ts/home-page Organization JSON-LD to
+  PlatformSettings** (closes this slice's own stated scope, not left for a
+  future session): `apps/web/src/app/robots.ts` reads `canonicalHost` from
+  settings instead of `PUBLIC_ORIGIN`/a hardcoded placeholder, and the
+  emergency `crawlerGlobalNoindex` switch now actually disallows `/`
+  site-wide when set (search-visibility.md: "Emergency disable controls stop
+  future external notifications... immediately"). `apps/web/src/app/
+sitemap.ts` reads the same canonical origin and returns an empty sitemap
+  under the same emergency switch (belt-and-suspenders alongside robots'
+  disallow-all — a sitemap entry is itself a mild indexing signal). **Found
+  and fixed a real fabrication bug while wiring the home page**: `[locale]/
+page.tsx` previously emitted `Organization` JSON-LD with a hardcoded
+  `name: 'EraMix'` unconditionally — exactly the "fabricated... organization
+  fact" CLAUDE.md forbids; it now calls `buildOrganizationJsonLd(settings)`
+  and renders nothing until a Product Owner sets a real name via
+  `/admin/settings`. This is a deliberate, documented trade-off: the home
+  page was previously statically prerendered (SSG) and is now
+  `force-dynamic` (a live settings read), matching the DB-backed convention
+  every other public page (catalog, articles, ...) already uses — `next
+build` never needs a live database for any of them.
+- **Seed**: `packages/infrastructure/prisma/seed.ts` idempotently upserts the
+  singleton `PlatformSettings` row (`canonicalHost: 'eramix.example'`, no
+  organization facts — Organization JSON-LD stays absent until a real value
+  is set). `getPlatformSettings`/`robots.ts`/`sitemap.ts`/the home page all
+  throw `ResourceNotFoundError` if this row is missing by design (never
+  implicitly materialized on read) — the Pi scripts' existing numbered order
+  (`db:seed` in steps 02/04, before the `db:seed:e2e`-only steps 03/05)
+  already satisfies this precondition; no script reordering was needed.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy — `C:` had 2.3 GB free at the start of this session):
+  `pnpm run format` / `pnpm run lint` (incl. `redocly lint`) /
+  `pnpm run typecheck` all exit 0 across all 7 workspace projects;
+  `pnpm run test` — **325 unit tests** (up from 297: +15
+  `platform-settings.test.ts` in `packages/domain`, +12 `settings.test.ts` in
+  `packages/application`, +1 `settings.manage` RBAC case in
+  `authorization.test.ts`). Production build and any Postgres-backed
+  behaviour (including whether the new migration actually applies to a real
+  PostgreSQL 19 Beta 2 instance) are verified by CI only for this slice.
+- **Not yet built — explicitly scoped out of this slice, not forgotten**:
+  IndexNow adapter, the unified analytics event registry (GA4/Yandex-
+  Metrica/Rust-analytics _emission_, not just the settings toggles), the
+  advertising-provider control plane, cross-platform measurement dashboards,
+  and the Merchant/sellable-offer model itself. `PUBLIC_ORIGIN`-based host
+  resolution in `apps/web/src/server/csrf.ts` (security-relevant same-origin
+  check) and `[locale]/layout.tsx` (`metadataBase`) were deliberately left
+  untouched this slice — expanding settings-driven host resolution into the
+  CSRF boundary needs its own careful verification, not a drive-by change
+  bundled into this one. All of the above are the next slices.
+
 ## Required task format for the CLI agent
 
 For every task, report:

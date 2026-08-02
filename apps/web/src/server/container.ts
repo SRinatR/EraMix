@@ -14,6 +14,8 @@ import {
   PrismaOrderCommentRepository,
   PrismaOrderRepository,
   PrismaOutboxMessageRepository,
+  PrismaPlatformSettingsHistoryRepository,
+  PrismaPlatformSettingsRepository,
   PrismaProductAssetRepository,
   PrismaProductRepository,
   PrismaUnitOfWork,
@@ -63,6 +65,8 @@ function buildContainer() {
     orderComments: new PrismaOrderCommentRepository(prisma),
     auditEvents: new PrismaAuditEventRepository(prisma),
     outbox: new PrismaOutboxMessageRepository(prisma),
+    settingsRepo: new PrismaPlatformSettingsRepository(prisma),
+    settingsHistoryRepo: new PrismaPlatformSettingsHistoryRepository(prisma),
     get identityProvider() {
       if (env.OIDC_ISSUER_URL === undefined || env.OIDC_CLIENT_ID === undefined) {
         throw new Error(

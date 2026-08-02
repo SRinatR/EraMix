@@ -16,6 +16,7 @@ const ADMIN_PERMISSIONS = [
   'order.read.all',
   'content.write',
   'catalog.write',
+  'settings.manage',
 ] as const;
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -54,6 +55,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </li>
           <li>
             <Link href="/admin/audit">Audit</Link>
+          </li>
+          <li>
+            <Link href="/admin/settings">Settings</Link>
           </li>
         </ul>
       </nav>

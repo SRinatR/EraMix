@@ -22,7 +22,8 @@ export type Permission =
   | 'content.slug.change'
   | 'users.manage'
   | 'audit.read.limited'
-  | 'audit.read.full';
+  | 'audit.read.full'
+  | 'settings.manage';
 
 const ROLE_PERMISSIONS: Readonly<Record<PlatformRole, ReadonlySet<Permission>>> = {
   // Табл. 8: Клиент — Публичный каталог R, Собственный профиль RU, Заказы
@@ -72,6 +73,13 @@ const ROLE_PERMISSIONS: Readonly<Record<PlatformRole, ReadonlySet<Permission>>> 
     'users.manage',
     'audit.read.limited',
     'audit.read.full',
+    // Not a TZ §3.1 table-8 resource — the SEO/analytics/advertising control
+    // plane is new mandated scope (CLAUDE.md's "Public URL and localization
+    // policy" + docs/runbooks/search-visibility.md's settings table, which
+    // names "Product Owner / platform administrator" as the sole owner for
+    // most rows and "Product Owner only" for the most sensitive ones, e.g.
+    // Merchant Center/AI files) — ADMIN-only, no other role.
+    'settings.manage',
   ]),
   // Табл. 7: "Read-only доступ к журналам аудита и техническим
   // идентификаторам" — no other resource.

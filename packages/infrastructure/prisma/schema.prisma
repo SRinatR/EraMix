@@ -165,6 +165,9 @@ enum OutboxStatus {
 }
 
 // ---------- Identity & company ----------
+// (PlatformSettings/PlatformSettingsHistory enums and models are declared
+// after User/Company/Membership, near the end of the file, since they carry
+// no relation to the identity/catalog/order model tree.)
 
 model User {
   id          String   @id @default(uuid()) @db.Uuid
@@ -183,6 +186,7 @@ model User {
   orderComments         OrderComment[]       @relation("OrderCommentAuthor")
   auditEvents           AuditEvent[]
   uploadedProductAssets ProductAsset[]
+  platformSettingsChanges PlatformSettingsHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -609,4 +613,110 @@ model OutboxMessage {
 
   @@index([status, availableAt])
   @@map("outbox_messages")
+}
+
+// ---------- Product Owner / admin control plane (CLAUDE.md "Public URL and
+// localization policy" + docs/runbooks/search-visibility.md "Settings,
+// controls and recovery") ----------
+
+/// Single-row policy table (the `id` default enforces one well-known row by
+/// application-layer convention — Prisma has no first-class "singleton table"
+/// constraint, same pragmatic approach this schema already uses for other
+/// not-yet-fully-modeled concerns, e.g. Company.metadata). Every field maps
+/// directly to a named row in the search-visibility runbook's settings table;
+/// no field here is speculative. Secrets (IndexNow API key, any future OAuth
+/// token) are never columns on this table — only a non-secret public
+/// verification token or a boolean "configured" flag is stored; the real
+/// secret lives in the deployment secret store per CLAUDE.md.
+model PlatformSettings {
+  id String @id @default("singleton")
+
+  // Canonical host, HTTPS/host redirect and trailing-slash policy.
+  canonicalHost      String  @db.VarChar(255)
+  forceHttps         Boolean @default(true)
+  stripTrailingSlash Boolean @default(true)
+
+  // Organization/NAP facts — published in Organization JSON-LD only when
+  // set; automation never fabricates these (CLAUDE.md: "only when real and
+  // maintained").
+  organizationName      String?
+  organizationLegalName String?
+  organizationEmail     String?
+  organizationPhone     String?
+  organizationAddress   String?
+  /// JSON array of verified social/profile URLs (schema.org `sameAs`).
+  organizationSameAs    Json?
+
+  // Page-type SEO defaults / Open Graph fallback.
+  seoDefaultTitleTemplate       String?
+  seoDefaultDescriptionFallback String?
+  ogFallbackImageUrl            String?
+
+  // Crawler/snippet directives and experimental-file gate.
+  /// Emergency disable: forces sitewide noindex regardless of per-entity
+  /// publication state. Never deletes routes or bypasses publication rules.
+  crawlerGlobalNoindex        Boolean @default(false)
+  googleExtendedAllowed       Boolean @default(true)
+  aiCompatibilityFilesEnabled Boolean @default(false)
+
+  // Analytics consent mode and provider identifiers (non-secret IDs only).
+  analyticsConsentRequired Boolean @default(true)
+  ga4Enabled               Boolean @default(false)
+  ga4MeasurementId         String?
+  yandexMetricaEnabled     Boolean @default(false)
+  yandexMetricaCounterId   String?
+  /// Must stay false until the Rust analytics service's contract lands
+  /// (not expected before October 2026 — search-visibility.md). The flag
+  /// exists so the disabled-by-default adapter boundary has somewhere to
+  /// read its enablement state from; flipping it true does not by itself
+  /// make the (not-yet-implemented) adapter do anything.
+  rustAnalyticsEnabled     Boolean @default(false)
+
+  // Search Console / Yandex Webmaster / Bing / IndexNow integration state.
+  // Verification tokens are public HTML-meta/DNS values, not secrets.
+  searchConsoleVerificationToken   String?
+  yandexWebmasterVerificationToken String?
+  bingVerificationToken            String?
+  /// The real IndexNow key is an env-configured deployment secret
+  /// (never a column here); this only toggles whether the adapter is armed.
+  indexNowEnabled                  Boolean @default(false)
+
+  /// Kill switch for a future direct-sale/Merchant mode. Validated false at
+  /// the application layer until a real versioned Offer model exists —
+  /// CLAUDE.md: "do not enable Merchant output for current quote-only
+  /// products."
+  merchantCenterEnabled Boolean @default(false)
+
+  updatedByUserId String? @db.Uuid
+  history         PlatformSettingsHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(0)
+
+  @@map("platform_settings")
+}
+
+/// Append-only audit/rollback trail: one row per committed settings change,
+/// storing the full snapshot *before* the change plus who/why. Rollback is
+/// implemented at the application layer as "apply a past snapshot as a new
+/// update", never as a destructive rewrite of this table.
+model PlatformSettingsHistory {
+  id         String @id @default(uuid()) @db.Uuid
+  settingsId String @default("singleton")
+  /// The settings row's `version` immediately before this change.
+  previousVersion Int
+  /// Full settings snapshot as it was before this change (secrets are never
+  /// stored here in the first place, so no redaction is needed on read).
+  previousSnapshot Json
+  changeReason     String?
+  changedByUserId  String? @db.Uuid
+
+  settings      PlatformSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  changedByUser User?            @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([settingsId, createdAt])
+  @@map("platform_settings_history")
 }
