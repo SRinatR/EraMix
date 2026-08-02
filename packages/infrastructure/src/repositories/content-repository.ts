@@ -1,5 +1,6 @@
 import {
   clampPagination,
+  type ContentListFilter,
   type ContentRepository,
   type ContentTranslationEditPatch,
   type ContentWithTranslations,
@@ -260,21 +261,42 @@ export class PrismaContentRepository implements ContentRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } = {},
+    input: { limit?: number; offset?: number } & ContentListFilter = {},
   ): Promise<Page<ContentWithTranslations>> {
     const { limit, offset } = clampPagination(input);
+    const where = buildContentWhere(input);
+    const orderBy = {
+      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
+    };
     const client = resolveClient(this.prisma);
     const [rows, total] = await Promise.all([
       client.content.findMany({
+        where,
         include: WITH_TRANSLATIONS_AND_ROUTES,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         take: limit,
         skip: offset,
       }),
-      client.content.count(),
+      client.content.count({ where }),
     ]);
     return { items: rows.map(toDomain), total, limit, offset };
   }
+}
+
+function buildContentWhere(input: ContentListFilter): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (input.type !== undefined) {
+    where['type'] = input.type;
+  }
+  if (input.status !== undefined) {
+    where['status'] = input.status;
+  }
+  if (input.search !== undefined && input.search.trim().length > 0) {
+    where['translations'] = {
+      some: { title: { contains: input.search, mode: 'insensitive' } },
+    };
+  }
+  return where;
 }
 
 function toDomain(row: ContentRowWithTranslations): ContentWithTranslations {

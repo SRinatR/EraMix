@@ -1674,6 +1674,39 @@ gap." This slice closes it for categories and products.
   is Pi-gated integration territory). Production build and any
   Postgres-backed behaviour verified by CI only.
 
+### Rich search/sort/filter: admin content; media/documents deliberately exempted
+
+- **Content** (`ContentListFilter`: `type`/`status`/`search`/`sort`, same
+  allowlist pattern as the previous slice — `sort` is exactly
+  `createdAt_asc|createdAt_desc`, enforced in `PrismaContentRepository`'s
+  `orderBy` and independently in `parseAllowlistedParam` at the delivery
+  layer): `/admin/content` gained search/type/status/sort
+  `<form method="get">` controls and an explicit "No content items match
+  this filter." empty state (previously this page had no empty state at
+  all).
+- **Media/documents deliberately not paginated — a considered exemption,
+  not an oversight**: `ProductAssetRepository.listByProduct` stays
+  unbounded-per-product-scope. Reasoning: (1) per-product asset counts are
+  human-curated media (photos/spec sheets), never the 100k/1M-row scale
+  DB-005's load profile names — the same category the "option picker, not
+  a list screen" pickers already fall into; (2) the existing reorder
+  feature (`reorderProductAssets`, Phase 6) requires the _complete_
+  ordered set in one request — `reorderProductAssets` already "rejects any
+  request whose id set doesn't exactly match the product's current
+  assets" — so a server-side type/status filter on this list would
+  actively break reordering (a user filtering to "images only" could no
+  longer submit a valid reorder covering every asset). Pagination here
+  would trade a real, working feature for an unneeded one. No global
+  "media library across every product" admin view exists to paginate
+  instead — confirmed by grep, not assumed.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy): `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck`/`test` all exit 0 — 289 unit tests unchanged (the new
+  `ContentListFilter` allowlist logic is exercised by the same
+  `parseAllowlistedParam` tests the categories/products slice already
+  added — no new distinct logic to test at the application layer).
+  Production build and any Postgres-backed behaviour verified by CI only.
+
 ## Required task format for the CLI agent
 
 For every task, report:

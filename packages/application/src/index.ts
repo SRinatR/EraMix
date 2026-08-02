@@ -33,6 +33,7 @@ export type {
   ContentRepository,
   ContentWithTranslations,
   ContentTranslationEditPatch,
+  ContentListFilter,
   OrderRepository,
   OrderWithLines,
   OrderListFilter,

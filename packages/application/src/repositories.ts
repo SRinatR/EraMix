@@ -249,6 +249,14 @@ export interface ContentTranslationEditPatch {
   readonly seoDescription?: string | null;
 }
 
+export interface ContentListFilter {
+  readonly type?: Content['type'];
+  readonly status?: Content['status'];
+  /** Substring match against any locale's translation title — explicit allowlist, never a raw query passthrough. */
+  readonly search?: string;
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc';
+}
+
 export interface ContentRepository {
   findById(id: string): Promise<ContentWithTranslations | undefined>;
   /** Route uniqueness — and therefore lookup — is scoped per (namespace, locale). */
@@ -292,8 +300,8 @@ export interface ContentRepository {
   ): Promise<ContentRoute>;
   /** PUBLISHED content only, scoped to a type — public listing (e.g. FAQ, article index) and sitemap generation. */
   listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]>;
-  /** All statuses (DRAFT/PUBLISHED/ARCHIVED), all types — admin content listing (ADM-002/DB-005: bounded, paginated). */
-  listAll(input?: PaginationInput): Promise<Page<ContentWithTranslations>>;
+  /** All statuses (DRAFT/PUBLISHED/ARCHIVED), all types — admin content listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
+  listAll(input?: PaginationInput & ContentListFilter): Promise<Page<ContentWithTranslations>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
     id: string,

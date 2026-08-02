@@ -1,14 +1,18 @@
 import { Link } from '@/i18n/navigation';
 import { PaginationControls } from '@/components/pagination-controls';
 import { getContainer } from '@/server/container';
-import { parsePaginationParams } from '@/server/pagination';
+import {
+  parseAllowlistedParam,
+  parsePaginationParams,
+  parseStringParam,
+} from '@/server/pagination';
 import { getServerActor } from '@/server/session';
 import { AddContentTranslationForm } from './add-content-translation-form';
 import { EditContentTranslationForm } from './edit-content-translation-form';
 import { ChangeSlugForm } from '../catalog/change-slug-form';
 import { TransitionStatusForm } from '../catalog/transition-status-form';
 import { requirePermission } from '@eramix/application';
-import type { ContentRouteNamespace, ContentType } from '@eramix/domain';
+import type { ContentRouteNamespace, ContentType, PublicationStatus } from '@eramix/domain';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +21,9 @@ const NAMESPACE_BY_TYPE: Partial<Record<ContentType, ContentRouteNamespace>> = {
   ARTICLE: 'ARTICLES',
   PAGE: 'PAGES',
 };
+const CONTENT_TYPES: readonly ContentType[] = ['ARTICLE', 'PAGE', 'FAQ_ITEM'];
+const STATUSES: readonly PublicationStatus[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const SORTS = ['createdAt_asc', 'createdAt_desc'] as const;
 
 function firstTranslationTitle(translations: readonly { locale: string; title: string }[]): string {
   return (
@@ -42,83 +49,149 @@ export default async function AdminContentPage({
   }
 
   const container = getContainer();
-  const pagination = parsePaginationParams(await searchParams);
-  const { items, total, limit, offset } = await container.content.listAll(pagination);
+  const resolved = await searchParams;
+  const search = parseStringParam(resolved, 'search');
+  const type = parseAllowlistedParam(resolved, 'type', CONTENT_TYPES);
+  const status = parseAllowlistedParam(resolved, 'status', STATUSES);
+  const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
+  const { items, total, limit, offset } = await container.content.listAll({
+    ...parsePaginationParams(resolved),
+    ...(search !== undefined ? { search } : {}),
+    ...(type !== undefined ? { type } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(sort !== undefined ? { sort } : {}),
+  });
 
   return (
     <main>
       <h1>
         Content <Link href="/admin/content/new">New content item</Link>
       </h1>
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Title</th>
-            <th>Status</th>
-            <th>Change status</th>
-            <th>Add translation</th>
-            <th>Edit translations</th>
-            <th>Slugs</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const namespace = NAMESPACE_BY_TYPE[item.type];
-            return (
-              <tr key={item.id}>
-                <td>{item.type}</td>
-                <td>{firstTranslationTitle(item.translations)}</td>
-                <td>{item.status}</td>
-                <td>
-                  <TransitionStatusForm
-                    endpoint={`/api/admin/content/${item.id}/status`}
-                    currentStatus={item.status}
-                    expectedVersion={item.version}
-                  />
-                </td>
-                <td>
-                  <AddContentTranslationForm
-                    contentId={item.id}
-                    existingLocales={item.translations.map((t) => t.locale)}
-                    allowSlug={namespace !== undefined}
-                  />
-                </td>
-                <td>
-                  {item.translations.map((translation) => (
-                    <div key={translation.id}>
-                      {translation.locale}:{' '}
-                      <EditContentTranslationForm
-                        endpoint={`/api/admin/content/${item.id}/translations/${translation.id}`}
-                        expectedVersion={translation.version}
-                        initialTitle={translation.title}
-                        initialSummary={translation.summary}
-                        initialContent={translation.content}
-                        initialSeoTitle={translation.seoTitle}
-                        initialSeoDescription={translation.seoDescription}
-                      />
-                    </div>
-                  ))}
-                </td>
-                <td>
-                  {namespace &&
-                    item.translations.map((translation) => (
+      <form method="get">
+        <label>
+          Search
+          <input type="search" name="search" defaultValue={search ?? ''} />
+        </label>
+        <label>
+          Type
+          <select name="type" defaultValue={type ?? ''}>
+            <option value="">All</option>
+            {CONTENT_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select name="status" defaultValue={status ?? ''}>
+            <option value="">All</option>
+            {STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort
+          <select name="sort" defaultValue={sort ?? 'createdAt_desc'}>
+            {SORTS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+      </form>
+      {items.length === 0 ? (
+        <p>No content items match this filter.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Change status</th>
+              <th>Add translation</th>
+              <th>Edit translations</th>
+              <th>Slugs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const namespace = NAMESPACE_BY_TYPE[item.type];
+              return (
+                <tr key={item.id}>
+                  <td>{item.type}</td>
+                  <td>{firstTranslationTitle(item.translations)}</td>
+                  <td>{item.status}</td>
+                  <td>
+                    <TransitionStatusForm
+                      endpoint={`/api/admin/content/${item.id}/status`}
+                      currentStatus={item.status}
+                      expectedVersion={item.version}
+                    />
+                  </td>
+                  <td>
+                    <AddContentTranslationForm
+                      contentId={item.id}
+                      existingLocales={item.translations.map((t) => t.locale)}
+                      allowSlug={namespace !== undefined}
+                    />
+                  </td>
+                  <td>
+                    {item.translations.map((translation) => (
                       <div key={translation.id}>
                         {translation.locale}:{' '}
-                        <ChangeSlugForm
-                          endpoint={`/api/admin/content/${item.id}/translations/${translation.id}/slug`}
-                          currentSlug={translation.routes.find((route) => route.isCanonical)?.slug}
-                          extraBody={{ locale: translation.locale, namespace }}
+                        <EditContentTranslationForm
+                          endpoint={`/api/admin/content/${item.id}/translations/${translation.id}`}
+                          expectedVersion={translation.version}
+                          initialTitle={translation.title}
+                          initialSummary={translation.summary}
+                          initialContent={translation.content}
+                          initialSeoTitle={translation.seoTitle}
+                          initialSeoDescription={translation.seoDescription}
                         />
                       </div>
                     ))}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <PaginationControls basePath="/admin/content" total={total} limit={limit} offset={offset} />
+                  </td>
+                  <td>
+                    {namespace &&
+                      item.translations.map((translation) => (
+                        <div key={translation.id}>
+                          {translation.locale}:{' '}
+                          <ChangeSlugForm
+                            endpoint={`/api/admin/content/${item.id}/translations/${translation.id}/slug`}
+                            currentSlug={
+                              translation.routes.find((route) => route.isCanonical)?.slug
+                            }
+                            extraBody={{ locale: translation.locale, namespace }}
+                          />
+                        </div>
+                      ))}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <PaginationControls
+        basePath="/admin/content"
+        total={total}
+        limit={limit}
+        offset={offset}
+        extraParams={{
+          ...(search !== undefined ? { search } : {}),
+          ...(type !== undefined ? { type } : {}),
+          ...(status !== undefined ? { status } : {}),
+          ...(sort !== undefined ? { sort } : {}),
+        }}
+      />
     </main>
   );
 }
