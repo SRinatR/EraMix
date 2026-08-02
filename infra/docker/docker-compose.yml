@@ -3,6 +3,13 @@ services:
   # Docker on the authoring laptop (session policy). Verify in the
   # authorized Docker-capable session (docs/IMPLEMENTATION_ROADMAP.md Phase
   # 7) before relying on this file for a real deployment.
+  #
+  # Every `environment:` value below is a local-dev-only, throwaway
+  # credential (matches .env.example's own comment) — never a real secret.
+  # ADR-0016: dotenvx is a local/CI launch-time convenience only; it plays
+  # no role here or in a real deployment. Production replaces every one of
+  # these `environment:` blocks with values injected by the deployment
+  # platform's secret store at container start, never a committed file.
   postgres:
     # ADR-0013: PostgreSQL 19 Beta 2 is mandatory for local/CI/staging/initial
     # production; 17/18 must never be a silent fallback. The exact image

@@ -33,11 +33,17 @@ COPY packages/ui/package.json packages/ui/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
+# .dockerignore (ADR-0016) excludes .env/.env.*/.env.keys from this build
+# context entirely — `COPY . .` can never pick up a real or example secret
+# file, encrypted or not.
 COPY . .
 ENV NODE_ENV=production
 # `prisma generate` needs DATABASE_URL merely resolvable (prisma.config.ts's
 # env('DATABASE_URL') throws if entirely unset), never actually reachable —
 # the real value is injected at container runtime, not build time.
+# `db:generate` below is dotenvx-wrapped (ADR-0016), but no `.env` file
+# exists in this image — dotenvx finds none, warns (ignored), and passes
+# this placeholder straight through unchanged.
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN pnpm --filter @eramix/infrastructure run db:generate
 RUN pnpm --filter @eramix/web... run build
@@ -51,4 +57,11 @@ COPY --from=build --chown=nextjs:nodejs /repo/apps/web/.next/static ./apps/web/.
 COPY --from=build --chown=nextjs:nodejs /repo/apps/web/public ./apps/web/public
 USER nextjs
 EXPOSE 3000
+# Runs Next's standalone server directly, not `pnpm run start` —
+# package.json's dotenvx-wrapped `dev`/`start` scripts (ADR-0016) are
+# local-dev conveniences only; the standalone output copied above doesn't
+# even include devDependencies (dotenvx included). Real config/secrets are
+# injected as container env vars by the deployment platform
+# (docker-compose.yml's `environment:` locally; the production secret store
+# once deployed), never read from a .env file here.
 CMD ["node", "apps/web/server.js"]

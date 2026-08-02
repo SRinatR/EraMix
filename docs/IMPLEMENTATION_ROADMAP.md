@@ -988,6 +988,24 @@ rate-limit.ts`. Verified live: 10 requests to `/api/auth/login` succeed
   Do not treat this status block as Phase 7 completion — it is not; see the
   final report's Pi test plan for exactly what remains.
 
+### Evidence, 2026-08-02: dotenvx environment-file workflow migration
+
+`dotenv@17.4.2`'s four scattered programmatic `config()` calls
+(`apps/web/next.config.ts`, `packages/infrastructure/prisma.config.ts`, its
+two `prisma/seed*.ts` scripts) were replaced with `@dotenvx/dotenvx@2.19.1`
+used exclusively as a `package.json`-script CLI launcher — see
+`docs/adr/0016-dotenvx-environment-workflow.md` for full version/integrity
+evidence, the exact wrapped-script list, and the (not-yet-enabled) future
+encrypted-`.env` workflow. Two new CI `security`-job gates
+(`dotenvx precommit`/`dotenvx prebuild`) and a new
+`packages/infrastructure/src/env-example.test.ts` (asserts `.env.example`
+still resolves against `env.ts`'s live zod schema) were added; a
+previously-missing `.dockerignore` was written and the gap it closes was
+proven locally (`dotenvx prebuild` failed before it existed, passed after).
+No Pi/VPS access was used or needed — this is a local/CI-only tooling
+change; production/staging secret injection is unaffected and remains the
+deployment platform's responsibility, never `dotenvx`'s.
+
 ## Phase 8 — release acceptance
 
 Deliver:

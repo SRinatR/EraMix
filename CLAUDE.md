@@ -151,6 +151,33 @@ never a fallback page rendered under the wrong locale URL.
 - Apply rate limits to authentication, search, order submission, uploads, and
   admin operations. Never log credentials, tokens, or unnecessary PII.
 
+## Environment configuration and secrets
+
+- Application, domain, application-layer, and UI code read configuration
+  exclusively through `packages/infrastructure/src/env.ts`'s validated
+  `loadEnv()`/`process.env`. No domain, application, UI, or business code may
+  import `dotenv` or `@dotenvx/dotenvx`.
+- `dotenvx` (`@dotenvx/dotenvx`, exact-pinned, `docs/adr/0016-dotenvx-environment-workflow.md`)
+  is the standard local-developer/CI environment-file launcher — invoked only
+  as a CLI wrapper (`dotenvx run -f … -- <command>`) inside `package.json`
+  `scripts`, never imported programmatically. It is a launch-time
+  convenience only; it never becomes a second source of truth for a real
+  secret.
+- The production/staging secret store is always authoritative. CI sources
+  real values from GitHub Actions secrets/environment variables (never a
+  `.env` file); Docker/deployment sources them from the deployment
+  platform's secret store, injected as container env vars at start, never
+  baked into an image layer.
+- Never commit a plaintext `.env`, `.env.local`, `.env.production`,
+  `.env.keys`, or any other secret-bearing local environment file.
+  `.env.keys` (and any `.env.*.keys`) must never be committed, copied into a
+  container, printed, or logged — enforced by `.gitignore`, `.dockerignore`,
+  and the CI `security` job's `dotenvx precommit`/`dotenvx prebuild` gates.
+- An encrypted `.env.<environment>` may only be committed after an explicit
+  Product Owner/security decision (see ADR-0016's "future encrypted-env
+  workflow"); its matching private key belongs only in the approved CI/VPS
+  secret store.
+
 ## Data, content, and ordering invariants
 
 - PostgreSQL `19beta2` is the mandatory version for local, CI, staging, and

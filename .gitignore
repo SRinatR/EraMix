@@ -9,6 +9,11 @@ coverage/
 .env
 .env.*
 !.env.example
+# Explicit, defense-in-depth call-outs (ADR-0016) — already matched by
+# `.env.*` above, named here so a future edit to that broader pattern can't
+# silently stop covering dotenvx's private-decryption-key files.
+.env.keys
+.env.*.keys
 *.log
 .DS_Store
 Thumbs.db

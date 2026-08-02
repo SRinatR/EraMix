@@ -1,5 +1,9 @@
 # Runbook: upload/media security posture
 
+> This runbook also covers environment/secret handling — see "Environment
+> configuration and secrets" below — despite its upload-focused title; it is
+> the repository's one security runbook.
+
 Status: describes the MVP implementation as it exists today (generic media
 uploads, `packages/application/src/uploads.ts`; product image/document
 attachments, `packages/application/src/product-assets.ts`). The concrete
@@ -73,6 +77,60 @@ result throws before a row is created (see the pipeline above), so a
   quotes/control characters before writing it into the
   `Content-Disposition` header, so it cannot inject a second header or break
   out of the quoted filename.
+
+## Environment configuration and secrets
+
+Status: implemented as of ADR-0016 (`docs/adr/0016-dotenvx-environment-workflow.md`)
+— read that ADR for full rationale, version/integrity evidence, and the
+future encrypted-`.env` workflow this section summarizes.
+
+- **Application code never reads a `.env` file directly.**
+  `packages/infrastructure/src/env.ts`'s `loadEnv()` reads only
+  `process.env`, validated by a zod schema, and fails closed (throws) on any
+  missing/malformed required value. Nothing in `packages/domain`,
+  `packages/application`, `packages/ui`, or route/UI code imports
+  `dotenv`/`@dotenvx/dotenvx`.
+- **`dotenvx` is a local/CI launch-time convenience only.** It is invoked
+  exclusively as a CLI wrapper (`dotenvx run -f ../../.env --ignore
+MISSING_ENV_FILE -- <command>`) inside `package.json` scripts
+  (`apps/web`'s `dev`/`start`, `apps/worker`'s `start`,
+  `packages/infrastructure`'s `db:*`/`test:integration`). It never runs in a
+  Docker `CMD` (those bypass `package.json` scripts entirely) and never
+  overrides an already-set environment variable (no script uses
+  `--overload`), so CI/Docker/the Pi scripts — none of which use a `.env`
+  file — are unaffected by its presence.
+- **The production/staging secret store is always authoritative.** CI uses
+  GitHub Actions secrets/environment variables; Docker/deployment injects
+  real values as container env vars at start, never bakes them into an image
+  layer. `dotenvx` does not and must not replace either.
+- **Never commit** a plaintext `.env`, `.env.local`, `.env.production`,
+  `.env.keys`, or any other secret-bearing local environment file.
+  `.env.keys` (and any `.env.*.keys`) must never be committed, copied into a
+  container, printed, or logged. Enforced by:
+  - `.gitignore`'s explicit `.env.keys`/`.env.*.keys` lines (on top of the
+    pre-existing `.env.*` pattern);
+  - `.dockerignore`'s identical exclusions (so a Docker build context can
+    never pick one up, even transiently);
+  - the CI `security` job's `dotenvx precommit`/`dotenvx prebuild` steps,
+    which fail closed the instant any `.env*`-pattern file on disk is
+    neither gitignored/dockerignored, `.env.example` itself, nor
+    dotenvx-encrypted ciphertext.
+- **Future encrypted-environment-file workflow (not yet enabled):** an
+  encrypted `.env.<environment>` may only be committed after an explicit
+  Product Owner/security decision. The matching `.env.<environment>.keys`
+  private key is stored only in the approved CI/VPS secret store — never
+  committed, copied into a container, printed, or logged. Production private
+  keys are injected at deployment-secret-store runtime, never baked into an
+  image layer. Rotation = re-encrypt with a new keypair and update the
+  secret store; revocation = delete the key from the secret store (the
+  encrypted file becomes unreadable until a new key is provisioned — the
+  intended fail-closed response to a suspected key leak).
+- **`.env.example`** stays plaintext, complete, and non-secret by
+  construction — `packages/infrastructure/src/env-example.test.ts` (run as
+  part of the normal `pnpm run test`/CI `unit` job) asserts it resolves
+  against the live zod schema and that no
+  `SESSION_SECRET`/`MEDIA_SIGNING_SECRET`/`OIDC_CLIENT_SECRET` value is
+  present in it.
 
 ## Known MVP limitations (tracked, not hidden)
 

@@ -160,6 +160,14 @@ jobs:
       # the next Next.js upgrade.
       - name: pnpm audit (dependency vulnerabilities, ADR-0015)
         run: pnpm audit --audit-level=critical
+      # ADR-0016: every .env*-pattern file on disk must be either gitignored,
+      # dockerignored, dotenvx-encrypted, or literally .env.example — a
+      # tracked/dockerable .env.keys or plaintext .env would throw here
+      # instead of silently reaching a commit or an image build context.
+      - name: dotenvx precommit gate (no plaintext/untracked-key .env files committable)
+        run: pnpm exec dotenvx precommit
+      - name: dotenvx prebuild gate (no plaintext/untracked-key .env files in the Docker build context)
+        run: pnpm exec dotenvx prebuild
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:

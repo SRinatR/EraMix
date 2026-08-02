@@ -10,6 +10,13 @@ explicitly authorized) session.
 
 Do not run any of these against a production or shared environment.
 
+Every `pnpm --filter @eramix/infrastructure run db:*` call below is
+dotenvx-wrapped (`docs/adr/0016-dotenvx-environment-workflow.md`) —
+harmlessly a no-op here, since these scripts always `export DATABASE_URL`
+(and friends) directly in the shell first, and dotenvx never overrides an
+already-set environment variable. No `.env` file is used or needed on the
+Pi.
+
 ## Order of operations
 
 ```sh

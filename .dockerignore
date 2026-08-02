@@ -1,0 +1,47 @@
+# Docker build context exclusions (ADR-0016 — dotenvx migration; secret
+# model). infra/docker/*.Dockerfile's `build` stage runs `COPY . .` against
+# the repo root context (infra/docker/docker-compose.yml's `context: ../..`)
+# — anything not excluded here is sent to the Docker daemon and can land in
+# an intermediate layer, so real/example secrets, git history, and
+# host-machine build output never belong in this list's absence.
+
+# Host-machine, non-reproducible build output — the image installs its own
+# dependencies and rebuilds from source (see the Dockerfiles' `deps`/`build`
+# stages); copying the host's own node_modules would be wasted, oversized,
+# and potentially platform-mismatched (native addons built for the host OS).
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+packages/infrastructure/src/generated/
+
+# Never send real, example, or encrypted secret material into the build
+# context. The build stage's own placeholder DATABASE_URL is set via
+# Dockerfile `ENV`, never a .env file; real runtime secrets are injected by
+# the deployment platform's secret store at container start, never baked
+# into an image layer (see docs/adr/0016-dotenvx-environment-workflow.md).
+.env
+.env.*
+!.env.example
+.env.keys
+.env.*.keys
+
+.git/
+.gitignore
+*.log
+.DS_Store
+Thumbs.db
+
+# Dev-only local media storage stand-in; never shipped in an image.
+.var/
+
+# Pi-only E2E suite, QA proofing renders, and one-off editing tools —
+# deliberately outside the pnpm workspace and irrelevant to any image build.
+e2e/
+qa/
+tools/
+docs/
