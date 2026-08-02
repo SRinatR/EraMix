@@ -655,6 +655,184 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
 
+  /api/admin/companies:
+    get:
+      operationId: listAdminCompanies
+      summary: List companies (users.manage — Administrator only)
+      description: >-
+        TZ §3.1's RBAC matrix has no separate "Компании" resource; company
+        data belongs to the same Identity & Access module as users/roles
+        (§4.2), so this reuses the existing users.manage permission rather
+        than introducing a new one.
+      tags: [Admin]
+      responses:
+        '200':
+          description: Companies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Company'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: createCompany
+      summary: Create a company (users.manage — Administrator only)
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompanyRequest'
+      responses:
+        '201':
+          description: The created company.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+  /api/admin/companies/{companyId}/status:
+    patch:
+      operationId: updateCompanyStatus
+      summary: Suspend or reactivate a company (users.manage — Administrator only)
+      tags: [Admin]
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCompanyStatusRequest'
+      responses:
+        '200':
+          description: The updated company.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Stale version (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/admin/companies/{companyId}/memberships:
+    get:
+      operationId: listCompanyMemberships
+      summary: List a company's memberships (users.manage — Administrator only)
+      tags: [Admin]
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Memberships.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: createMembership
+      summary: Add a user to a company (users.manage — Administrator only)
+      tags: [Admin]
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMembershipRequest'
+      responses:
+        '201':
+          description: The created membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          description: Company or user not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/admin/companies/{companyId}/memberships/{membershipId}/status:
+    patch:
+      operationId: updateMembershipStatus
+      summary: Change a membership's status (users.manage — Administrator only)
+      tags: [Admin]
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: membershipId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMembershipStatusRequest'
+      responses:
+        '200':
+          description: The updated membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Membership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Stale version (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
   /api/admin/categories/{categoryId}/status:
     patch:
       operationId: transitionCategoryStatus
@@ -1687,6 +1865,67 @@ components:
           type: string
           enum: [ACTIVE, DISABLED]
         version: { type: integer }
+    Company:
+      type: object
+      required: [id, legalName, status, version]
+      properties:
+        id: { type: string }
+        legalName: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        metadata:
+          description: >-
+            Untyped bucket for jurisdiction-specific registration fields
+            pending a business decision (docs/OPEN_QUESTIONS.md Q-09).
+          type: object
+        version: { type: integer }
+    CreateCompanyRequest:
+      type: object
+      required: [legalName]
+      properties:
+        legalName: { type: string, minLength: 1, maxLength: 255 }
+        metadata: { type: object }
+    UpdateCompanyStatusRequest:
+      type: object
+      required: [status, expectedVersion]
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        expectedVersion: { type: integer }
+    CompanyRole:
+      type: string
+      enum: [OWNER, MEMBER]
+    MembershipStatus:
+      type: string
+      enum: [ACTIVE, INVITED, REVOKED]
+    Membership:
+      type: object
+      required: [id, userId, companyId, role, status, version]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        companyId: { type: string }
+        role:
+          $ref: '#/components/schemas/CompanyRole'
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        version: { type: integer }
+    CreateMembershipRequest:
+      type: object
+      required: [userId, role]
+      properties:
+        userId: { type: string }
+        role:
+          $ref: '#/components/schemas/CompanyRole'
+    UpdateMembershipStatusRequest:
+      type: object
+      required: [status, expectedVersion]
+      properties:
+        status:
+          $ref: '#/components/schemas/MembershipStatus'
+        expectedVersion: { type: integer }
     PublicationStatus:
       type: string
       description: >-

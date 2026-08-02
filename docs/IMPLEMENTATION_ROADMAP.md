@@ -1160,6 +1160,78 @@ from 234: +9 `order-comments.test.ts`), `next build` registers 67 route
 entries (1 new: the comments route). The `OrderComment` table/migration
 itself remains unverified against real PostgreSQL — same Pi-pending status
 as every other DB-backed surface (see Phase 7/8).
+Pushed as commit `ad42232`; GitHub Actions run
+[30749502637](https://github.com/SRinatR/EraMix/actions/runs/30749502637)
+is green.
+
+### Admin companies + memberships CRUD (closes a named audit gap: "companies" is a required admin capability, but `CompanyRepository`/`MembershipRepository` had no admin API/UI at all — nothing anywhere in the app could create a Company or a Membership)
+
+TZ §3.1's RBAC matrix (table 8) has no dedicated "Компании" resource row —
+only Публичный каталог/Собственный профиль/Заказы своей
+компании/Все доступные заказы/Публичный контент/Пользователи и
+роли/Аудит — confirmed by extracting and reading the TZ v1.3 `.docx` text
+directly (not assumed), so this does **not** add a new `Permission` enum
+member or touch ADR-0014's transcribed matrix. §4.2's module table assigns
+company data to the same Identity & Access module as "локальный профиль...
+роли" — i.e. the same module already gated by the existing Admin-only
+`users.manage` permission ("Пользователи и роли: CRUD"). Reusing
+`users.manage` for company/membership admin CRUD is the conservative default
+CLAUDE.md permits ("resolve non-blocking open questions conservatively only
+when the existing specification already permits a default"), not an
+invented requirement — documented inline at the new routes' definition
+site, not just here.
+- **Repository ports extended** (`packages/application/src/repositories.ts`):
+  `CompanyRepository` gained `listAll()`/`updateStatus()`;
+  `MembershipRepository` gained `findById()`/`listByCompany()`/
+  `updateStatus()` — all following the exact `updateMany({where: {id,
+version}}) + assertOptimisticLockAcquired` idiom every other `updateStatus`
+  in this codebase already uses, implemented in
+  `PrismaCompanyRepository`/`PrismaMembershipRepository`. No migration
+  needed — `Company`/`Membership` tables have existed since Phase 1; only
+  new query methods were added.
+- **Routes** (all `enforceRateLimit('admin')`, `requireActor` +
+  `requirePermission(..., 'users.manage')`, audited): `GET`/`POST
+/api/admin/companies`, `PATCH /api/admin/companies/{companyId}/status`,
+  `GET`/`POST /api/admin/companies/{companyId}/memberships`, `PATCH
+/api/admin/companies/{companyId}/memberships/{membershipId}/status` —
+  `createMembership` 404s on an unknown company or user rather than
+  creating an orphaned row. Audit actions: `company.created`,
+  `company.status_changed`, `membership.created`,
+  `membership.status_changed`.
+- **Admin UI**: `/admin/companies` (list + status-transition form +
+  create-company form + a link per row to manage its members),
+  `/admin/companies/{companyId}/memberships` (lists existing members joined
+  against `UserRepository.listAll()` for display name/email, a
+  status-transition form per membership, and a create-membership form
+  scoped to users who are not already members of this company). New
+  "Companies" entry in the admin nav (`apps/web/src/app/[locale]/admin/
+layout.tsx`).
+- **OpenAPI**: `Company`/`Membership`/`CompanyRole`/`MembershipStatus`/
+  `CreateCompanyRequest`/`UpdateCompanyStatusRequest`/
+  `CreateMembershipRequest`/`UpdateMembershipStatusRequest` schemas, all 5
+  new endpoints documented under the `Admin` tag with the same RBAC-matrix
+  rationale inline; `redocly lint` passes.
+- **Not addressed by this slice, and correctly so**: this only gives an
+  Admin a way to link an existing user to a company — it does not implement
+  customer self-service company registration/onboarding (still blocked on
+  Q-09's unapproved required legal/registration field list) or a
+  `COMPANY_ADMIN`-side "invite a teammate" flow (no such role/capability is
+  named in the TZ's RBAC matrix). `Company.metadata` remains the existing
+  untyped Q-09 placeholder — this slice does not add structured
+  jurisdiction fields.
+- **Verified locally** (laptop, no Postgres): `pnpm run check` (format,
+  lint incl. `redocly lint`, typecheck, test, build) exit 0 — 248 unit
+  tests unchanged (this slice is thin routes + repository methods,
+  matching the existing `/api/admin/users` convention of no dedicated
+  application-layer use-case file; behaviour is exercised at the repository
+  level, which the pre-existing Postgres integration-test file already
+  covers for the sibling `updateStatus` idiom), `next build` registers 71
+  route entries total, 6 of them `companies`-scoped and new this slice (4
+  API routes + 2 admin pages — directly grepped from the build output, not
+  eyeballed). Nothing here has touched a real PostgreSQL
+  instance — `updateStatus`'s optimistic-concurrency behaviour against real
+  Postgres error codes is unverified, same Pi-pending status as every other
+  DB-backed surface.
 
 ## Required task format for the CLI agent
 

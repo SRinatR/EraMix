@@ -54,12 +54,24 @@ export interface UserRepository {
 export interface CompanyRepository {
   findById(id: string): Promise<Company | undefined>;
   create(input: Omit<Company, 'version' | 'createdAt' | 'updatedAt'>): Promise<Company>;
+  /** Admin `users.manage` listing (TZ's Identity & Access module owns company data) — small MVP company count, no pagination yet. */
+  listAll(): Promise<readonly Company[]>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateStatus(id: string, expectedVersion: number, status: Company['status']): Promise<Company>;
 }
 
 export interface MembershipRepository {
+  findById(id: string): Promise<Membership | undefined>;
   findByUserAndCompany(userId: string, companyId: string): Promise<Membership | undefined>;
   listByUser(userId: string): Promise<readonly Membership[]>;
+  listByCompany(companyId: string): Promise<readonly Membership[]>;
   create(input: Omit<Membership, 'version' | 'createdAt' | 'updatedAt'>): Promise<Membership>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: Membership['status'],
+  ): Promise<Membership>;
 }
 
 export interface CategoryWithTranslations extends Category {
