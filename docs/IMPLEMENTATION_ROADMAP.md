@@ -563,9 +563,9 @@ build` registers 66 top-level route entries including the new `DELETE
   run remains Pi-pending.
 - **Not yet built**: the notification worker's `DevEmailSender` only logs
   recipient/subject to structured JSON, it does not send real mail (ADR-0007
-  blocked on Q-06); manager comments/status-timeline UI does not exist (the
-  `order.transition` API + audit trail exist, but no admin page renders
-  them yet — see Phase 6). **No test in this phase has run against a real
+  blocked on Q-06). Manager comments/status-timeline UI — see the
+  "post-Phase-8 completeness pass" section near the end of this document,
+  which closes this gap. **No test in this phase has run against a real
   PostgreSQL instance on this laptop** — `packages/application`'s tests use
   in-memory fakes; `packages/infrastructure/src/repositories/
 postgres.integration.test.ts` (new this session) exercises the real Prisma
@@ -1117,6 +1117,49 @@ first-run-unverified until the Pi session runs it once for real.
   production environment has been touched. Do not claim any Phase 8
   acceptance evidence exists — only that the tooling to produce it is now
   ready and waiting for explicit Pi authorization.
+
+## Post-Phase-8 implementation-completeness pass
+
+Product Owner instruction, 2026-08-02: before any Raspberry Pi work, close
+every remaining non-Pi, non-production implementation gap against CLAUDE.md,
+this roadmap, the TZ, `docs/OPEN_QUESTIONS.md`, the ADRs, the OpenAPI
+contract, and the implemented code — without touching the Pi/VPS or
+installing Docker/Postgres/browser tooling on this laptop. This section
+records what that pass closed; entries are appended as each vertical slice
+lands, each with its own `pnpm run check` evidence.
+
+### Order comments (closes the Phase 5/6 "manager comments" gap)
+
+`packages/application/src/order-comments.ts` (`addOrderComment`,
+`listOrderCommentsForActor`, `visibleOrderComments`, 9 unit tests) and
+`OrderComment`/`CommentVisibility` (domain entity, migration
+`20260802140000_add_order_comments`, `PrismaOrderCommentRepository`) already
+existed uncommitted from a prior session; this pass found and fixed a real
+type bug before wiring it up (`OrderCommentRepository.create()`'s port
+signature omitted `id` from its input type, which does not match this
+repository's own established convention — every other `create()` port
+omits only `version`/`createdAt`/`updatedAt`, never `id`, since the use case
+always generates it via `idGen` — and did not match either the use case,
+which already passed `id` explicitly, or the Prisma adapter, which already
+declared `Omit<OrderComment, 'createdAt'>`; fixed the port to match both).
+Added the missing route (`GET`/`POST /api/orders/by-id/{orderId}/comments`,
+`apps/web/src/app/api/orders/by-id/[orderId]/comments/route.ts`), OpenAPI
+documentation (`OrderComment`/`AddOrderCommentRequest`/`CommentVisibility`
+schemas, `redocly lint` passes), and UI: a shared
+`apps/web/src/components/add-order-comment-form.tsx` (visibility selector
+only rendered when the actor holds `order.transition`, but the server is the
+real enforcement point regardless of what the form sends) wired into both
+the customer order-detail page (`canPostInternal={false}` — a CUSTOMER can
+never post INTERNAL) and the admin order-detail page
+(`canPostInternal={hasPermission(actor.platformRole, 'order.transition')}`),
+both rendering the comment list already filtered server-side by
+`listOrderCommentsForActor`.
+**Verified locally** (laptop, no Postgres): `pnpm run check` (format, lint
+incl. `redocly lint`, typecheck, test, build) exit 0 — 248 unit tests (up
+from 234: +9 `order-comments.test.ts`), `next build` registers 67 route
+entries (1 new: the comments route). The `OrderComment` table/migration
+itself remains unverified against real PostgreSQL — same Pi-pending status
+as every other DB-backed surface (see Phase 7/8).
 
 ## Required task format for the CLI agent
 

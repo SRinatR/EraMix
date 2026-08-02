@@ -67,6 +67,8 @@ export type {
   Content,
   OrderLine,
   OrderStatusHistoryEntry,
+  CommentVisibility,
+  OrderComment,
   Order,
   AuditEvent,
   OutboxMessage,

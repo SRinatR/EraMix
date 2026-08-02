@@ -13,6 +13,7 @@ export { PrismaProductRepository } from './repositories/product-repository.js';
 export { PrismaProductAssetRepository } from './repositories/product-asset-repository.js';
 export { PrismaContentRepository } from './repositories/content-repository.js';
 export { PrismaOrderRepository } from './repositories/order-repository.js';
+export { PrismaOrderCommentRepository } from './repositories/order-comment-repository.js';
 export { CryptoIdGenerator } from './id-generator.js';
 export { JsonLogger } from './logger.js';
 export type { Logger, LogLevel, LogFields } from './logger.js';

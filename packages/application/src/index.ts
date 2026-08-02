@@ -31,6 +31,7 @@ export type {
   ContentTranslationEditPatch,
   OrderRepository,
   OrderWithLines,
+  OrderCommentRepository,
   AuditEventRepository,
   OutboxMessageRepository,
 } from './repositories.js';
@@ -67,6 +68,12 @@ export {
   CUSTOMER_CANCELLABLE_STATES,
 } from './order-lifecycle.js';
 export type { CreateDraftOrderInput, OrderLineInput } from './order-lifecycle.js';
+export {
+  addOrderComment,
+  listOrderCommentsForActor,
+  visibleOrderComments,
+} from './order-comments.js';
+export type { AddOrderCommentInput, OrderCommentDeps } from './order-comments.js';
 export {
   listCatalogCategories,
   listCatalogProducts,

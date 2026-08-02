@@ -183,6 +183,22 @@ export interface OrderStatusHistoryEntry {
   readonly createdAt: Date;
 }
 
+/**
+ * PUBLIC is visible to the ordering company's own members; INTERNAL only to
+ * `order.transition` holders (manager/admin) — see
+ * packages/application/src/order-comments.ts (ORD-008/ACC-004/TZ §6.6).
+ */
+export type CommentVisibility = 'PUBLIC' | 'INTERNAL';
+
+export interface OrderComment {
+  readonly id: string;
+  readonly orderId: string;
+  readonly authorId: string;
+  readonly visibility: CommentVisibility;
+  readonly body: string;
+  readonly createdAt: Date;
+}
+
 export interface Order extends Versioned, Timestamped {
   readonly id: string;
   readonly orderNumber: string;

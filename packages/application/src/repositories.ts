@@ -12,6 +12,7 @@ import type {
   LocaleCode,
   Membership,
   Order,
+  OrderComment,
   OrderLine,
   OrderStatus,
   OrderStatusHistoryEntry,
@@ -311,6 +312,12 @@ export interface OrderRepository {
       readonly submittedAt?: Date;
     },
   ): Promise<OrderWithLines>;
+}
+
+export interface OrderCommentRepository {
+  /** Append-only, ordered oldest-first — same convention as OrderStatusHistory. Visibility filtering is the use case's job, not the repository's. */
+  listByOrder(orderId: string): Promise<readonly OrderComment[]>;
+  create(comment: Omit<OrderComment, 'createdAt'>): Promise<OrderComment>;
 }
 
 export interface AuditEventRepository {

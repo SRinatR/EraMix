@@ -11,6 +11,7 @@ import {
   PrismaCompanyRepository,
   PrismaContentRepository,
   PrismaMembershipRepository,
+  PrismaOrderCommentRepository,
   PrismaOrderRepository,
   PrismaOutboxMessageRepository,
   PrismaProductAssetRepository,
@@ -59,6 +60,7 @@ function buildContainer() {
     productAssets: new PrismaProductAssetRepository(prisma),
     content: new PrismaContentRepository(prisma),
     orders: new PrismaOrderRepository(prisma),
+    orderComments: new PrismaOrderCommentRepository(prisma),
     auditEvents: new PrismaAuditEventRepository(prisma),
     outbox: new PrismaOutboxMessageRepository(prisma),
     get identityProvider() {

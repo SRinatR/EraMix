@@ -527,6 +527,72 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/orders/by-id/{orderId}/comments:
+    get:
+      operationId: listOrderComments
+      summary: List an order's comments (ORD-008/ACC-004/TZ §6.6)
+      description: >-
+        INTERNAL comments are filtered out for any actor lacking
+        order.transition (i.e. every CUSTOMER) — never client-side, always
+        server-side.
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Comments visible to the caller, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderComment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: addOrderComment
+      summary: Add a comment to an order
+      description: >-
+        visibility: INTERNAL requires order.transition (manager/admin only);
+        a CUSTOMER may only post PUBLIC comments.
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddOrderCommentRequest'
+      responses:
+        '201':
+          description: The created comment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderComment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          description: Blank comment body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 
   /api/admin/users:
     get:
@@ -1810,6 +1876,27 @@ components:
         toStatus:
           $ref: '#/components/schemas/OrderStatus'
         reason: { type: string }
+    CommentVisibility:
+      type: string
+      enum: [PUBLIC, INTERNAL]
+    OrderComment:
+      type: object
+      required: [id, orderId, authorId, visibility, body, createdAt]
+      properties:
+        id: { type: string }
+        orderId: { type: string }
+        authorId: { type: string }
+        visibility:
+          $ref: '#/components/schemas/CommentVisibility'
+        body: { type: string, maxLength: 2000 }
+        createdAt: { type: string, format: date-time }
+    AddOrderCommentRequest:
+      type: object
+      required: [body, visibility]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        visibility:
+          $ref: '#/components/schemas/CommentVisibility'
     ProblemDetailsFieldError:
       type: object
       required: [pointer, code, message]

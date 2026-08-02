@@ -147,6 +147,15 @@ enum OrderStatus {
   CANCELLED
 }
 
+/// PUBLIC comments are visible to the ordering company's own members
+/// (ORD-008: "клиент видит... публичные комментарии менеджера"); INTERNAL
+/// comments are visible only to actors holding `order.transition`
+/// (manager/admin) — see packages/application/src/order-comments.ts.
+enum CommentVisibility {
+  PUBLIC
+  INTERNAL
+}
+
 enum OutboxStatus {
   PENDING
   PROCESSING
@@ -171,6 +180,7 @@ model User {
   memberships           Membership[]
   createdOrders         Order[]              @relation("OrderCreatedBy")
   orderStatusEvents     OrderStatusHistory[]
+  orderComments         OrderComment[]       @relation("OrderCommentAuthor")
   auditEvents           AuditEvent[]
   uploadedProductAssets ProductAsset[]
 
@@ -488,6 +498,7 @@ model Order {
   createdByUser User                 @relation("OrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   lines         OrderLine[]
   statusHistory OrderStatusHistory[]
+  comments      OrderComment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -538,6 +549,26 @@ model OrderStatusHistory {
 
   @@index([orderId, createdAt])
   @@map("order_status_history")
+}
+
+/// ORD-008/ACC-004/TZ §6.6: order-scoped comments. PUBLIC is visible to the
+/// ordering company's own members; INTERNAL only to order.transition holders
+/// (manager/admin) — see packages/application/src/order-comments.ts. Never
+/// edited/deleted (append-only, matching OrderStatusHistory's convention).
+model OrderComment {
+  id         String            @id @default(uuid()) @db.Uuid
+  orderId    String            @db.Uuid
+  authorId   String            @db.Uuid
+  visibility CommentVisibility
+  body       String            @db.VarChar(2000)
+
+  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  author User  @relation("OrderCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("order_comments")
 }
 
 // ---------- Audit & outbox ----------

@@ -1,7 +1,13 @@
+import { AddOrderCommentForm } from '@/components/add-order-comment-form';
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
 import { TransitionOrderForm } from './transition-order-form';
-import { ALLOWED_ORDER_TRANSITIONS, requirePermission } from '@eramix/application';
+import {
+  ALLOWED_ORDER_TRANSITIONS,
+  hasPermission,
+  listOrderCommentsForActor,
+  requirePermission,
+} from '@eramix/application';
 import { notFound } from 'next/navigation';
 
 export default async function AdminOrderDetailPage({
@@ -25,6 +31,12 @@ export default async function AdminOrderDetailPage({
   if (!order) {
     notFound();
   }
+
+  const comments = await listOrderCommentsForActor(
+    { orderRepo: container.orders, commentRepo: container.orderComments },
+    { orderId: order.id, actorRole: actor.platformRole, actorCompanyIds: actor.companyIds },
+  );
+  const canPostInternal = hasPermission(actor.platformRole, 'order.transition');
 
   return (
     <main>
@@ -70,6 +82,16 @@ export default async function AdminOrderDetailPage({
         expectedVersion={order.version}
         allowedStatuses={ALLOWED_ORDER_TRANSITIONS[order.status]}
       />
+
+      <h2>Comments</h2>
+      <ul>
+        {comments.map((comment) => (
+          <li key={comment.id}>
+            [{comment.visibility}] {comment.createdAt.toISOString()}: {comment.body}
+          </li>
+        ))}
+      </ul>
+      <AddOrderCommentForm orderId={order.id} canPostInternal={canPostInternal} />
     </main>
   );
 }

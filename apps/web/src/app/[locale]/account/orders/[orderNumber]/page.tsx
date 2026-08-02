@@ -1,5 +1,6 @@
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
+import { AddOrderCommentForm } from '@/components/add-order-comment-form';
 import { AddLineForm } from './add-line-form';
 import { CancelOrderButton } from './cancel-order-button';
 import { RemoveLineButton } from './remove-line-button';
@@ -8,6 +9,7 @@ import {
   assertOrderCompanyAccess,
   CUSTOMER_CANCELLABLE_STATES,
   listCatalogProducts,
+  listOrderCommentsForActor,
 } from '@eramix/application';
 import { AccessDeniedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
@@ -67,6 +69,11 @@ export default async function OrderDetailPage({
         })
         .filter((product): product is NonNullable<typeof product> => product !== undefined)
     : [];
+
+  const comments = await listOrderCommentsForActor(
+    { orderRepo: container.orders, commentRepo: container.orderComments },
+    { orderId: order.id, actorRole: actor.platformRole, actorCompanyIds: actor.companyIds },
+  );
 
   return (
     <main>
@@ -137,6 +144,16 @@ export default async function OrderDetailPage({
       {canCustomerCancel && (
         <CancelOrderButton orderId={order.id} expectedVersion={order.version} />
       )}
+
+      <h2>Comments</h2>
+      <ul>
+        {comments.map((comment) => (
+          <li key={comment.id}>
+            {comment.createdAt.toISOString()}: {comment.body}
+          </li>
+        ))}
+      </ul>
+      <AddOrderCommentForm orderId={order.id} canPostInternal={false} />
     </main>
   );
 }
