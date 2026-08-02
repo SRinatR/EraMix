@@ -2,5 +2,12 @@
   "HomePage": {
     "title": "EraMix",
     "description": "Lokalizatsiyalangan ochiq marshrutlash bosqichma-bosqich amalga oshirilmoqda. Ushbu vaqtinchalik sahifa sborkani tekshirish uchun mavjud."
+  },
+  "Nav": {
+    "home": "Bosh sahifa",
+    "catalog": "Katalog",
+    "articles": "Maqolalar",
+    "faq": "Savol-javob",
+    "account": "Shaxsiy kabinet"
   }
 }

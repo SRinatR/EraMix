@@ -1180,6 +1180,7 @@ CLAUDE.md permits ("resolve non-blocking open questions conservatively only
 when the existing specification already permits a default"), not an
 invented requirement — documented inline at the new routes' definition
 site, not just here.
+
 - **Repository ports extended** (`packages/application/src/repositories.ts`):
   `CompanyRepository` gained `listAll()`/`updateStatus()`;
   `MembershipRepository` gained `findById()`/`listByCompany()`/
@@ -1232,6 +1233,49 @@ layout.tsx`).
   instance — `updateStatus`'s optimistic-concurrency behaviour against real
   Postgres error codes is unverified, same Pi-pending status as every other
   DB-backed surface.
+
+**Correction, same pass**: the commit above (`383ba86`) pushed with an
+unformatted `IMPLEMENTATION_ROADMAP.md` edit — `pnpm run format` was run
+_before_ the roadmap section was written, not after, so CI's `Source`
+job's `pnpm run format` step correctly failed
+([run 30749830691](https://github.com/SRinatR/EraMix/actions/runs/30749830691)).
+Root cause was a process ordering mistake in this session, not a tooling
+defect; fixed by reformatting and folding the fix into the next commit,
+and re-running the full `pnpm run check` sequence (including `format`)
+_after_ every documentation edit from this point on, not just after code
+edits.
+
+### Public site navigation + language switcher
+
+Closes a named gap: no shared header/nav or language switcher existed
+anywhere (`[locale]/layout.tsx` rendered `{children}` directly; only the
+home page had its own three ad hoc links). New
+`apps/web/src/components/site-header.tsx` (deliberately session-independent
+— no `getServerActor()`/cookie read, so `/[locale]` stays statically
+prerenderable; confirmed unchanged in `next build`'s output, still `●
+/[locale]` with `/en`/`/ru`/`/uz` SSG children) and
+`apps/web/src/components/language-switcher.tsx` (client component using
+`next-intl`'s `usePathname`/`useRouter().replace(pathname, {locale})` to
+swap only the locale segment, preserving the current path — never a
+navigation to `/`). Wired into `[locale]/layout.tsx`; the home page's
+now-redundant inline nav was removed. New `Nav` message namespace added to
+all three `apps/web/messages/*.json` locale files.
+TZ WEB-003's "О компании/Сертификаты/Инструкции/Контакты" pages are
+admin-authored `PAGE` content with editor-chosen slugs (Phase 3/6) — none
+are authored yet, so the header cannot link them without inventing a slug;
+documented inline as a follow-up once real pages exist (a content/IA
+decision, not implementable here without fabricating a URL).
+**Verified against the real dev server, not just `next build`** (this
+repo's own UI-verification convention): `curl http://localhost:9010/en`
+and `/ru` both show the header with correctly localized nav labels, the
+active locale rendered as a non-interactive `aria-current="true"` span, and
+the other two locales as switch buttons; every nav link carries the
+locale prefix (e.g. `/en/catalog`, `/ru/catalog`).
+`pnpm run check` (format, lint incl. `redocly lint`, typecheck, test,
+build) exit 0 — 248 unit tests unchanged (no new test file; this is a
+presentational layer with no business logic of its own to unit-test —
+the existing route-resolution/locale-detection tests already cover the
+underlying routing behaviour this reuses).
 
 ## Required task format for the CLI agent
 

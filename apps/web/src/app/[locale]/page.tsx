@@ -1,4 +1,3 @@
-import { Link } from '@/i18n/navigation';
 import { SUPPORTED_LOCALES, isSupportedLocale } from '@eramix/domain';
 import { useTranslations } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
@@ -32,19 +31,6 @@ function HomePageContent() {
     <main>
       <h1>{t('title')}</h1>
       <p>{t('description')}</p>
-      <nav>
-        <ul>
-          <li>
-            <Link href="/catalog">Catalog</Link>
-          </li>
-          <li>
-            <Link href="/articles">Articles</Link>
-          </li>
-          <li>
-            <Link href="/faq">FAQ</Link>
-          </li>
-        </ul>
-      </nav>
     </main>
   );
 }
