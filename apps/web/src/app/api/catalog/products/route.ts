@@ -21,25 +21,20 @@ export const GET = withApiHandler('catalog.products.search', async (request) => 
   }
   const categoryId = url.searchParams.get('categoryId') ?? undefined;
   const search = url.searchParams.get('search') ?? undefined;
+  const cursorParam = url.searchParams.get('cursor');
   const limitParam = url.searchParams.get('limit');
-  const offsetParam = url.searchParams.get('offset');
 
   const container = getContainer();
   const result = await listCatalogProducts(container.products, {
     ...(categoryId !== undefined ? { categoryId } : {}),
     ...(search !== undefined ? { search } : {}),
+    ...(cursorParam !== null ? { cursor: cursorParam } : {}),
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
   });
 
-  const items = result.items
+  const data = result.data
     .map((product) => productToDto(locale as LocaleCode, product))
     .filter((item): item is NonNullable<typeof item> => item !== undefined);
 
-  return NextResponse.json({
-    items,
-    total: result.total,
-    limit: result.limit,
-    offset: result.offset,
-  });
+  return NextResponse.json({ data, page: result.page });
 });

@@ -38,29 +38,27 @@ export const GET = withApiHandler('admin.companies.list', async (request) => {
   requirePermission(actor.platformRole, 'users.manage');
 
   const url = new URL(request.url);
+  const cursorParam = url.searchParams.get('cursor');
   const limitParam = url.searchParams.get('limit');
-  const offsetParam = url.searchParams.get('offset');
   const searchParam = url.searchParams.get('search');
   const sort = parseSort(url.searchParams.get('sort'));
   const container = getContainer();
-  const { items, total, limit, offset } = await container.companies.listAll({
+  const { data, page } = await container.companies.listAll({
+    ...(cursorParam !== null ? { cursor: cursorParam } : {}),
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
     ...(searchParam !== null ? { search: searchParam } : {}),
     ...(sort !== undefined ? { sort } : {}),
   });
 
   return NextResponse.json({
-    items: items.map((company) => ({
+    data: data.map((company) => ({
       id: company.id,
       legalName: company.legalName,
       status: company.status,
       metadata: company.metadata,
       version: company.version,
     })),
-    total,
-    limit,
-    offset,
+    page,
   });
 });
 

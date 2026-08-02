@@ -1,13 +1,22 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
   type AuditEventListFilter,
   type AuditEventRepository,
-  type Page,
+  type CursorPage,
+  type CursorPaginationInput,
 } from '@eramix/application';
 import type { AuditEvent } from '@eramix/domain';
 import type { AuditEvent as AuditEventRow } from '../generated/prisma/client.js';
 import { nullableJsonToRecord, nullToUndefined } from '../prisma-json.js';
 import type { PrismaClient } from '../prisma-client.js';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import { resolveClient } from '../transaction-context.js';
 
 export class PrismaAuditEventRepository implements AuditEventRepository {
@@ -30,31 +39,44 @@ export class PrismaAuditEventRepository implements AuditEventRepository {
   async listByEntity(
     entityType: string,
     entityId: string,
-    input: { limit?: number; offset?: number } & AuditEventListFilter = {},
-  ): Promise<Page<AuditEvent>> {
-    const { limit, offset } = clampPagination(input);
-    const where: Record<string, unknown> = { entityType, entityId };
+    input: CursorPaginationInput & AuditEventListFilter = {},
+  ): Promise<CursorPage<AuditEvent>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveAuditEventSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const filterWhere: Record<string, unknown> = { entityType, entityId };
     if (input.action !== undefined) {
-      where['action'] = input.action;
+      filterWhere['action'] = input.action;
     }
     if (input.actorUserId !== undefined) {
-      where['actorUserId'] = input.actorUserId;
+      filterWhere['actorUserId'] = input.actorUserId;
     }
     if (input.createdFrom !== undefined || input.createdTo !== undefined) {
-      where['createdAt'] = {
+      filterWhere['createdAt'] = {
         ...(input.createdFrom !== undefined ? { gte: input.createdFrom } : {}),
         ...(input.createdTo !== undefined ? { lte: input.createdTo } : {}),
       };
     }
-    const orderBy = {
-      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
-    };
+    const where = combineWithCursor(filterWhere, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.auditEvent.findMany({ where, orderBy, take: limit, skip: offset }),
-      client.auditEvent.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.auditEvent.findMany({ where, orderBy, take: limit + 1 });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
+  }
+}
+
+/** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
+function resolveAuditEventSort(sort: AuditEventListFilter['sort']): SortSpec {
+  switch (sort) {
+    case 'createdAt_asc':
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
+    case 'createdAt_desc':
+    default:
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
   }
 }
 

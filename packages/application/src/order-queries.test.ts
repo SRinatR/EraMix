@@ -1,7 +1,7 @@
 import { AccessDeniedError } from '@eramix/domain';
 import { describe, expect, it } from 'vitest';
 import { listOrdersForActor } from './order-queries.js';
-import type { Page } from './pagination.js';
+import type { CursorPage } from './pagination.js';
 import type { OrderRepository, OrderWithLines } from './repositories.js';
 
 function makeOrder(id: string, companyId: string): OrderWithLines {
@@ -24,13 +24,13 @@ class RecordingOrderRepository implements Pick<OrderRepository, 'listAll'> {
   public lastCompanyIdsFilter: readonly string[] | undefined;
   constructor(private readonly orders: readonly OrderWithLines[]) {}
 
-  listAll(input: { companyIds?: readonly string[] } = {}): Promise<Page<OrderWithLines>> {
+  listAll(input: { companyIds?: readonly string[] } = {}): Promise<CursorPage<OrderWithLines>> {
     this.lastCompanyIdsFilter = input.companyIds;
-    const items =
+    const data =
       input.companyIds === undefined
         ? this.orders
         : this.orders.filter((order) => input.companyIds?.includes(order.companyId));
-    return Promise.resolve({ items, total: items.length, limit: 20, offset: 0 });
+    return Promise.resolve({ data, page: { hasMore: false } });
   }
 }
 
@@ -47,7 +47,7 @@ describe('listOrdersForActor', () => {
     });
 
     expect(repo.lastCompanyIdsFilter).toEqual(['company-a']);
-    expect(result.items.map((o) => o.id)).toEqual(['1']);
+    expect(result.data.map((o) => o.id)).toEqual(['1']);
   });
 
   it('a multi-company customer sees every ACTIVE company by default (true cross-company page, never narrowed silently)', async () => {
@@ -63,7 +63,7 @@ describe('listOrdersForActor', () => {
     });
 
     expect(repo.lastCompanyIdsFilter).toEqual(['company-a', 'company-b']);
-    expect(result.items.map((o) => o.id).sort()).toEqual(['1', '2']);
+    expect(result.data.map((o) => o.id).sort()).toEqual(['1', '2']);
   });
 
   it('an explicit companyId filter narrows to exactly that company when it is one of the actor’s memberships', async () => {
@@ -79,7 +79,7 @@ describe('listOrdersForActor', () => {
     });
 
     expect(repo.lastCompanyIdsFilter).toEqual(['company-b']);
-    expect(result.items.map((o) => o.id)).toEqual(['2']);
+    expect(result.data.map((o) => o.id)).toEqual(['2']);
   });
 
   it('rejects an explicit companyId filter for a company the actor does not belong to (unauthorized company)', async () => {
@@ -113,7 +113,7 @@ describe('listOrdersForActor', () => {
       actorCompanyIds: [],
     });
     expect(repo.lastCompanyIdsFilter).toEqual([]);
-    expect(unfiltered.items).toEqual([]);
+    expect(unfiltered.data).toEqual([]);
   });
 
   it('a manager/admin (order.read.all) sees every company unrestricted, with no companyId filter', async () => {
@@ -128,7 +128,7 @@ describe('listOrdersForActor', () => {
     });
 
     expect(repo.lastCompanyIdsFilter).toBeUndefined();
-    expect(result.items).toHaveLength(2);
+    expect(result.data).toHaveLength(2);
   });
 
   it('a manager/admin may still filter to one company explicitly, without an ownership check', async () => {
@@ -144,7 +144,7 @@ describe('listOrdersForActor', () => {
     });
 
     expect(repo.lastCompanyIdsFilter).toEqual(['company-b']);
-    expect(result.items.map((o) => o.id)).toEqual(['2']);
+    expect(result.data.map((o) => o.id)).toEqual(['2']);
   });
 
   it('passes pagination/status/sort filters through untouched alongside the company scope', async () => {
@@ -163,14 +163,14 @@ describe('listOrdersForActor', () => {
       status: 'SUBMITTED',
       sort: 'createdAt_asc',
       limit: 10,
-      offset: 20,
+      cursor: 'opaque-cursor',
     });
 
     expect(capturedInput).toEqual({
       status: 'SUBMITTED',
       sort: 'createdAt_asc',
       limit: 10,
-      offset: 20,
+      cursor: 'opaque-cursor',
       companyIds: ['company-a'],
     });
   });

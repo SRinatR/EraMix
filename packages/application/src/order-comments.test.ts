@@ -12,7 +12,7 @@ import {
   listOrderCommentsForActor,
   visibleOrderComments,
 } from './order-comments.js';
-import type { Page } from './pagination.js';
+import type { CursorPage } from './pagination.js';
 import type {
   AuditEventRepository,
   OrderCommentRepository,
@@ -30,7 +30,7 @@ class SequentialIdGenerator {
 function fakeAuditRepo(): AuditEventRepository {
   return {
     record: (event) => Promise.resolve({ id: 'audit-1', createdAt: new Date(), ...event }),
-    listByEntity: () => Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 }),
+    listByEntity: () => Promise.resolve({ data: [], page: { hasMore: false } }),
   };
 }
 
@@ -46,11 +46,11 @@ class InMemoryOrderRepository implements OrderRepository {
   findByIdempotencyKey(): Promise<OrderWithLines | undefined> {
     return Promise.resolve(undefined);
   }
-  listByCompany(): Promise<Page<OrderWithLines>> {
-    return Promise.resolve({ items: [], total: 0, limit: 0, offset: 0 });
+  listByCompany(): Promise<CursorPage<OrderWithLines>> {
+    return Promise.resolve({ data: [], page: { hasMore: false } });
   }
-  listAll(): Promise<Page<OrderWithLines>> {
-    return Promise.resolve({ items: [], total: 0, limit: 0, offset: 0 });
+  listAll(): Promise<CursorPage<OrderWithLines>> {
+    return Promise.resolve({ data: [], page: { hasMore: false } });
   }
   create(): Promise<OrderWithLines> {
     throw new Error('not implemented');

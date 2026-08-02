@@ -1,11 +1,20 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
   type CategoryListFilter,
   type CategoryRepository,
   type CategoryTranslationEditPatch,
   type CategoryWithTranslations,
-  type Page,
+  type CursorPage,
+  type CursorPaginationInput,
 } from '@eramix/application';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -246,38 +255,40 @@ export class PrismaCategoryRepository implements CategoryRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } & CategoryListFilter = {},
-  ): Promise<Page<CategoryWithTranslations>> {
-    const { limit, offset } = clampPagination(input);
-    const where = buildCategoryWhere(input);
-    const orderBy = buildCategoryOrderBy(input.sort);
+    input: CursorPaginationInput & CategoryListFilter = {},
+  ): Promise<CursorPage<CategoryWithTranslations>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveCategorySort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const where = combineWithCursor(buildCategoryWhere(input), sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.category.findMany({
-        where,
-        include: WITH_TRANSLATIONS_AND_ROUTES,
-        orderBy,
-        take: limit,
-        skip: offset,
-      }),
-      client.category.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.category.findMany({
+      where,
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy,
+      take: limit + 1,
+    });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 }
 
 /** DB-005: an explicit allowlist, never a raw client-supplied sort field passed straight into Prisma's `orderBy`. */
-function buildCategoryOrderBy(sort: CategoryListFilter['sort']): Record<string, 'asc' | 'desc'> {
+function resolveCategorySort(sort: CategoryListFilter['sort']): SortSpec {
   switch (sort) {
     case 'createdAt_asc':
-      return { createdAt: 'asc' };
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
     case 'createdAt_desc':
-      return { createdAt: 'desc' };
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
     case 'sortOrder_desc':
-      return { sortOrder: 'desc' };
+      return { field: 'sortOrder', direction: 'desc', kind: 'number' };
     case 'sortOrder_asc':
     default:
-      return { sortOrder: 'asc' };
+      return { field: 'sortOrder', direction: 'asc', kind: 'number' };
   }
 }
 

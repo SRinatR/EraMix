@@ -2,24 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { parseAllowlistedParam, parsePaginationParams, parseStringParam } from './pagination';
 
 describe('parsePaginationParams', () => {
-  it('reads plain limit/offset with no prefix', () => {
-    expect(parsePaginationParams({ limit: '10', offset: '20' })).toEqual({
+  it('reads plain cursor/limit with no prefix', () => {
+    expect(parsePaginationParams({ cursor: 'abc', limit: '10' })).toEqual({
+      cursor: 'abc',
       limit: 10,
-      offset: 20,
     });
   });
 
-  it('reads prefixed limit/offset for a multi-list page', () => {
+  it('reads prefixed cursor/limit for a multi-list page', () => {
     expect(
       parsePaginationParams(
-        { categoriesLimit: '5', categoriesOffset: '15', productsLimit: '99' },
+        { categoriesCursor: 'abc', categoriesLimit: '5', productsLimit: '99' },
         'categories',
       ),
-    ).toEqual({ limit: 5, offset: 15 });
+    ).toEqual({ cursor: 'abc', limit: 5 });
   });
 
-  it('ignores a non-numeric value', () => {
+  it('ignores a non-numeric limit', () => {
     expect(parsePaginationParams({ limit: 'not-a-number' })).toEqual({});
+  });
+
+  it('ignores an empty cursor', () => {
+    expect(parsePaginationParams({ cursor: '' })).toEqual({});
   });
 });
 

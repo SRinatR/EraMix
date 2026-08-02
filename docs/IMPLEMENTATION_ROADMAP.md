@@ -1820,6 +1820,81 @@ shape. Root-caused from the real CI log (not guessed), fixed
 "listByEntity\|\.listAll(\|\.listByCompany(" packages apps --include=
 *.test.ts` now shows every remaining match already uses `.items`.
 
+## ADR-0017: cursor-based pagination migration — evidence
+
+Re-auditing the pagination work above against TZ §8/§8.1 (API-005) found a
+real, previously-undetected specification conflict: the TZ mandates
+cursor-based pagination with envelope `{data, page:{nextCursor, hasMore}}`,
+but every list endpoint built through the "implementation-completeness"
+pass above (and the pre-existing `GET /api/catalog/products`) used
+offset-based pagination (`{items, total, limit, offset}`), never recorded
+as a deviation. Product Owner decision: migrate to cursor-based pagination
+now (see [ADR-0017](adr/0017-cursor-based-pagination.md) for the full
+decision record).
+
+- **Core primitive**: `packages/application/src/pagination.ts` rewritten —
+  `CursorPage<T> = {data, page:{nextCursor?, hasMore}}`, `clampLimit`
+  (1–100, default 20), `encodeCursor`/`decodeCursor` (opaque
+  base64url-encoded `{v, id}`, platform-neutral via `btoa`/`TextEncoder`
+  with local ambient declarations, matching `packages/domain`'s
+  zero-framework-dependency convention). `clampPagination`/`Page<T>`/
+  `offset` removed outright, not kept as a deprecated alias.
+- **Shared Prisma helper**: new `packages/infrastructure/src/repositories/
+cursor-query.ts` — `combineWithCursor` (always `AND: [filterWhere,
+cursorWhere]`, never a naive spread, so a filter's own `OR`, e.g.
+  product SKU/name search, can never collide with the cursor's `OR`),
+  `buildCursorOrderBy`, `cursorValueOf`. Established once against
+  `category-repository.ts` as the reference pattern, then replicated to
+  `product-repository.ts`, `content-repository.ts`, `user-repository.ts`,
+  `company-repository.ts`, `membership-repository.ts`,
+  `order-repository.ts`, `audit-event-repository.ts` — all 8 repositories
+  with a paginated `listAll`/`listByCompany`/`listByEntity`/
+  `listPublished`. `ProductRepository.countPublished` removed (no `total`
+  to compute under keyset pagination).
+- **Delivery layer**: `apps/web/src/server/pagination.ts`'s
+  `parsePaginationParams` now reads `?cursor=&limit=` (or prefixed
+  `?<prefix>Cursor=&<prefix>Limit=` for a two-list page) instead of
+  `?limit=&offset=`; the cursor is never decoded at this layer, only
+  forwarded opaquely. `PaginationControls` redesigned: a "Next" link
+  (built from `page.nextCursor`, shown only when `page.hasMore`) plus a
+  "First page" link back to the uncursored start once the caller has
+  scrolled forward — no `prevCursor` from the server, consistent with the
+  TZ's forward-only envelope; "First page" is derived purely from whether
+  the current request already carried a `cursor`.
+- **Routes + UI updated**: all 6 API routes with a paginated collection
+  response (`GET /api/catalog/products`, `GET /api/orders`,
+  `GET /api/admin/users`, `GET /api/admin/companies`,
+  `GET /api/admin/companies/{companyId}/memberships`,
+  `GET /api/admin/audit`) and every Server Component list page
+  (`/catalog/[slug]`, `/account/orders`, `/admin/orders`, `/admin/users`,
+  `/admin/companies`, `/admin/companies/[companyId]/memberships`,
+  `/admin/content`, `/admin/catalog` — the last one has two independently
+  paginated sections, each preserving the sibling section's cursor and own
+  filters via prefixed `extraParams`, a pre-existing bug where the
+  category list's Next link previously dropped its own search/status/sort
+  filters is also fixed here).
+- **OpenAPI**: new reusable `components.parameters.CursorParam`/
+  `LimitParam` and `components.schemas.CursorPageInfo`
+  (`{nextCursor?, hasMore}`); all 6 paginated collection endpoints updated
+  to the `{data, page}` envelope and `cursor`/`limit` query parameters.
+  `redocly lint openapi/openapi.yaml` passes.
+- **Tests**: `packages/application/src/pagination.test.ts` rewritten for
+  the new primitive; every in-memory repository fake across
+  `authoring.test.ts`, `order-comments.test.ts`, `order-lifecycle.test.ts`,
+  `order-queries.test.ts`, `product-assets.test.ts`, `publication.test.ts`,
+  `route-resolution.test.ts`, `sitemap.test.ts`, `slug-change.test.ts`,
+  `translation-edit.test.ts` updated to the `{data, page}` shape;
+  `packages/infrastructure/src/repositories/postgres.integration.test.ts`'s
+  two `AuditEventRepository.listByEntity` assertions (`.items` from the
+  immediately preceding audit-events slice) updated to `.data`.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy): `pnpm -r --if-present run typecheck` — 7/7 workspace
+  projects clean; `pnpm -r --if-present run test` — 297/297 tests passing
+  (`packages/domain` 86, `packages/ui` 1, `packages/application` 137,
+  `packages/contracts` 1, `packages/infrastructure` 28, `apps/web` 38,
+  `apps/worker` 6); `redocly lint` clean. Production build and
+  Postgres-backed `test:integration` verified by CI only.
+
 ## Required task format for the CLI agent
 
 For every task, report:

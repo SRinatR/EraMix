@@ -38,13 +38,9 @@ export default async function AdminUsersPage({
   const resolved = await searchParams;
   const search = parseStringParam(resolved, 'search');
   const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
-  const {
-    items: users,
-    total,
-    limit,
-    offset,
-  } = await container.users.listAll({
-    ...parsePaginationParams(resolved),
+  const pagination = parsePaginationParams(resolved);
+  const { data: users, page } = await container.users.listAll({
+    ...pagination,
     ...(search !== undefined ? { search } : {}),
     ...(sort !== undefined ? { sort } : {}),
   });
@@ -101,9 +97,8 @@ export default async function AdminUsersPage({
       )}
       <PaginationControls
         basePath="/admin/users"
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={{
           ...(search !== undefined ? { search } : {}),
           ...(sort !== undefined ? { sort } : {}),

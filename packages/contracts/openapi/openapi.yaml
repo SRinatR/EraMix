@@ -194,14 +194,8 @@ paths:
           in: query
           required: false
           schema: { type: string }
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated published products.
@@ -209,15 +203,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Product'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
   /api/catalog/products/{publicId}:
     get:
       operationId: getCatalogProduct
@@ -357,14 +350,8 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_desc }
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated orders.
@@ -372,15 +359,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Order'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -661,14 +647,8 @@ paths:
             type: string
             enum: [createdAt_asc, createdAt_desc, displayName_asc, displayName_desc]
             default: createdAt_asc
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated users.
@@ -676,15 +656,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/AdminUser'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -751,14 +730,8 @@ paths:
             type: string
             enum: [createdAt_asc, createdAt_desc, legalName_asc, legalName_desc]
             default: createdAt_asc
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated companies.
@@ -766,15 +739,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Company'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -848,14 +820,8 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_asc }
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated memberships.
@@ -863,15 +829,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Membership'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1840,14 +1805,8 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_desc }
-        - name: limit
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: offset
-          in: query
-          required: false
-          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: Paginated audit events for the given entity.
@@ -1855,15 +1814,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items, total, limit, offset]
+                required: [data, page]
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/AuditEvent'
-                  total: { type: integer }
-                  limit: { type: integer }
-                  offset: { type: integer }
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1947,6 +1905,20 @@ components:
       description: >-
         Secure, HttpOnly, SameSite session cookie set by /auth/callback.
         Browser JavaScript never has access to the underlying OIDC tokens.
+  parameters:
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque pagination cursor from a previous response's
+        `page.nextCursor` (ADR-0017). Never hand-constructed.
+      schema: { type: string }
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
   responses:
     Unauthorized:
       description: No valid session (AUTH_REQUIRED).
@@ -1988,6 +1960,18 @@ components:
       type: string
       description: Platform-wide staff/customer role (ADR-0014, TZ §3.1 RBAC matrix).
       enum: [CUSTOMER, MANAGER, CONTENT_EDITOR, ADMIN, AUDITOR]
+    CursorPageInfo:
+      type: object
+      description: >-
+        ADR-0017/API-005: forward-only keyset pagination. `nextCursor` is an
+        opaque, base64url-encoded token — clients must never decode or
+        construct it, only echo it back as the `cursor` query parameter of
+        the next request. There is no `prevCursor` and no `total`; a list's
+        total size is not computed.
+      required: [hasMore]
+      properties:
+        nextCursor: { type: string }
+        hasMore: { type: boolean }
     Session:
       type: object
       required: [userId, email, displayName, platformRole, companyIds]

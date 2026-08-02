@@ -125,7 +125,7 @@ describe('PostgreSQL integration', () => {
     ).rejects.toThrow('forced rollback');
 
     const events = await auditRepo().listByEntity('IntegrationTest', entityId);
-    expect(events.items).toHaveLength(0);
+    expect(events.data).toHaveLength(0);
   });
 
   it('PrismaUnitOfWork commits all writes when the transaction body succeeds', async () => {
@@ -141,6 +141,6 @@ describe('PostgreSQL integration', () => {
     });
 
     const events = await auditRepo().listByEntity('IntegrationTest', entityId);
-    expect(events.items).toHaveLength(1);
+    expect(events.data).toHaveLength(1);
   });
 });

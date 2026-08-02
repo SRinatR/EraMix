@@ -1,10 +1,19 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
+  type CursorPage,
+  type CursorPaginationInput,
   type OrderListFilter,
   type OrderRepository,
-  type Page,
   type OrderWithLines,
 } from '@eramix/application';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import {
   IdempotencyConflictError,
   ResourceNotFoundError,
@@ -105,37 +114,38 @@ export class PrismaOrderRepository implements OrderRepository {
 
   async listByCompany(
     companyId: string,
-    input: { limit?: number; offset?: number } & OrderListFilter = {},
-  ): Promise<Page<OrderWithLines>> {
+    input: CursorPaginationInput & OrderListFilter = {},
+  ): Promise<CursorPage<OrderWithLines>> {
     return this.listWhere({ companyId, ...buildOrderFilterWhere(input) }, input);
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } & OrderListFilter = {},
-  ): Promise<Page<OrderWithLines>> {
+    input: CursorPaginationInput & OrderListFilter = {},
+  ): Promise<CursorPage<OrderWithLines>> {
     return this.listWhere(buildOrderFilterWhere(input), input);
   }
 
   private async listWhere(
-    where: Record<string, unknown>,
-    input: { limit?: number; offset?: number; sort?: OrderListFilter['sort'] },
-  ): Promise<Page<OrderWithLines>> {
-    const { limit, offset } = clampPagination(input);
-    const orderBy = {
-      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
-    };
+    filterWhere: Record<string, unknown>,
+    input: CursorPaginationInput & { sort?: OrderListFilter['sort'] },
+  ): Promise<CursorPage<OrderWithLines>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveOrderSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const where = combineWithCursor(filterWhere, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.order.findMany({
-        where,
-        include: WITH_LINES_AND_HISTORY,
-        orderBy,
-        take: limit,
-        skip: offset,
-      }),
-      client.order.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.order.findMany({
+      where,
+      include: WITH_LINES_AND_HISTORY,
+      orderBy,
+      take: limit + 1,
+    });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 
   async addLine(
@@ -243,6 +253,17 @@ export class PrismaOrderRepository implements OrderRepository {
       throw new ResourceNotFoundError(`Order ${orderId} not found after update.`, { orderId });
     }
     return updated;
+  }
+}
+
+/** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
+function resolveOrderSort(sort: OrderListFilter['sort']): SortSpec {
+  switch (sort) {
+    case 'createdAt_asc':
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
+    case 'createdAt_desc':
+    default:
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
   }
 }
 

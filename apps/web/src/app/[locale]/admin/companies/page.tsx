@@ -40,13 +40,9 @@ export default async function AdminCompaniesPage({
   const resolved = await searchParams;
   const search = parseStringParam(resolved, 'search');
   const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
-  const {
-    items: companies,
-    total,
-    limit,
-    offset,
-  } = await container.companies.listAll({
-    ...parsePaginationParams(resolved),
+  const pagination = parsePaginationParams(resolved);
+  const { data: companies, page } = await container.companies.listAll({
+    ...pagination,
     ...(search !== undefined ? { search } : {}),
     ...(sort !== undefined ? { sort } : {}),
   });
@@ -103,9 +99,8 @@ export default async function AdminCompaniesPage({
       )}
       <PaginationControls
         basePath="/admin/companies"
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={{
           ...(search !== undefined ? { search } : {}),
           ...(sort !== undefined ? { sort } : {}),

@@ -1,11 +1,20 @@
 import {
-  clampPagination,
-  type Page,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
+  type CursorPage,
+  type CursorPaginationInput,
   type ProductListFilter,
   type ProductRepository,
   type ProductTranslationEditPatch,
   type ProductWithTranslations,
 } from '@eramix/application';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -187,62 +196,68 @@ export class PrismaProductRepository implements ProductRepository {
     return updated;
   }
 
-  async listPublished(input: {
-    categoryId?: string;
-    search?: string;
-    limit: number;
-    offset: number;
-  }): Promise<readonly ProductWithTranslations[]> {
+  /** Public catalog search (ADR-0017/API-005) — cursor-paginated, PUBLISHED only. */
+  async listPublished(
+    input: { categoryId?: string; search?: string } & CursorPaginationInput,
+  ): Promise<CursorPage<ProductWithTranslations>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = PUBLISHED_SORT;
+    const decoded = decodeCursor(input.cursor);
+    const where = combineWithCursor(buildPublishedWhere(input), sortSpec, decoded);
     const rows = await resolveClient(this.prisma).product.findMany({
-      where: buildPublishedWhere(input),
+      where,
       include: WITH_TRANSLATIONS,
-      orderBy: { createdAt: 'desc' },
-      take: input.limit,
-      skip: input.offset,
+      orderBy: buildCursorOrderBy(sortSpec),
+      take: limit + 1,
     });
-    return rows.map(toDomain);
-  }
-
-  async countPublished(input: { categoryId?: string; search?: string }): Promise<number> {
-    return resolveClient(this.prisma).product.count({ where: buildPublishedWhere(input) });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } & ProductListFilter = {},
-  ): Promise<Page<ProductWithTranslations>> {
-    const { limit, offset } = clampPagination(input);
-    const where = {
+    input: CursorPaginationInput & ProductListFilter = {},
+  ): Promise<CursorPage<ProductWithTranslations>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveProductSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const filterWhere = {
       ...buildSearchWhere(input),
       ...(input.status !== undefined ? { status: input.status } : {}),
     };
-    const orderBy = buildProductOrderBy(input.sort);
+    const where = combineWithCursor(filterWhere, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.product.findMany({
-        where,
-        include: WITH_TRANSLATIONS,
-        orderBy,
-        take: limit,
-        skip: offset,
-      }),
-      client.product.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.product.findMany({
+      where,
+      include: WITH_TRANSLATIONS,
+      orderBy,
+      take: limit + 1,
+    });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 }
 
+const PUBLISHED_SORT: SortSpec = { field: 'createdAt', direction: 'desc', kind: 'date' };
+
 /** DB-005: an explicit allowlist, never a raw client-supplied sort field passed straight into Prisma's `orderBy`. */
-function buildProductOrderBy(sort: ProductListFilter['sort']): Record<string, 'asc' | 'desc'> {
+function resolveProductSort(sort: ProductListFilter['sort']): SortSpec {
   switch (sort) {
     case 'sku_asc':
-      return { sku: 'asc' };
+      return { field: 'sku', direction: 'asc', kind: 'string' };
     case 'sku_desc':
-      return { sku: 'desc' };
+      return { field: 'sku', direction: 'desc', kind: 'string' };
     case 'createdAt_asc':
-      return { createdAt: 'asc' };
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
     case 'createdAt_desc':
     default:
-      return { createdAt: 'desc' };
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
   }
 }
 

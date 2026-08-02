@@ -1,22 +1,23 @@
 /**
- * Parses `?limit=&offset=` (or, on a page with more than one independently
- * paginated list, `?<prefix>Limit=&<prefix>Offset=`) from a Next.js Server
- * Component's `searchParams` into the shape `clampPagination`
- * (packages/application) expects.
+ * Parses `?cursor=&limit=` (or, on a page with more than one independently
+ * paginated list, `?<prefix>Cursor=&<prefix>Limit=`) from a Next.js Server
+ * Component's `searchParams` into the shape `CursorPaginationInput`
+ * (packages/application, ADR-0017) expects. The cursor is opaque and never
+ * decoded here — an invalid/tampered cursor is handled by `decodeCursor`
+ * inside the repository, never by delivery-layer parsing.
  */
 export function parsePaginationParams(
   searchParams: Record<string, string | string[] | undefined>,
   prefix = '',
-): { limit?: number; offset?: number } {
+): { cursor?: string; limit?: number } {
+  const cursorKey = prefix ? `${prefix}Cursor` : 'cursor';
   const limitKey = prefix ? `${prefix}Limit` : 'limit';
-  const offsetKey = prefix ? `${prefix}Offset` : 'offset';
+  const cursorRaw = searchParams[cursorKey];
   const limitRaw = searchParams[limitKey];
-  const offsetRaw = searchParams[offsetKey];
   const limit = typeof limitRaw === 'string' ? Number(limitRaw) : undefined;
-  const offset = typeof offsetRaw === 'string' ? Number(offsetRaw) : undefined;
   return {
+    ...(typeof cursorRaw === 'string' && cursorRaw.length > 0 ? { cursor: cursorRaw } : {}),
     ...(limit !== undefined && Number.isFinite(limit) ? { limit } : {}),
-    ...(offset !== undefined && Number.isFinite(offset) ? { offset } : {}),
   };
 }
 

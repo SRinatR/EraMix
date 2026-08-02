@@ -78,7 +78,7 @@ export default async function AccountOrdersPage({
     }
     throw error;
   }
-  const { items: orders, total, limit, offset } = orderPage;
+  const { data: orders, page } = orderPage;
   const companies = await Promise.all(
     actor.companyIds.map((id) => container.companies.findById(id)),
   );
@@ -165,9 +165,8 @@ export default async function AccountOrdersPage({
       )}
       <PaginationControls
         basePath="/account/orders"
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={{
           ...(status !== undefined ? { status } : {}),
           ...(search !== undefined ? { search } : {}),

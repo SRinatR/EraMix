@@ -110,8 +110,12 @@ function fakeRepositories() {
       listPublished: () => Promise.resolve([publishedCategory]),
     },
     product: {
-      listPublished: (input: { limit: number; offset: number }) =>
-        Promise.resolve(input.offset === 0 ? [publishedProduct] : []),
+      listPublished: (input: { cursor?: string }) =>
+        Promise.resolve(
+          input.cursor === undefined
+            ? { data: [publishedProduct], page: { hasMore: false } }
+            : { data: [], page: { hasMore: false } },
+        ),
     },
   } as unknown as Parameters<typeof buildSitemapEntries>[0];
 }

@@ -55,7 +55,7 @@ export default async function OrderDetailPage({
   const canEditDraft = actor.companyIds.includes(order.companyId) && order.status === 'DRAFT';
 
   const addLineProducts = canEditDraft
-    ? (await listCatalogProducts(container.products, { limit: 100 })).items
+    ? (await listCatalogProducts(container.products, { limit: 100 })).data
         .map((product) => {
           const translation = product.translations.find((t) => t.locale === (locale as LocaleCode));
           return translation

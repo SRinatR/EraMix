@@ -26,20 +26,20 @@ export const GET = withApiHandler('admin.users.list', async (request) => {
   requirePermission(actor.platformRole, 'users.manage');
 
   const url = new URL(request.url);
+  const cursorParam = url.searchParams.get('cursor');
   const limitParam = url.searchParams.get('limit');
-  const offsetParam = url.searchParams.get('offset');
   const searchParam = url.searchParams.get('search');
   const sort = parseSort(url.searchParams.get('sort'));
   const container = getContainer();
-  const { items, total, limit, offset } = await container.users.listAll({
+  const { data, page } = await container.users.listAll({
+    ...(cursorParam !== null ? { cursor: cursorParam } : {}),
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
     ...(searchParam !== null ? { search: searchParam } : {}),
     ...(sort !== undefined ? { sort } : {}),
   });
 
   return NextResponse.json({
-    items: items.map((user) => ({
+    data: data.map((user) => ({
       id: user.id,
       email: user.email,
       displayName: user.displayName,
@@ -47,8 +47,6 @@ export const GET = withApiHandler('admin.users.list', async (request) => {
       status: user.status,
       version: user.version,
     })),
-    total,
-    limit,
-    offset,
+    page,
   });
 });

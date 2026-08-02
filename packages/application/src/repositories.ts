@@ -24,7 +24,7 @@ import type {
   PublicationStatus,
   User,
 } from '@eramix/domain';
-import type { Page, PaginationInput } from './pagination.js';
+import type { CursorPage, CursorPaginationInput } from './pagination.js';
 
 /**
  * Every `update*` method enforces optimistic concurrency: the caller passes
@@ -48,7 +48,7 @@ export interface UserRepository {
   findByIssuerAndSubject(issuer: string, subject: string): Promise<User | undefined>;
   create(input: Omit<User, 'version' | 'createdAt' | 'updatedAt'>): Promise<User>;
   /** Admin `users.manage` listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
-  listAll(input?: PaginationInput & UserListFilter): Promise<Page<User>>;
+  listAll(input?: CursorPaginationInput & UserListFilter): Promise<CursorPage<User>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updatePlatformRole(
     id: string,
@@ -66,7 +66,7 @@ export interface CompanyRepository {
   findById(id: string): Promise<Company | undefined>;
   create(input: Omit<Company, 'version' | 'createdAt' | 'updatedAt'>): Promise<Company>;
   /** Admin `users.manage` listing (TZ's Identity & Access module owns company data; ADM-002/DB-005: bounded, paginated, filterable, sortable). */
-  listAll(input?: PaginationInput & CompanyListFilter): Promise<Page<Company>>;
+  listAll(input?: CursorPaginationInput & CompanyListFilter): Promise<CursorPage<Company>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(id: string, expectedVersion: number, status: Company['status']): Promise<Company>;
 }
@@ -82,8 +82,8 @@ export interface MembershipRepository {
   /** ADM-002/DB-005: bounded, paginated, sortable. */
   listByCompany(
     companyId: string,
-    input?: PaginationInput & MembershipListFilter,
-  ): Promise<Page<Membership>>;
+    input?: CursorPaginationInput & MembershipListFilter,
+  ): Promise<CursorPage<Membership>>;
   create(input: Omit<Membership, 'version' | 'createdAt' | 'updatedAt'>): Promise<Membership>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
@@ -151,7 +151,9 @@ export interface CategoryRepository {
   listPublished(): Promise<readonly CategoryWithTranslations[]>;
   listByParent(parentId: string | undefined): Promise<readonly CategoryWithTranslations[]>;
   /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
-  listAll(input?: PaginationInput & CategoryListFilter): Promise<Page<CategoryWithTranslations>>;
+  listAll(
+    input?: CursorPaginationInput & CategoryListFilter,
+  ): Promise<CursorPage<CategoryWithTranslations>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
     id: string,
@@ -207,16 +209,14 @@ export interface ProductRepository {
     expectedVersion: number,
     status: Product['status'],
   ): Promise<ProductWithTranslations>;
-  /** PUBLISHED products only, optionally scoped to a category — catalog browse/search and sitemap generation. */
-  listPublished(input: {
-    categoryId?: string;
-    search?: string;
-    limit: number;
-    offset: number;
-  }): Promise<readonly ProductWithTranslations[]>;
-  countPublished(input: { categoryId?: string; search?: string }): Promise<number>;
+  /** PUBLISHED products only, optionally scoped to a category — catalog browse/search and sitemap generation (ADR-0017: cursor-paginated). */
+  listPublished(
+    input: { categoryId?: string; search?: string } & CursorPaginationInput,
+  ): Promise<CursorPage<ProductWithTranslations>>;
   /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
-  listAll(input?: PaginationInput & ProductListFilter): Promise<Page<ProductWithTranslations>>;
+  listAll(
+    input?: CursorPaginationInput & ProductListFilter,
+  ): Promise<CursorPage<ProductWithTranslations>>;
 }
 
 /** Patch shape for editing an existing asset's editorial metadata (never storageKey/checksum/scan fields — those are set once at upload time and are otherwise immutable). */
@@ -318,7 +318,9 @@ export interface ContentRepository {
   /** PUBLISHED content only, scoped to a type — public listing (e.g. FAQ, article index) and sitemap generation. */
   listPublished(type: Content['type']): Promise<readonly ContentWithTranslations[]>;
   /** All statuses (DRAFT/PUBLISHED/ARCHIVED), all types — admin content listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
-  listAll(input?: PaginationInput & ContentListFilter): Promise<Page<ContentWithTranslations>>;
+  listAll(
+    input?: CursorPaginationInput & ContentListFilter,
+  ): Promise<CursorPage<ContentWithTranslations>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
     id: string,
@@ -357,10 +359,10 @@ export interface OrderRepository {
   /** ACC-003 ("фильтр по статусу/дате, сортировку, пагинацию") / ADM-002 / DB-005: bounded, paginated, filterable, sortable. */
   listByCompany(
     companyId: string,
-    input?: PaginationInput & OrderListFilter,
-  ): Promise<Page<OrderWithLines>>;
+    input?: CursorPaginationInput & OrderListFilter,
+  ): Promise<CursorPage<OrderWithLines>>;
   /** Manager/admin queue (`order.read.all`), or — when `companyIds` is set — a true cross-company customer view. Same ACC-003/ADM-002/DB-005 pagination/filter/sort contract. */
-  listAll(input?: PaginationInput & OrderListFilter): Promise<Page<OrderWithLines>>;
+  listAll(input?: CursorPaginationInput & OrderListFilter): Promise<CursorPage<OrderWithLines>>;
   create(
     order: Omit<Order, 'version' | 'createdAt' | 'updatedAt'>,
     lines: readonly Omit<OrderLine, 'id'>[],
@@ -410,8 +412,8 @@ export interface AuditEventRepository {
   listByEntity(
     entityType: string,
     entityId: string,
-    input?: PaginationInput & AuditEventListFilter,
-  ): Promise<Page<AuditEvent>>;
+    input?: CursorPaginationInput & AuditEventListFilter,
+  ): Promise<CursorPage<AuditEvent>>;
 }
 
 export interface OutboxMessageRepository {

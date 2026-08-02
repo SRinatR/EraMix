@@ -50,8 +50,8 @@ export default async function AdminCompanyMembershipsPage({
     // than paginated, same rationale as the category pickers elsewhere.
     container.users.listAll({ limit: 200 }),
   ]);
-  const { items: memberships, total, limit, offset } = membershipPage;
-  const users = userPage.items;
+  const { data: memberships, page } = membershipPage;
+  const users = userPage.data;
   const usersById = new Map(users.map((user) => [user.id, user]));
   const existingMemberUserIds = new Set(memberships.map((membership) => membership.userId));
   const eligibleUsers = users.filter((user) => !existingMemberUserIds.has(user.id));
@@ -106,9 +106,8 @@ export default async function AdminCompanyMembershipsPage({
       )}
       <PaginationControls
         basePath={`/admin/companies/${companyId}/memberships`}
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={sort !== undefined ? { sort } : {}}
       />
 

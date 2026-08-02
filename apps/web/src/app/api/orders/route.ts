@@ -37,8 +37,8 @@ const createOrderSchema = z.object({
 
 /** ACC-003 ("фильтр по статусу/дате, сортировку, пагинацию"). */
 function parseOrderListQuery(url: URL): {
+  cursor?: string;
   limit?: number;
-  offset?: number;
 } & OrderListFilter {
   const statusParam = url.searchParams.get('status');
   const status =
@@ -49,16 +49,16 @@ function parseOrderListQuery(url: URL): {
   const createdToParam = url.searchParams.get('createdTo');
   const sortParam = url.searchParams.get('sort');
   const searchParam = url.searchParams.get('search');
+  const cursorParam = url.searchParams.get('cursor');
   const limitParam = url.searchParams.get('limit');
-  const offsetParam = url.searchParams.get('offset');
   return {
     ...(status !== undefined ? { status } : {}),
     ...(createdFromParam !== null ? { createdFrom: new Date(createdFromParam) } : {}),
     ...(createdToParam !== null ? { createdTo: new Date(createdToParam) } : {}),
     ...(sortParam === 'createdAt_asc' || sortParam === 'createdAt_desc' ? { sort: sortParam } : {}),
     ...(searchParam !== null ? { search: searchParam } : {}),
+    ...(cursorParam !== null ? { cursor: cursorParam } : {}),
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-    ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
   };
 }
 
@@ -69,13 +69,13 @@ export const GET = withApiHandler('orders.list', async (request) => {
   const query = parseOrderListQuery(url);
   const companyIdParam = url.searchParams.get('companyId');
 
-  const { items, total, limit, offset } = await listOrdersForActor(container.orders, {
+  const { data, page } = await listOrdersForActor(container.orders, {
     ...query,
     actorRole: actor.platformRole,
     actorCompanyIds: actor.companyIds,
     ...(companyIdParam !== null ? { companyId: companyIdParam } : {}),
   });
-  return NextResponse.json({ items: items.map(orderToDto), total, limit, offset });
+  return NextResponse.json({ data: data.map(orderToDto), page });
 });
 
 export const POST = withApiHandler('orders.create', async (request, traceId) => {

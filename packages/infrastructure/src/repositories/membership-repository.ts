@@ -1,12 +1,21 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
+  type CursorPage,
+  type CursorPaginationInput,
   type MembershipListFilter,
   type MembershipRepository,
-  type Page,
 } from '@eramix/application';
 import { ResourceNotFoundError, type Membership } from '@eramix/domain';
 import type { Membership as MembershipRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -32,23 +41,20 @@ export class PrismaMembershipRepository implements MembershipRepository {
 
   async listByCompany(
     companyId: string,
-    input: { limit?: number; offset?: number } & MembershipListFilter = {},
-  ): Promise<Page<Membership>> {
-    const { limit, offset } = clampPagination(input);
-    const orderBy = {
-      createdAt: input.sort === 'createdAt_desc' ? ('desc' as const) : ('asc' as const),
-    };
+    input: CursorPaginationInput & MembershipListFilter = {},
+  ): Promise<CursorPage<Membership>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveMembershipSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const where = combineWithCursor({ companyId }, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.membership.findMany({
-        where: { companyId },
-        orderBy,
-        take: limit,
-        skip: offset,
-      }),
-      client.membership.count({ where: { companyId } }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.membership.findMany({ where, orderBy, take: limit + 1 });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 
   async create(
@@ -86,6 +92,17 @@ export class PrismaMembershipRepository implements MembershipRepository {
       throw new ResourceNotFoundError(`Membership ${id} not found after update.`, { id });
     }
     return toDomain(updated);
+  }
+}
+
+/** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
+function resolveMembershipSort(sort: MembershipListFilter['sort']): SortSpec {
+  switch (sort) {
+    case 'createdAt_desc':
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
+    case 'createdAt_asc':
+    default:
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
   }
 }
 

@@ -1,5 +1,5 @@
 import type { ContentType } from '@eramix/domain';
-import { clampPagination } from './pagination.js';
+import type { CursorPage, CursorPaginationInput } from './pagination.js';
 import type {
   CategoryRepository,
   CategoryWithTranslations,
@@ -19,28 +19,12 @@ export async function listCatalogCategories(
     : categoryRepo.listByParent(parentId);
 }
 
-export interface ProductSearchResult {
-  readonly items: readonly ProductWithTranslations[];
-  readonly total: number;
-  readonly limit: number;
-  readonly offset: number;
-}
-
-/** Public catalog browse/search — only PUBLISHED products are ever exposed. */
+/** Public catalog browse/search — only PUBLISHED products are ever exposed. Cursor-paginated (ADR-0017/API-005). */
 export async function listCatalogProducts(
   productRepo: ProductRepository,
-  input: { categoryId?: string; search?: string; limit?: number; offset?: number },
-): Promise<ProductSearchResult> {
-  const { limit, offset } = clampPagination(input);
-  const query = {
-    ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-    ...(input.search !== undefined ? { search: input.search } : {}),
-  };
-  const [items, total] = await Promise.all([
-    productRepo.listPublished({ ...query, limit, offset }),
-    productRepo.countPublished(query),
-  ]);
-  return { items, total, limit, offset };
+  input: { categoryId?: string; search?: string } & CursorPaginationInput,
+): Promise<CursorPage<ProductWithTranslations>> {
+  return productRepo.listPublished(input);
 }
 
 /** Public content listing (article index, FAQ list) — only PUBLISHED content. */

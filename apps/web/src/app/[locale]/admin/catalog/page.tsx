@@ -74,32 +74,42 @@ export default async function AdminCatalogPage({
     'products',
   );
 
+  const categoriesPagination = parsePaginationParams(resolvedSearchParams, 'categories');
+  const productsPagination = parsePaginationParams(resolvedSearchParams, 'products');
   const [categoryPage, productPage] = await Promise.all([
     container.categories.listAll({
-      ...parsePaginationParams(resolvedSearchParams, 'categories'),
+      ...categoriesPagination,
       ...(categorySearch !== undefined ? { search: categorySearch } : {}),
       ...(categoryStatus !== undefined ? { status: categoryStatus } : {}),
       ...(categorySort !== undefined ? { sort: categorySort } : {}),
     }),
     container.products.listAll({
-      ...parsePaginationParams(resolvedSearchParams, 'products'),
+      ...productsPagination,
       ...(productSearch !== undefined ? { search: productSearch } : {}),
       ...(productStatus !== undefined ? { status: productStatus } : {}),
       ...(productSort !== undefined ? { sort: productSort } : {}),
     }),
   ]);
-  const { items: categories } = categoryPage;
-  const { items: products } = productPage;
+  const { data: categories, page: categoryPageInfo } = categoryPage;
+  const { data: products, page: productPageInfo } = productPage;
   const categoryExtraParams = {
-    productsLimit: String(productPage.limit),
-    productsOffset: String(productPage.offset),
+    ...(categorySearch !== undefined ? { categoriesSearch: categorySearch } : {}),
+    ...(categoryStatus !== undefined ? { categoriesStatus: categoryStatus } : {}),
+    ...(categorySort !== undefined ? { categoriesSort: categorySort } : {}),
+    ...(productsPagination.cursor !== undefined
+      ? { productsCursor: productsPagination.cursor }
+      : {}),
     ...(productSearch !== undefined ? { productsSearch: productSearch } : {}),
     ...(productStatus !== undefined ? { productsStatus: productStatus } : {}),
     ...(productSort !== undefined ? { productsSort: productSort } : {}),
   };
   const productExtraParams = {
-    categoriesLimit: String(categoryPage.limit),
-    categoriesOffset: String(categoryPage.offset),
+    ...(productSearch !== undefined ? { productsSearch: productSearch } : {}),
+    ...(productStatus !== undefined ? { productsStatus: productStatus } : {}),
+    ...(productSort !== undefined ? { productsSort: productSort } : {}),
+    ...(categoriesPagination.cursor !== undefined
+      ? { categoriesCursor: categoriesPagination.cursor }
+      : {}),
     ...(categorySearch !== undefined ? { categoriesSearch: categorySearch } : {}),
     ...(categoryStatus !== undefined ? { categoriesStatus: categoryStatus } : {}),
     ...(categorySort !== undefined ? { categoriesSort: categorySort } : {}),
@@ -113,8 +123,9 @@ export default async function AdminCatalogPage({
         Categories <Link href="/admin/catalog/categories/new">New category</Link>
       </h2>
       <form method="get">
-        <input type="hidden" name="productsLimit" value={productPage.limit} />
-        <input type="hidden" name="productsOffset" value={productPage.offset} />
+        {productsPagination.cursor !== undefined && (
+          <input type="hidden" name="productsCursor" value={productsPagination.cursor} />
+        )}
         <label>
           Search
           <input type="search" name="categoriesSearch" defaultValue={categorySearch ?? ''} />
@@ -204,11 +215,9 @@ export default async function AdminCatalogPage({
       </table>
       <PaginationControls
         basePath="/admin/catalog"
-        total={categoryPage.total}
-        limit={categoryPage.limit}
-        offset={categoryPage.offset}
-        limitParamName="categoriesLimit"
-        offsetParamName="categoriesOffset"
+        page={categoryPageInfo}
+        currentCursor={categoriesPagination.cursor}
+        cursorParamName="categoriesCursor"
         extraParams={categoryExtraParams}
       />
 
@@ -216,8 +225,9 @@ export default async function AdminCatalogPage({
         Products <Link href="/admin/catalog/products/new">New product</Link>
       </h2>
       <form method="get">
-        <input type="hidden" name="categoriesLimit" value={categoryPage.limit} />
-        <input type="hidden" name="categoriesOffset" value={categoryPage.offset} />
+        {categoriesPagination.cursor !== undefined && (
+          <input type="hidden" name="categoriesCursor" value={categoriesPagination.cursor} />
+        )}
         <label>
           Search
           <input type="search" name="productsSearch" defaultValue={productSearch ?? ''} />
@@ -304,11 +314,9 @@ export default async function AdminCatalogPage({
       </table>
       <PaginationControls
         basePath="/admin/catalog"
-        total={productPage.total}
-        limit={productPage.limit}
-        offset={productPage.offset}
-        limitParamName="productsLimit"
-        offsetParamName="productsOffset"
+        page={productPageInfo}
+        currentCursor={productsPagination.cursor}
+        cursorParamName="productsCursor"
         extraParams={productExtraParams}
       />
     </main>

@@ -7,7 +7,7 @@ import type {
   ProductTranslation,
 } from '@eramix/domain';
 import { describe, expect, it } from 'vitest';
-import type { Page } from './pagination.js';
+import type { CursorPage } from './pagination.js';
 import type {
   ContentRepository,
   ContentWithTranslations,
@@ -105,7 +105,7 @@ class InMemoryContentRepository implements ContentRepository {
     throw new Error('not needed for these tests');
   }
 
-  listAll(): Promise<Page<ContentWithTranslations>> {
+  listAll(): Promise<CursorPage<ContentWithTranslations>> {
     throw new Error('not needed for these tests');
   }
 
@@ -370,15 +370,14 @@ class InMemoryProductRepository implements ProductRepository {
     throw new Error('not needed for these tests');
   }
 
-  listPublished(): Promise<readonly (Product & { translations: ProductTranslation[] })[]> {
-    return Promise.resolve(this.product ? [this.product] : []);
+  listPublished(): Promise<CursorPage<Product & { translations: ProductTranslation[] }>> {
+    return Promise.resolve({
+      data: this.product ? [this.product] : [],
+      page: { hasMore: false },
+    });
   }
 
-  countPublished(): Promise<number> {
-    return Promise.resolve(this.product ? 1 : 0);
-  }
-
-  listAll(): Promise<Page<Product & { translations: ProductTranslation[] }>> {
+  listAll(): Promise<CursorPage<Product & { translations: ProductTranslation[] }>> {
     throw new Error('not needed for these tests');
   }
 }

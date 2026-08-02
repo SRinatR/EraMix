@@ -54,8 +54,9 @@ export default async function AdminContentPage({
   const type = parseAllowlistedParam(resolved, 'type', CONTENT_TYPES);
   const status = parseAllowlistedParam(resolved, 'status', STATUSES);
   const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
-  const { items, total, limit, offset } = await container.content.listAll({
-    ...parsePaginationParams(resolved),
+  const pagination = parsePaginationParams(resolved);
+  const { data: items, page } = await container.content.listAll({
+    ...pagination,
     ...(search !== undefined ? { search } : {}),
     ...(type !== undefined ? { type } : {}),
     ...(status !== undefined ? { status } : {}),
@@ -182,9 +183,8 @@ export default async function AdminContentPage({
       )}
       <PaginationControls
         basePath="/admin/content"
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={{
           ...(search !== undefined ? { search } : {}),
           ...(type !== undefined ? { type } : {}),

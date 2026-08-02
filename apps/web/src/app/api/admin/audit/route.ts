@@ -46,26 +46,22 @@ export const GET = withApiHandler('admin.audit.search', async (request) => {
   const createdFromParam = url.searchParams.get('createdFrom');
   const createdToParam = url.searchParams.get('createdTo');
   const sort = parseSort(url.searchParams.get('sort'));
+  const cursorParam = url.searchParams.get('cursor');
   const limitParam = url.searchParams.get('limit');
-  const offsetParam = url.searchParams.get('offset');
 
   const container = getContainer();
-  const { items, total, limit, offset } = await container.auditEvents.listByEntity(
-    entityType,
-    entityId,
-    {
-      ...(action !== null ? { action } : {}),
-      ...(actorUserId !== null ? { actorUserId } : {}),
-      ...(createdFromParam !== null ? { createdFrom: new Date(createdFromParam) } : {}),
-      ...(createdToParam !== null ? { createdTo: new Date(createdToParam) } : {}),
-      ...(sort !== undefined ? { sort } : {}),
-      ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-      ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
-    },
-  );
+  const { data, page } = await container.auditEvents.listByEntity(entityType, entityId, {
+    ...(action !== null ? { action } : {}),
+    ...(actorUserId !== null ? { actorUserId } : {}),
+    ...(createdFromParam !== null ? { createdFrom: new Date(createdFromParam) } : {}),
+    ...(createdToParam !== null ? { createdTo: new Date(createdToParam) } : {}),
+    ...(sort !== undefined ? { sort } : {}),
+    ...(cursorParam !== null ? { cursor: cursorParam } : {}),
+    ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
+  });
 
   return NextResponse.json({
-    items: items.map((event) => ({
+    data: data.map((event) => ({
       id: event.id,
       actorUserId: event.actorUserId,
       action: event.action,
@@ -74,8 +70,6 @@ export const GET = withApiHandler('admin.audit.search', async (request) => {
       metadata: event.metadata,
       createdAt: event.createdAt.toISOString(),
     })),
-    total,
-    limit,
-    offset,
+    page,
   });
 });

@@ -31,17 +31,17 @@ export const GET = withApiHandler<{ companyId: string }>(
 
     const { companyId } = await params;
     const url = new URL(request.url);
+    const cursorParam = url.searchParams.get('cursor');
     const limitParam = url.searchParams.get('limit');
-    const offsetParam = url.searchParams.get('offset');
     const sort = parseSort(url.searchParams.get('sort'));
     const container = getContainer();
-    const { items, total, limit, offset } = await container.memberships.listByCompany(companyId, {
+    const { data, page } = await container.memberships.listByCompany(companyId, {
+      ...(cursorParam !== null ? { cursor: cursorParam } : {}),
       ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
-      ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
       ...(sort !== undefined ? { sort } : {}),
     });
 
-    return NextResponse.json({ items, total, limit, offset });
+    return NextResponse.json({ data, page });
   },
 );
 

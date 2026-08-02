@@ -157,12 +157,13 @@ export default async function CatalogEntryPage({
   const searchParam =
     typeof resolvedSearchParams['search'] === 'string' ? resolvedSearchParams['search'] : undefined;
 
+  const pagination = parsePaginationParams(resolvedSearchParams);
   const [subcategories, productPage] = await Promise.all([
     listCatalogCategories(container.categories, category.id),
     listCatalogProducts(container.products, {
       categoryId: category.id,
       ...(searchParam !== undefined ? { search: searchParam } : {}),
-      ...parsePaginationParams(resolvedSearchParams),
+      ...pagination,
     }),
   ]);
 
@@ -206,11 +207,11 @@ export default async function CatalogEntryPage({
         </label>
         <button type="submit">Search</button>
       </form>
-      {productPage.items.length === 0 ? (
+      {productPage.data.length === 0 ? (
         <p>No products match this search.</p>
       ) : (
         <ul>
-          {productPage.items.map((product) => {
+          {productPage.data.map((product) => {
             const productTranslation = product.translations.find((t) => t.locale === locale);
             if (!productTranslation) {
               return null;
@@ -231,9 +232,8 @@ export default async function CatalogEntryPage({
       )}
       <PaginationControls
         basePath={`/catalog/${slug}`}
-        total={productPage.total}
-        limit={productPage.limit}
-        offset={productPage.offset}
+        page={productPage.page}
+        currentCursor={pagination.cursor}
         extraParams={searchParam !== undefined ? { search: searchParam } : {}}
       />
     </main>

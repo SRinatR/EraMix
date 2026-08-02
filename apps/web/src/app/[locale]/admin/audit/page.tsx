@@ -45,10 +45,11 @@ export default async function AdminAuditPage({
   const actorUserId = parseStringParam(resolved, 'actorUserId');
   const sort = parseAllowlistedParam(resolved, 'sort', SORTS);
   const container = getContainer();
-  const page =
+  const pagination = parsePaginationParams(resolved);
+  const result =
     entityType !== undefined && entityId !== undefined
       ? await container.auditEvents.listByEntity(entityType, entityId, {
-          ...parsePaginationParams(resolved),
+          ...pagination,
           ...(action !== undefined ? { action } : {}),
           ...(actorUserId !== undefined ? { actorUserId } : {}),
           ...(sort !== undefined ? { sort } : {}),
@@ -88,8 +89,8 @@ export default async function AdminAuditPage({
         <button type="submit">Search</button>
       </form>
 
-      {page &&
-        (page.items.length === 0 ? (
+      {result &&
+        (result.data.length === 0 ? (
           <p>No audit events match this filter.</p>
         ) : (
           <>
@@ -103,7 +104,7 @@ export default async function AdminAuditPage({
                 </tr>
               </thead>
               <tbody>
-                {page.items.map((event) => (
+                {result.data.map((event) => (
                   <tr key={event.id}>
                     <td>{event.createdAt.toISOString()}</td>
                     <td>{event.actorUserId ?? '(system)'}</td>
@@ -117,9 +118,8 @@ export default async function AdminAuditPage({
             </table>
             <PaginationControls
               basePath="/admin/audit"
-              total={page.total}
-              limit={page.limit}
-              offset={page.offset}
+              page={result.page}
+              currentCursor={pagination.cursor}
               extraParams={{
                 ...(entityType !== undefined ? { entityType } : {}),
                 ...(entityId !== undefined ? { entityId } : {}),

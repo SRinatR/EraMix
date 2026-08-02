@@ -1,13 +1,22 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
   type CompanyListFilter,
   type CompanyRepository,
-  type Page,
+  type CursorPage,
+  type CursorPaginationInput,
 } from '@eramix/application';
 import { ResourceNotFoundError, type Company } from '@eramix/domain';
 import type { Company as CompanyRow } from '../generated/prisma/client.js';
 import { nullableJsonToRecord } from '../prisma-json.js';
 import type { PrismaClient } from '../prisma-client.js';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -32,20 +41,24 @@ export class PrismaCompanyRepository implements CompanyRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } & CompanyListFilter = {},
-  ): Promise<Page<Company>> {
-    const { limit, offset } = clampPagination(input);
-    const where =
+    input: CursorPaginationInput & CompanyListFilter = {},
+  ): Promise<CursorPage<Company>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveCompanySort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const filterWhere: Record<string, unknown> =
       input.search !== undefined && input.search.trim().length > 0
         ? { legalName: { contains: input.search, mode: 'insensitive' as const } }
         : {};
-    const orderBy = buildCompanyOrderBy(input.sort);
+    const where = combineWithCursor(filterWhere, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.company.findMany({ where, orderBy, take: limit, skip: offset }),
-      client.company.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.company.findMany({ where, orderBy, take: limit + 1 });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 
   async updateStatus(
@@ -72,17 +85,17 @@ export class PrismaCompanyRepository implements CompanyRepository {
 }
 
 /** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
-function buildCompanyOrderBy(sort: CompanyListFilter['sort']): Record<string, 'asc' | 'desc'> {
+function resolveCompanySort(sort: CompanyListFilter['sort']): SortSpec {
   switch (sort) {
     case 'legalName_asc':
-      return { legalName: 'asc' };
+      return { field: 'legalName', direction: 'asc', kind: 'string' };
     case 'legalName_desc':
-      return { legalName: 'desc' };
+      return { field: 'legalName', direction: 'desc', kind: 'string' };
     case 'createdAt_desc':
-      return { createdAt: 'desc' };
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
     case 'createdAt_asc':
     default:
-      return { createdAt: 'asc' };
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
   }
 }
 

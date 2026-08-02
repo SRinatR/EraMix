@@ -1,11 +1,20 @@
 import {
-  clampPagination,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
   type ContentListFilter,
   type ContentRepository,
   type ContentTranslationEditPatch,
   type ContentWithTranslations,
-  type Page,
+  type CursorPage,
+  type CursorPaginationInput,
 } from '@eramix/application';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -261,25 +270,36 @@ export class PrismaContentRepository implements ContentRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number } & ContentListFilter = {},
-  ): Promise<Page<ContentWithTranslations>> {
-    const { limit, offset } = clampPagination(input);
-    const where = buildContentWhere(input);
-    const orderBy = {
-      createdAt: input.sort === 'createdAt_asc' ? ('asc' as const) : ('desc' as const),
-    };
+    input: CursorPaginationInput & ContentListFilter = {},
+  ): Promise<CursorPage<ContentWithTranslations>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveContentSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const where = combineWithCursor(buildContentWhere(input), sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.content.findMany({
-        where,
-        include: WITH_TRANSLATIONS_AND_ROUTES,
-        orderBy,
-        take: limit,
-        skip: offset,
-      }),
-      client.content.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.content.findMany({
+      where,
+      include: WITH_TRANSLATIONS_AND_ROUTES,
+      orderBy,
+      take: limit + 1,
+    });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
+  }
+}
+
+/** DB-005: an explicit allowlist, never a raw client-supplied sort field passed straight into Prisma's `orderBy`. */
+function resolveContentSort(sort: ContentListFilter['sort']): SortSpec {
+  switch (sort) {
+    case 'createdAt_asc':
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
+    case 'createdAt_desc':
+    default:
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
   }
 }
 

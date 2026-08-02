@@ -1,9 +1,9 @@
 import { AccessDeniedError, type PlatformRole } from '@eramix/domain';
 import { hasPermission } from './authorization.js';
-import type { Page, PaginationInput } from './pagination.js';
+import type { CursorPage, CursorPaginationInput } from './pagination.js';
 import type { OrderListFilter, OrderRepository, OrderWithLines } from './repositories.js';
 
-export interface ListOrdersForActorInput extends PaginationInput, OrderListFilter {
+export interface ListOrdersForActorInput extends CursorPaginationInput, OrderListFilter {
   readonly actorRole: PlatformRole;
   /** The actor's live `ACTIVE` membership company ids (never trust a stale cache — see apps/web/src/server/session.ts). */
   readonly actorCompanyIds: readonly string[];
@@ -27,7 +27,7 @@ export interface ListOrdersForActorInput extends PaginationInput, OrderListFilte
 export async function listOrdersForActor(
   orderRepo: Pick<OrderRepository, 'listAll'>,
   input: ListOrdersForActorInput,
-): Promise<Page<OrderWithLines>> {
+): Promise<CursorPage<OrderWithLines>> {
   const { actorRole, actorCompanyIds, companyId, ...filter } = input;
 
   if (hasPermission(actorRole, 'order.read.all')) {

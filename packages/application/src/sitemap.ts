@@ -54,11 +54,18 @@ export async function buildSitemapEntries(repositories: {
     }
   }
 
-  let offset = 0;
+  // ADR-0017: walks the public product listing forward by cursor (never
+  // offset), the same mechanism a real client of GET /api/catalog/products
+  // would use — sitemap generation is not exempt from the cursor contract
+  // just because it is server-internal.
+  let cursor: string | undefined;
   const pageSize = 500;
   for (;;) {
-    const products = await repositories.product.listPublished({ limit: pageSize, offset });
-    for (const product of products) {
+    const page = await repositories.product.listPublished({
+      limit: pageSize,
+      ...(cursor !== undefined ? { cursor } : {}),
+    });
+    for (const product of page.data) {
       for (const translation of product.translations) {
         entries.push({
           url: productUrl({
@@ -70,10 +77,10 @@ export async function buildSitemapEntries(repositories: {
         });
       }
     }
-    if (products.length < pageSize) {
+    if (!page.page.hasMore) {
       break;
     }
-    offset += pageSize;
+    cursor = page.page.nextCursor;
   }
 
   return entries;

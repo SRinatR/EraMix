@@ -28,7 +28,7 @@ export default async function NewOrderPage({ params }: { params: Promise<{ local
   ).filter((company): company is NonNullable<typeof company> => company !== undefined);
 
   const productResult = await listCatalogProducts(container.products, { limit: 100 });
-  const products = productResult.items
+  const products = productResult.data
     .map((product) => {
       const translation = product.translations.find((t) => t.locale === (locale as LocaleCode));
       return translation

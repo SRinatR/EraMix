@@ -1,12 +1,21 @@
 import {
-  clampPagination,
-  type Page,
+  buildCursorPage,
+  clampLimit,
+  decodeCursor,
+  type CursorPage,
+  type CursorPaginationInput,
   type UserListFilter,
   type UserRepository,
 } from '@eramix/application';
 import { ResourceNotFoundError, type PlatformRole, type User } from '@eramix/domain';
 import type { User as UserRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
+import {
+  buildCursorOrderBy,
+  combineWithCursor,
+  cursorValueOf,
+  type SortSpec,
+} from './cursor-query.js';
 import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
 
@@ -40,11 +49,11 @@ export class PrismaUserRepository implements UserRepository {
     return toDomain(row);
   }
 
-  async listAll(
-    input: { limit?: number; offset?: number } & UserListFilter = {},
-  ): Promise<Page<User>> {
-    const { limit, offset } = clampPagination(input);
-    const where =
+  async listAll(input: CursorPaginationInput & UserListFilter = {}): Promise<CursorPage<User>> {
+    const limit = clampLimit(input.limit);
+    const sortSpec = resolveUserSort(input.sort);
+    const decoded = decodeCursor(input.cursor);
+    const filterWhere: Record<string, unknown> =
       input.search !== undefined && input.search.trim().length > 0
         ? {
             OR: [
@@ -53,13 +62,15 @@ export class PrismaUserRepository implements UserRepository {
             ],
           }
         : {};
-    const orderBy = buildUserOrderBy(input.sort);
+    const where = combineWithCursor(filterWhere, sortSpec, decoded);
+    const orderBy = buildCursorOrderBy(sortSpec);
     const client = resolveClient(this.prisma);
-    const [rows, total] = await Promise.all([
-      client.user.findMany({ where, orderBy, take: limit, skip: offset }),
-      client.user.count({ where }),
-    ]);
-    return { items: rows.map(toDomain), total, limit, offset };
+    const rows = await client.user.findMany({ where, orderBy, take: limit + 1 });
+    const items = rows.map(toDomain);
+    return buildCursorPage(items, limit, (item) => ({
+      v: cursorValueOf(sortSpec, item as unknown as Record<string, unknown>),
+      id: item.id,
+    }));
   }
 
   async updatePlatformRole(
@@ -86,17 +97,17 @@ export class PrismaUserRepository implements UserRepository {
 }
 
 /** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
-function buildUserOrderBy(sort: UserListFilter['sort']): Record<string, 'asc' | 'desc'> {
+function resolveUserSort(sort: UserListFilter['sort']): SortSpec {
   switch (sort) {
     case 'displayName_asc':
-      return { displayName: 'asc' };
+      return { field: 'displayName', direction: 'asc', kind: 'string' };
     case 'displayName_desc':
-      return { displayName: 'desc' };
+      return { field: 'displayName', direction: 'desc', kind: 'string' };
     case 'createdAt_desc':
-      return { createdAt: 'desc' };
+      return { field: 'createdAt', direction: 'desc', kind: 'date' };
     case 'createdAt_asc':
     default:
-      return { createdAt: 'asc' };
+      return { field: 'createdAt', direction: 'asc', kind: 'date' };
   }
 }
 

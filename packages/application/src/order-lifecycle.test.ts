@@ -20,7 +20,7 @@ import {
   submitOrder,
   transitionOrderStatus,
 } from './order-lifecycle.js';
-import type { Page } from './pagination.js';
+import type { CursorPage } from './pagination.js';
 import type {
   AuditEventRepository,
   OrderRepository,
@@ -52,7 +52,7 @@ class SequentialIdGenerator {
 function fakeAuditRepo(): AuditEventRepository {
   return {
     record: (event) => Promise.resolve({ id: 'audit-1', createdAt: new Date(), ...event }),
-    listByEntity: () => Promise.resolve({ items: [], total: 0, limit: 20, offset: 0 }),
+    listByEntity: () => Promise.resolve({ data: [], page: { hasMore: false } }),
   };
 }
 
@@ -125,14 +125,14 @@ class InMemoryOrderRepository implements OrderRepository {
     );
   }
 
-  listByCompany(companyId: string): Promise<Page<OrderWithLines>> {
-    const items = [...this.orders.values()].filter((o) => o.companyId === companyId);
-    return Promise.resolve({ items, total: items.length, limit: items.length, offset: 0 });
+  listByCompany(companyId: string): Promise<CursorPage<OrderWithLines>> {
+    const data = [...this.orders.values()].filter((o) => o.companyId === companyId);
+    return Promise.resolve({ data, page: { hasMore: false } });
   }
 
-  listAll(): Promise<Page<OrderWithLines>> {
-    const items = [...this.orders.values()];
-    return Promise.resolve({ items, total: items.length, limit: items.length, offset: 0 });
+  listAll(): Promise<CursorPage<OrderWithLines>> {
+    const data = [...this.orders.values()];
+    return Promise.resolve({ data, page: { hasMore: false } });
   }
 
   create(

@@ -2,52 +2,51 @@ import { Link } from '@/i18n/navigation';
 
 /**
  * ADM-002 ("Все списки имеют серверную пагинацию... явные loading/empty/
- * error states") / DB-005 ("bounded queries и пагинацию"). Plain links, no
- * client JS — `basePath` must already be locale-relative (next-intl's
- * `Link` adds the locale prefix itself).
+ * error states") / DB-005 ("bounded queries и пагинацию") / ADR-0017
+ * (cursor-based pagination, API-005): forward-only by design — the API
+ * envelope carries only `nextCursor`/`hasMore`, never a `prevCursor`, so
+ * this control offers "Next" (when `hasMore`) and, once the caller has
+ * scrolled past the first page, a "First page" link back to the
+ * unfiltered/uncursored start. Plain links, no client JS — `basePath` must
+ * already be locale-relative (next-intl's `Link` adds the locale prefix
+ * itself).
  */
 export function PaginationControls({
   basePath,
-  total,
-  limit,
-  offset,
+  page,
+  currentCursor,
   extraParams = {},
-  limitParamName = 'limit',
-  offsetParamName = 'offset',
+  cursorParamName = 'cursor',
 }: {
   readonly basePath: string;
-  readonly total: number;
-  readonly limit: number;
-  readonly offset: number;
-  /** Fixed params to preserve on Prev/Next — e.g. a sibling section's current page on a two-list admin screen. */
+  readonly page: { readonly hasMore: boolean; readonly nextCursor?: string };
+  /** The cursor the current page was rendered with, if any — enables "First page". */
+  readonly currentCursor: string | undefined;
+  /** Fixed params to preserve on Next/First — e.g. the current search/sort/filter, or a sibling section's cursor on a two-list admin screen. */
   readonly extraParams?: Record<string, string>;
   /** Override when a page has more than one independently-paginated list. */
-  readonly limitParamName?: string;
-  readonly offsetParamName?: string;
+  readonly cursorParamName?: string;
 }) {
-  if (total === 0) {
-    return <p>No results.</p>;
+  const hasNext = page.hasMore && page.nextCursor !== undefined;
+  const hasFirst = currentCursor !== undefined;
+
+  if (!hasNext && !hasFirst) {
+    return null;
   }
 
-  const hasPrev = offset > 0;
-  const hasNext = offset + limit < total;
-
-  function hrefFor(newOffset: number): string {
-    const params = new URLSearchParams({
-      ...extraParams,
-      [limitParamName]: String(limit),
-      [offsetParamName]: String(newOffset),
-    });
-    return `${basePath}?${params.toString()}`;
+  function hrefFor(cursor: string | undefined): string {
+    const params = new URLSearchParams(extraParams);
+    if (cursor !== undefined) {
+      params.set(cursorParamName, cursor);
+    }
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
   }
 
   return (
     <nav aria-label="Pagination">
-      <p>
-        Showing {offset + 1}–{Math.min(offset + limit, total)} of {total}
-      </p>
-      {hasPrev && <Link href={hrefFor(Math.max(offset - limit, 0))}>Previous</Link>}
-      {hasNext && <Link href={hrefFor(offset + limit)}>Next</Link>}
+      {hasFirst && <Link href={hrefFor(undefined)}>First page</Link>}
+      {hasNext && <Link href={hrefFor(page.nextCursor)}>Next</Link>}
     </nav>
   );
 }

@@ -23,7 +23,7 @@ export default async function NewCategoryPage() {
   // targets list views, not option pickers); category counts are structural
   // catalog taxonomy, not the 100k-product-scale data DB-005's load profile
   // names.
-  const { items: categories } = await container.categories.listAll({ limit: 200 });
+  const { data: categories } = await container.categories.listAll({ limit: 200 });
 
   return (
     <main>

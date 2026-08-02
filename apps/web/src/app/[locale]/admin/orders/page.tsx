@@ -53,12 +53,8 @@ export default async function AdminOrdersPage({
   };
 
   const container = getContainer();
-  const {
-    items: orders,
-    total,
-    limit,
-    offset,
-  } = await container.orders.listAll({ ...parsePaginationParams(resolved), ...filter });
+  const pagination = parsePaginationParams(resolved);
+  const { data: orders, page } = await container.orders.listAll({ ...pagination, ...filter });
   const companies = await Promise.all(
     [...new Set(orders.map((order) => order.companyId))].map((id) =>
       container.companies.findById(id),
@@ -129,9 +125,8 @@ export default async function AdminOrdersPage({
       )}
       <PaginationControls
         basePath="/admin/orders"
-        total={total}
-        limit={limit}
-        offset={offset}
+        page={page}
+        currentCursor={pagination.cursor}
         extraParams={{
           ...(status !== undefined ? { status } : {}),
           ...(search !== undefined ? { search } : {}),
