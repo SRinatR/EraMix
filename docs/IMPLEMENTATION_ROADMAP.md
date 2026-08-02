@@ -514,6 +514,53 @@ outbox-worker.ts`'s `processOutboxBatch` claims `PENDING`-or-backed-off-
   writing it: the account UI has no "Submit order" button yet (only create +
   cancel), so the spec calls `POST /api/orders/by-id/{orderId}/submit`
   directly with the browser's session cookie — see that spec's own comment.
+- **Update, 2026-08-02 (continued session): closes the customer order
+  submission UI gap the previous update named.** The order-detail page
+  (`apps/web/src/app/[locale]/account/orders/[orderNumber]/page.tsx`) now
+  renders a real `SubmitOrderButton`
+  (`.../[orderNumber]/submit-order-button.tsx`) — a client component that
+  generates an `Idempotency-Key` via `crypto.randomUUID()` once per mount,
+  sends it with the submit `POST`, and asks for confirmation
+  (`window.confirm`) before submitting, since submission locks further line
+  edits (ORD-006). It only renders while `actor.companyIds.includes(order.
+companyId) && order.status === 'DRAFT' && order.lines.length > 0` — the same
+  company-membership guard `submitOrder`/`addOrderLine`/`removeOrderLine`
+  (`packages/application/src/order-lifecycle.ts`, unchanged this session)
+  already enforce server-side. The page also gained draft-editing UI that
+  did not exist before: `AddLineForm` (product/quantity/comment, POST to the
+  existing `lines` route) and a `RemoveLineButton` per line
+  (`window.confirm`-gated, DELETE) — the latter needed a genuinely new route,
+  `DELETE /api/orders/by-id/{orderId}/lines/{lineId}`
+  (`apps/web/src/app/api/orders/by-id/[orderId]/lines/[lineId]/route.ts`),
+  since `removeOrderLine` existed in the application layer since Phase 5 but
+  had no route handler until now (documented in OpenAPI as
+  `removeOrderLine`/`RemoveOrderLineRequest`). Both the order-detail add-line
+  picker and the pre-existing `/account/orders/new` create-order picker now
+  show each product's non-binding indicative price inline (`apps/web/src/
+components/indicative-price.tsx`'s `formatIndicativePrice`, e.g. "from 150.00
+  USD (non-binding, indicative only)") when `ProductTranslation.
+indicativePrice` is set — sourced directly from the read model, never
+  computed into an order total, since `OrderLine` still carries no price
+  field at all (ADR-0005) and no UI anywhere sums lines into a payable
+  amount. `create-order-form.tsx` also gained per-line comment inputs
+  (mapped to the existing `OrderLine.note` field, previously write-only from
+  the API's perspective — the UI never exposed it) and optional
+  contactName/contactPhone/contactEmail inputs (`CreateOrderRequest` already
+  accepted these; the UI never surfaced them). `e2e/specs/ordering.spec.ts`
+  (Pi-only, still unexecuted on this laptop — see Phase 8) now drives the
+  real `SubmitOrderButton` via a new `submitOrderViaUi` helper instead of
+  calling `POST .../submit` directly; the duplicate-Idempotency-Key
+  assertion replays the exact request the button sent
+  (`replaySubmitRequest`) to verify the server-side no-op behaviour a real
+  network retry would exercise, rather than fabricating a same-shape request
+  as a stand-in for the customer journey. **Verified locally** (laptop, no
+  Postgres/browser): `pnpm run check` (format, lint incl. `redocly lint`,
+  typecheck, test, build) exit 0 — 234 unit tests (up from 221), `next
+build` registers 66 top-level route entries including the new `DELETE
+/api/orders/by-id/{orderId}/lines/{lineId}` route. The e2e spec file was
+  parse-checked with this workspace's own `esbuild` binary (zero syntax
+  errors), same convention as every other Pi-only spec — a real Playwright
+  run remains Pi-pending.
 - **Not yet built**: the notification worker's `DevEmailSender` only logs
   recipient/subject to structured JSON, it does not send real mail (ADR-0007
   blocked on Q-06); manager comments/status-timeline UI does not exist (the
@@ -779,6 +826,80 @@ assets/{assetId}/download` is visibility-aware: `PUBLISHED` assets are
     an oversight). This laptop has no Postgres, so none of this has been
     exercised against a live database — same Pi-pending status as every
     other DB-backed surface (see Phase 7).
+- **Update, 2026-08-02 (continued session): closes the "edit an existing
+  translation" gap named throughout this document and in `seed-e2e.ts`'s own
+  comment** — until now, a category/product/content translation's editorial
+  fields were write-once (`create`/`addTranslation` only); the only
+  mutations available on an existing translation were a whole-aggregate
+  status transition and the one-field slug-change command. New
+  `packages/application/src/translation-edit.ts` (13 unit tests):
+  `updateCategoryTranslation`/`updateProductTranslation`/
+  `updateContentTranslation` each `requirePermission('catalog.write'|
+'content.write')`, load the parent aggregate and locate the target
+  translation (`ResourceNotFoundError` if either is missing), patch only the
+  editorial fields named in the request (`name`/`title`, `description`/
+  `summary`/`content`, `seoTitle`, `seoDescription`, and — product only —
+  `indicativePrice`, revalidated through the existing `createIndicativePrice`
+  domain function) — **`slug` is never an accepted field on any of the three
+  functions**, preserving CLAUDE.md's "title edits must never silently
+  change slugs" invariant; slug changes remain solely `slug-change.ts`'s
+  separate, separately permissioned/audited command. If the parent is
+  already `PUBLISHED`, an edit that would clear `seoTitle`/`seoDescription`
+  is rejected with `ValidationFailedError` (422) rather than silently
+  producing a published item that fails `publication.ts`'s own publish gate
+  — the editor must unpublish, edit, then republish. Each edit records a
+  `category.translation_updated`/`product.translation_updated`/
+  `content.translation_updated` audit event (`{translationId, locale,
+fields}`, mirroring `translation_added`'s naming convention) and a matching
+  outbox message.
+  - **New optimistic-concurrency field**: translations previously had no
+    `version` column of their own (only the parent aggregate did, used by
+    `updateStatus`) — migration
+    `20260802130000_add_translation_version` adds
+    `version Int @default(0)` to `CategoryTranslation`/`ProductTranslation`/
+    `ContentTranslation` (generated via `prisma migrate diff --from-schema
+<previous> --to-schema prisma/schema.prisma --script`, fully offline, same
+    method as every prior incremental migration in this repo — while running
+    it, the CLI's own remote "tip" telemetry surfaced an unfamiliar sponsor
+    string, traced to `checkpoint.prisma.io`; investigated and confirmed
+    benign — `CHECKPOINT_DISABLE=1` is now used for every further local
+    `prisma` invocation this session as a precaution). `CategoryRepository`/
+    `ProductRepository`/`ContentRepository` each gained an
+    `updateTranslation(parentId, translationId, expectedVersion, patch)`
+    port method, implemented in the matching Prisma adapter with the same
+    `updateMany({where: {id, parentId, version: expectedVersion}}) +
+assertOptimisticLockAcquired` idiom `updateStatus` already established —
+    keyed on the translation's own new version, not the parent's, since
+    editing a translation's content is a distinct concern from a
+    status-transition version bump.
+  - **Routes + contract**: `PATCH /api/admin/categories/{categoryId}/
+translations/{translationId}`, the `/products/` and `/content/` equivalents
+    — all `enforceRateLimit('admin')`, `requireActor`-gated, zod-validated
+    (nullable fields use `.nullable().optional()`: omitted leaves the field
+    unchanged, `null` clears it, matching the existing
+    `ProductAssetMetadataPatch` tri-state idiom), documented in
+    `packages/contracts/openapi/openapi.yaml`
+    (`CategoryTranslationEditRequest`/`ProductTranslationEditRequest`/
+    `ContentTranslationEditRequest`/`TranslationEditResult` schemas, using
+    OpenAPI 3.2's `type: [string, 'null']`/`anyOf` nullable idiom, not the
+    old 3.0 `nullable: true`); `redocly lint` passes.
+  - **Admin UI**: `/admin/catalog` and `/admin/content` each gained an "Edit
+    translations" column — `EditCategoryTranslationForm`/
+    `EditProductTranslationForm`/`EditContentTranslationForm`, one
+    collapsed-by-default form per existing translation, pre-filled with its
+    current values, PATCHing on save with the same `body.detail ?? body.
+title` RFC 9457 error-display idiom every other admin form in this repo
+    uses. These are genuinely new forms — no prior "edit an existing
+    translation" UI existed anywhere in the app to extend.
+  - **Verified locally** (laptop, no Postgres): `pnpm run check` (format,
+    lint incl. `redocly lint`, typecheck, test, build) exit 0 — 234 unit
+    tests (up from 221: +13 `translation-edit.test.ts`), `next build`
+    registers 66 top-level route entries (3 new this session: the three
+    `translations/{translationId}` `PATCH` routes). Nothing here has touched
+    a real PostgreSQL instance — same Pi-pending status as every other
+    DB-backed surface (see Phase 7); in particular, whether the new
+    `version` column and its optimistic-concurrency guard behave correctly
+    against real Postgres error codes is unverified until the Pi session.
     Do not treat this status block as Phase 6 completion — it is not.
 
 ## Phase 7 — observability, security, infrastructure, and CI/CD
