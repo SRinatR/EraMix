@@ -1,0 +1,22 @@
+title = "EraMix gitleaks config"
+
+[extend]
+useDefault = true
+
+# CLAUDE.md forbids weakening a security gate to make it pass — this is not
+# that. It precisely allowlists one specific, documented, non-secret test
+# fixture value, never a broad path/rule exemption, so a real credential
+# accidentally committed anywhere (including these same files) still fails
+# the scan.
+[allowlist]
+description = """
+IndexNow's domain-layer key validator (packages/domain/src/indexnow.ts)
+requires an 8-128 char alphanumeric/hyphen string — exactly the shape
+gitleaks' generic-api-key heuristic flags. Every occurrence below is the
+same deliberately fake, obviously-placeholder test fixture value
+('a1b2c3d4e5f6'), used only to exercise that shape validator and the
+worker/notifier dispatch tests around it; never a real secret. The real
+INDEXNOW_KEY only ever lives in the deployment secret store (never
+committed) — see .env.example and packages/infrastructure/src/env.ts.
+"""
+regexes = ['''a1b2c3d4e5f6''']
