@@ -31,7 +31,14 @@ export default async function NewOrderPage({ params }: { params: Promise<{ local
   const products = productResult.items
     .map((product) => {
       const translation = product.translations.find((t) => t.locale === (locale as LocaleCode));
-      return translation ? { id: product.id, name: translation.name, sku: product.sku } : undefined;
+      return translation
+        ? {
+            id: product.id,
+            name: translation.name,
+            sku: product.sku,
+            indicativePrice: translation.indicativePrice,
+          }
+        : undefined;
     })
     .filter((product): product is NonNullable<typeof product> => product !== undefined);
 

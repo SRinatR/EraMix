@@ -1,8 +1,15 @@
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
+import { AddLineForm } from './add-line-form';
 import { CancelOrderButton } from './cancel-order-button';
-import { assertOrderCompanyAccess, CUSTOMER_CANCELLABLE_STATES } from '@eramix/application';
-import { AccessDeniedError, isSupportedLocale } from '@eramix/domain';
+import { RemoveLineButton } from './remove-line-button';
+import { SubmitOrderButton } from './submit-order-button';
+import {
+  assertOrderCompanyAccess,
+  CUSTOMER_CANCELLABLE_STATES,
+  listCatalogProducts,
+} from '@eramix/application';
+import { AccessDeniedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -43,11 +50,32 @@ export default async function OrderDetailPage({
   const canCustomerCancel =
     actor.companyIds.includes(order.companyId) &&
     CUSTOMER_CANCELLABLE_STATES.includes(order.status);
+  const canEditDraft = actor.companyIds.includes(order.companyId) && order.status === 'DRAFT';
+
+  const addLineProducts = canEditDraft
+    ? (await listCatalogProducts(container.products, { limit: 100 })).items
+        .map((product) => {
+          const translation = product.translations.find((t) => t.locale === (locale as LocaleCode));
+          return translation
+            ? {
+                id: product.id,
+                name: translation.name,
+                sku: product.sku,
+                indicativePrice: translation.indicativePrice,
+              }
+            : undefined;
+        })
+        .filter((product): product is NonNullable<typeof product> => product !== undefined)
+    : [];
 
   return (
     <main>
       <h1>Order {order.orderNumber}</h1>
       <p>Status: {order.status}</p>
+      <p>
+        Prices shown, where available, are non-binding indicative &quot;from&quot; prices — never a
+        payable total. The final quote is confirmed manually by a manager after submission.
+      </p>
 
       <h2>Lines</h2>
       <table>
@@ -57,6 +85,7 @@ export default async function OrderDetailPage({
             <th>SKU</th>
             <th>Quantity</th>
             <th>Note</th>
+            {canEditDraft && <th>Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -66,10 +95,31 @@ export default async function OrderDetailPage({
               <td>{line.productSkuSnapshot}</td>
               <td>{line.quantity}</td>
               <td>{line.note ?? ''}</td>
+              {canEditDraft && (
+                <td>
+                  <RemoveLineButton
+                    orderId={order.id}
+                    lineId={line.id}
+                    expectedVersion={order.version}
+                    productName={line.productNameSnapshot}
+                  />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+
+      {canEditDraft && (
+        <>
+          <h2>Add a line</h2>
+          <AddLineForm
+            orderId={order.id}
+            expectedVersion={order.version}
+            products={addLineProducts}
+          />
+        </>
+      )}
 
       <h2>Status history</h2>
       <ul>
@@ -81,6 +131,9 @@ export default async function OrderDetailPage({
         ))}
       </ul>
 
+      {canEditDraft && order.lines.length > 0 && (
+        <SubmitOrderButton orderId={order.id} expectedVersion={order.version} />
+      )}
       {canCustomerCancel && (
         <CancelOrderButton orderId={order.id} expectedVersion={order.version} />
       )}

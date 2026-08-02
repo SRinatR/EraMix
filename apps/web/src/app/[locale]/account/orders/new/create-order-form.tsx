@@ -1,12 +1,22 @@
 'use client';
 
 import { useRouter } from '@/i18n/navigation';
+import { formatIndicativePrice } from '@/components/indicative-price';
+import type { IndicativePrice } from '@eramix/domain';
 import { useState, type FormEvent } from 'react';
 
 export interface ProductOption {
   readonly id: string;
   readonly name: string;
   readonly sku: string;
+  readonly indicativePrice?: IndicativePrice | undefined;
+}
+
+function productOptionLabel(product: ProductOption): string {
+  const base = `${product.name} (${product.sku})`;
+  return product.indicativePrice
+    ? `${base} — ${formatIndicativePrice(product.indicativePrice)}`
+    : base;
 }
 
 export interface CompanyOption {
@@ -17,6 +27,7 @@ export interface CompanyOption {
 interface LineRow {
   readonly productId: string;
   readonly quantity: number;
+  readonly note: string;
 }
 
 export function CreateOrderForm({
@@ -28,8 +39,11 @@ export function CreateOrderForm({
 }) {
   const router = useRouter();
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? '');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [lines, setLines] = useState<LineRow[]>([
-    { productId: products[0]?.id ?? '', quantity: 1 },
+    { productId: products[0]?.id ?? '', quantity: 1, note: '' },
   ]);
   const [error, setError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
@@ -39,7 +53,10 @@ export function CreateOrderForm({
   }
 
   function addLine(): void {
-    setLines((current) => [...current, { productId: products[0]?.id ?? '', quantity: 1 }]);
+    setLines((current) => [
+      ...current,
+      { productId: products[0]?.id ?? '', quantity: 1, note: '' },
+    ]);
   }
 
   function removeLine(index: number): void {
@@ -48,15 +65,33 @@ export function CreateOrderForm({
 
   async function handleSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    setPending(true);
     setError(undefined);
+
+    const usableLines = lines.filter((line) => line.productId);
+    if (usableLines.length === 0) {
+      setError('Add at least one product line.');
+      return;
+    }
+    if (usableLines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1)) {
+      setError('Quantity must be a positive whole number for every line.');
+      return;
+    }
+
+    setPending(true);
     try {
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           companyId,
-          lines: lines.filter((line) => line.productId),
+          ...(contactName.trim() ? { contactName: contactName.trim() } : {}),
+          ...(contactPhone.trim() ? { contactPhone: contactPhone.trim() } : {}),
+          ...(contactEmail.trim() ? { contactEmail: contactEmail.trim() } : {}),
+          lines: usableLines.map((line) => ({
+            productId: line.productId,
+            quantity: line.quantity,
+            ...(line.note.trim() ? { note: line.note.trim() } : {}),
+          })),
         }),
       });
       const body = (await response.json()) as {
@@ -94,7 +129,31 @@ export function CreateOrderForm({
         </select>
       </label>
 
+      <fieldset>
+        <legend>Contact for this order (optional)</legend>
+        <label>
+          Name
+          <input value={contactName} onChange={(event) => setContactName(event.target.value)} />
+        </label>
+        <label>
+          Phone
+          <input value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} />
+        </label>
+        <label>
+          Email
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={(event) => setContactEmail(event.target.value)}
+          />
+        </label>
+      </fieldset>
+
       <h2>Lines</h2>
+      <p>
+        Prices shown, where available, are non-binding indicative &quot;from&quot; prices — the
+        final quote is confirmed manually by a manager after submission.
+      </p>
       {lines.map((line, index) => (
         <div key={index}>
           <label>
@@ -105,7 +164,7 @@ export function CreateOrderForm({
             >
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
-                  {product.name} ({product.sku})
+                  {productOptionLabel(product)}
                 </option>
               ))}
             </select>
@@ -115,8 +174,17 @@ export function CreateOrderForm({
             <input
               type="number"
               min={1}
+              step={1}
               value={line.quantity}
               onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            Comment
+            <input
+              value={line.note}
+              onChange={(event) => updateLine(index, { note: event.target.value })}
+              placeholder="Optional note for this line"
             />
           </label>
           {lines.length > 1 && (

@@ -1,4 +1,4 @@
-import type { APIResponse, Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 
 export type TestRole = 'customer' | 'manager' | 'editor' | 'admin' | 'auditor';
 
@@ -17,21 +17,38 @@ export async function loginAs(page: Page, role: TestRole): Promise<void> {
 }
 
 /**
- * The submit endpoint is keyed by the order's internal id
- * (POST /api/orders/by-id/{orderId}/submit), not its public orderNumber —
- * looks it up first via GET /api/orders/{orderNumber} (apps/web/src/server/
- * dto.ts's orderToDto includes `id`), exactly as a future "submit" button
- * would have to.
+ * Clicks the account order-detail page's real "Submit order" button
+ * (apps/web/src/app/[locale]/account/orders/[orderNumber]/submit-order-button.tsx)
+ * — accepting the confirmation dialog it raises — and captures the exact
+ * POST /api/orders/by-id/{orderId}/submit request the button sent (URL,
+ * Idempotency-Key header, and body) so a caller can, if needed, replay the
+ * identical request to verify server-side idempotency (a realistic network-
+ * retry scenario, not a substitute for driving the button itself).
  */
-export async function submitOrder(
+export async function submitOrderViaUi(
   page: Page,
-  orderNumber: string,
-  idempotencyKey: string,
-): Promise<APIResponse> {
-  const getResponse = await page.request.get(`/api/orders/${orderNumber}`);
-  const order = await getResponse.json();
-  return page.request.post(`/api/orders/by-id/${order.id}/submit`, {
-    headers: { 'Idempotency-Key': idempotencyKey },
-    data: { expectedVersion: order.version },
+): Promise<{ request: Request; idempotencyKey: string }> {
+  page.once('dialog', (dialog) => void dialog.accept());
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => req.url().includes('/submit') && req.method() === 'POST'),
+    page.getByRole('button', { name: /submit order/i }).click(),
+  ]);
+  const idempotencyKey = request.headers()['idempotency-key'];
+  if (!idempotencyKey) {
+    throw new Error('Submit order button did not send an Idempotency-Key header.');
+  }
+  return { request, idempotencyKey };
+}
+
+/**
+ * Replays a previously captured submit request verbatim (same URL, same
+ * Idempotency-Key, same body) — the same shape of request a browser or
+ * intermediate proxy would resend on a timeout/network retry. Used only to
+ * assert the no-op/idempotent behaviour after the real button click above.
+ */
+export async function replaySubmitRequest(page: Page, request: Request) {
+  return page.request.post(request.url(), {
+    headers: { 'Idempotency-Key': request.headers()['idempotency-key']! },
+    data: request.postDataJSON(),
   });
 }

@@ -40,28 +40,29 @@ Or just run `scripts/pi/05-browser-e2e-run.sh`, which does all of the above.
 
 ## What's covered
 
-| File                           | Covers                                                                                                                       |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `public-catalog.spec.ts`       | Locale detection/redirect/explicit-prefix-wins, canonical routes, 308 redirect on a stale product slug, 404s, robots/sitemap |
-| `auth-rbac.spec.ts`            | Real OIDC login per role, server-side RBAC boundaries (never just hidden UI — IAM-008), logout                               |
-| `ordering.spec.ts`             | Draft order creation, duplicate-Idempotency-Key no-op, manager visibility, customer/company isolation (ORD-008)              |
-| `admin-product-assets.spec.ts` | Upload, the IMAGE-publish-requires-altText gate, public visibility after publish, confirm-gated removal                      |
-| `accessibility.spec.ts`        | axe-core WCAG 2.1 AA scan on key pages, keyboard navigation, `role="alert"` error announcement, `prefers-reduced-motion`     |
+| File                           | Covers                                                                                                                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `public-catalog.spec.ts`       | Locale detection/redirect/explicit-prefix-wins, canonical routes, 308 redirect on a stale product slug, 404s, robots/sitemap                                                           |
+| `auth-rbac.spec.ts`            | Real OIDC login per role, server-side RBAC boundaries (never just hidden UI — IAM-008), logout                                                                                         |
+| `ordering.spec.ts`             | Draft order creation, draft-editing UI, real Submit-order-button click, duplicate-Idempotency-Key no-op (via request replay), manager visibility, customer/company isolation (ORD-008) |
+| `admin-product-assets.spec.ts` | Upload, the IMAGE-publish-requires-altText gate, public visibility after publish, confirm-gated removal                                                                                |
+| `accessibility.spec.ts`        | axe-core WCAG 2.1 AA scan on key pages, keyboard navigation, `role="alert"` error announcement, `prefers-reduced-motion`                                                               |
 
 ## Known gaps and caveats (honest, not hidden)
 
-- **No submit button in the account UI yet.** `ordering.spec.ts` calls
-  `POST /api/orders/by-id/{orderId}/submit` directly (see `helpers.ts`'s
-  `submitOrder`) because there is currently no "Submit order" button on
-  `/account/orders/{orderNumber}`. Once one exists, replace that helper call
-  with a real UI click and this test gets strictly _more_ coverage for free.
-- **No "edit an existing translation" endpoint.** `seed-e2e.ts`'s published
-  demo product is created directly via Prisma, not through the app's own
-  authoring API, because there is currently no way to add `seoTitle`/
-  `seoDescription` to an _existing_ translation (only "add a new
-  translation" for a different locale, or "change slug"). A real editorial
-  workflow needs this; it's a genuine product gap, tracked here rather than
-  silently worked around.
+- **Both gaps this section used to name are closed.** The account UI now has
+  a real "Submit order" button (`submit-order-button.tsx`) that
+  `ordering.spec.ts` drives via `helpers.ts`'s `submitOrderViaUi` — the
+  duplicate-Idempotency-Key test replays the exact request that button sent
+  (`replaySubmitRequest`) rather than fabricating a request from scratch, so
+  it verifies a real network-retry scenario, not a UI-avoidance workaround.
+  Category/product/content translations can now be edited in place
+  (`updateCategoryTranslation`/`updateProductTranslation`/
+  `updateContentTranslation`, `/admin/catalog` and `/admin/content`'s new
+  "Edit translations" column) — `seed-e2e.ts`'s published demo product still
+  seeds directly via Prisma, but only because fixed, upserted ids are the
+  simpler choice for deterministic seed data, not because the endpoint is
+  missing (see that file's own comment).
 - **Test isolation.** Specs don't reset the database between runs; re-run
   `db:seed:e2e` (safe — it upserts) before re-running the suite if a prior
   run left extra product assets or orders behind. `admin-product-assets.spec.ts`
