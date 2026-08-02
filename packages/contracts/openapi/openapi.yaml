@@ -53,7 +53,19 @@ tags:
       integrations (GA4, Yandex Metrica, Rust analytics, Search Console,
       Yandex Webmaster, Bing, IndexNow, Merchant Center) are configuration
       scaffolding only in this phase — merchantCenterEnabled is rejected at
-      write time until a real versioned Offer model exists.
+      write time even though the Offer model now exists (ADR-0019): the
+      dormant Merchant feed foundation is prepared but intentionally
+      disabled pending a real checkout, verified seller/policies, exact
+      public offer facts, and explicit Product Owner approval.
+  - name: Offers
+    description: >-
+      Dormant direct-sale Merchant Offer control plane (settings.manage,
+      ADMIN-only — ADR-0019). Preparation for a future real checkout, not
+      permission to publish Merchant output today: every offer here is
+      structurally ineligible for syndication while
+      PlatformSettings.merchantCenterEnabled stays hard-false. A quote-only
+      product's offers remain excluded unless the product is explicitly
+      opted into direct-sale mode.
   - name: Advertising
     description: >-
       Advertising-integration control plane (settings.manage, ADMIN-only —
@@ -2219,6 +2231,210 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/admin/offers:
+    get:
+      operationId: listOffers
+      summary: >-
+        List Merchant offers (settings.manage — ADMIN only, ADR-0019).
+        Filterable by productId/state; cursor-paginated.
+      tags: [Offers]
+      parameters:
+        - name: productId
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/OfferState'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt_asc, createdAt_desc]
+        - $ref: '#/components/parameters/CursorParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated offers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Offer'
+                  page:
+                    $ref: '#/components/schemas/CursorPageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: createOffer
+      summary: >-
+        Create a new offer, always as DRAFT (settings.manage — ADMIN only,
+        ADR-0019). Publishing is a deliberate, separate, audited second step
+        via PATCH /api/admin/offers/{offerId} — never a side effect of
+        creation. Rejected before any write if the effective offer is
+        structurally invalid (non-positive price, malformed currency,
+        contradictory stock/availability state, and so on).
+      tags: [Offers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOfferRequest'
+      responses:
+        '201':
+          description: The created draft offer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/offers/{offerId}:
+    patch:
+      operationId: updateOffer
+      summary: >-
+        Update an offer (settings.manage — ADMIN only, ADR-0019). Tri-state
+        fields: omitted = unchanged, null = clear, value = set. Validates the
+        *effective* (current merged with patch) offer — publishing
+        (state: PUBLISHED) is rejected unless the parent product is
+        explicitly direct-sale-enabled, checkoutUrl/deliveryPolicyRef/
+        returnPolicyRef are all present, eligibleCountries is non-empty, and
+        the offer is not already expired.
+      tags: [Offers]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOfferRequest'
+      responses:
+        '200':
+          description: The updated offer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/offers/{offerId}/eligibility:
+    get:
+      operationId: getOfferEligibility
+      summary: >-
+        Per-offer eligibility reasons for the admin operational view
+        (settings.manage — ADMIN only, ADR-0019). `MERCHANT_CENTER_DISABLED`
+        is always present while PlatformSettings.merchantCenterEnabled stays
+        hard-false — no offer can ever be eligible in this phase.
+      tags: [Offers]
+      parameters:
+        - name: offerId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The offer's eligibility state and reasons.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [offerId, eligible, ineligibilityReasons]
+                properties:
+                  offerId: { type: string }
+                  eligible: { type: boolean }
+                  ineligibilityReasons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OfferIneligibilityReason'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/admin/products/{productId}/direct-sale:
+    patch:
+      operationId: setProductDirectSaleEnabled
+      summary: >-
+        Explicit per-product opt-in into direct-sale mode (settings.manage —
+        ADMIN only, ADR-0019). Required before any of the product's offers
+        can ever publish; flipping this alone never syndicates anything —
+        PlatformSettings.merchantCenterEnabled remains the separate,
+        hard-false gate.
+      tags: [Offers]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [directSaleEnabled, expectedVersion]
+              properties:
+                directSaleEnabled: { type: boolean }
+                expectedVersion: { type: integer }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: The product's updated direct-sale flag.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, directSaleEnabled, version]
+                properties:
+                  id: { type: string }
+                  directSaleEnabled: { type: boolean }
+                  version: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/analytics/events:
     post:
       operationId: recordAnalyticsEvents
@@ -3249,6 +3465,150 @@ components:
         pixelId: { type: [string, 'null'] }
         credentialSecretRef: { type: [string, 'null'] }
         testMode: { type: boolean }
+    OfferState:
+      type: string
+      enum: [DRAFT, PUBLISHED, ARCHIVED]
+    OfferAvailability:
+      type: string
+      enum: [IN_STOCK, OUT_OF_STOCK, PREORDER, BACKORDER, DISCONTINUED]
+    TaxDisplayPolicy:
+      type: string
+      enum: [TAX_INCLUDED, TAX_EXCLUDED]
+    OfferIneligibilityReason:
+      type: string
+      description: >-
+        ADR-0019's closed reason set. MERCHANT_CENTER_DISABLED is always
+        present while PlatformSettings.merchantCenterEnabled stays
+        hard-false.
+      enum:
+        - NOT_PUBLISHED
+        - PRODUCT_NOT_DIRECT_SALE_ENABLED
+        - PRODUCT_RETIRED
+        - PRODUCT_NOT_PUBLISHED
+        - EXPIRED
+        - NOT_YET_EFFECTIVE
+        - DISCONTINUED
+        - MERCHANT_CENTER_DISABLED
+    Offer:
+      type: object
+      required:
+        - id
+        - productId
+        - state
+        - sellerName
+        - priceAmountMinor
+        - currency
+        - taxDisplayPolicy
+        - availability
+        - sku
+        - eligibleCountries
+        - effectiveFrom
+        - updatedAt
+        - version
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        state:
+          $ref: '#/components/schemas/OfferState'
+        sellerName: { type: string }
+        sellerUrl: { type: [string, 'null'] }
+        priceAmountMinor: { type: integer }
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217, e.g. "USD".
+        taxDisplayPolicy:
+          $ref: '#/components/schemas/TaxDisplayPolicy'
+        availability:
+          $ref: '#/components/schemas/OfferAvailability'
+        availableFrom: { type: [string, 'null'], format: date-time }
+        inventoryQuantity: { type: [integer, 'null'] }
+        sku: { type: string }
+        gtin: { type: [string, 'null'] }
+        mpn: { type: [string, 'null'] }
+        brand: { type: [string, 'null'] }
+        eligibleCountries:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 2 }
+        deliveryPolicyRef: { type: [string, 'null'] }
+        returnPolicyRef: { type: [string, 'null'] }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: [string, 'null'], format: date-time }
+        checkoutUrl:
+          type: [string, 'null']
+          description: >-
+            Present only when purchasable; absent is the explicit
+            not-yet-purchasable state. Required for state: PUBLISHED.
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer }
+    CreateOfferRequest:
+      type: object
+      required:
+        - productId
+        - sellerName
+        - priceAmountMinor
+        - currency
+        - taxDisplayPolicy
+        - availability
+        - sku
+        - eligibleCountries
+        - effectiveFrom
+      properties:
+        productId: { type: string }
+        sellerName: { type: string, minLength: 1 }
+        sellerUrl: { type: string, format: uri }
+        priceAmountMinor: { type: integer }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        taxDisplayPolicy:
+          $ref: '#/components/schemas/TaxDisplayPolicy'
+        availability:
+          $ref: '#/components/schemas/OfferAvailability'
+        availableFrom: { type: string, format: date-time }
+        inventoryQuantity: { type: integer, minimum: 0 }
+        sku: { type: string, minLength: 1 }
+        gtin: { type: string, minLength: 1 }
+        mpn: { type: string, minLength: 1 }
+        brand: { type: string, minLength: 1 }
+        eligibleCountries:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 2 }
+        deliveryPolicyRef: { type: string, minLength: 1 }
+        returnPolicyRef: { type: string, minLength: 1 }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: string, format: date-time }
+        checkoutUrl: { type: string, format: uri }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    UpdateOfferRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        state:
+          $ref: '#/components/schemas/OfferState'
+        sellerName: { type: string, minLength: 1 }
+        sellerUrl: { type: [string, 'null'] }
+        priceAmountMinor: { type: integer }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        taxDisplayPolicy:
+          $ref: '#/components/schemas/TaxDisplayPolicy'
+        availability:
+          $ref: '#/components/schemas/OfferAvailability'
+        availableFrom: { type: [string, 'null'], format: date-time }
+        inventoryQuantity: { type: [integer, 'null'], minimum: 0 }
+        sku: { type: string, minLength: 1 }
+        gtin: { type: [string, 'null'] }
+        mpn: { type: [string, 'null'] }
+        brand: { type: [string, 'null'] }
+        eligibleCountries:
+          type: array
+          items: { type: string, minLength: 2, maxLength: 2 }
+        deliveryPolicyRef: { type: [string, 'null'] }
+        returnPolicyRef: { type: [string, 'null'] }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: [string, 'null'], format: date-time }
+        checkoutUrl: { type: [string, 'null'] }
     AnalyticsConsentState:
       type: object
       required: [analytics, advertising]

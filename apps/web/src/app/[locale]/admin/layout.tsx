@@ -62,6 +62,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <li>
             <Link href="/admin/advertising">Advertising</Link>
           </li>
+          <li>
+            <Link href="/admin/offers">Offers</Link>
+          </li>
         </ul>
       </nav>
       {children}
