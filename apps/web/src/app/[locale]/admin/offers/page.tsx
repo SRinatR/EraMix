@@ -5,6 +5,7 @@ import type { Offer } from '@eramix/domain';
 import { notFound } from 'next/navigation';
 import { CreateOfferForm } from './create-offer-form';
 import { DirectSaleToggleForm } from './direct-sale-toggle-form';
+import { FeedPreviewPanel } from './feed-preview-panel';
 import { OfferEditForm } from './offer-edit-form';
 
 export const dynamic = 'force-dynamic';
@@ -119,6 +120,7 @@ export default async function AdminOffersPage() {
       </table>
       <h2>Create offer</h2>
       <CreateOfferForm />
+      <FeedPreviewPanel />
     </main>
   );
 }

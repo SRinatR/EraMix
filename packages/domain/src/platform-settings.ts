@@ -39,7 +39,7 @@ export function validateEffectivePlatformSettings(effective: PlatformSettings): 
   }
   if (effective.merchantCenterEnabled) {
     throw new ValidationFailedError(
-      "merchantCenterEnabled cannot be enabled: no versioned sellable-offer (Merchant) model exists yet. This flag is prepared scaffolding only — see docs/runbooks/search-visibility.md's direct-sale launch sequence.",
+      'merchantCenterEnabled cannot be enabled: the versioned Offer model exists (ADR-0019) but stays intentionally disabled pending a real checkout, verified seller/policies, exact public offer facts, and explicit Product Owner approval.',
       { merchantCenterEnabled: true },
     );
   }

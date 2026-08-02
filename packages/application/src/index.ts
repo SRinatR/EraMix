@@ -202,3 +202,16 @@ export type {
   OfferEligibility,
   SetProductDirectSaleEnabledInput,
 } from './offer.js';
+export {
+  buildMerchantFeedPreview,
+  formatMerchantFeedTsv,
+  buildProductOfferJsonLd,
+} from './merchant-feed.js';
+export type {
+  MerchantFeedDeps,
+  MerchantFeedPreview,
+  MerchantFeedItem,
+  MerchantFeedDiagnostic,
+  MerchantFeedDiagnosticReason,
+  ProductOfferJsonLd,
+} from './merchant-feed.js';

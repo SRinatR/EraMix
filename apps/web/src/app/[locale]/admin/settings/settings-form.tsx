@@ -416,11 +416,12 @@ export function SettingsForm({
       </fieldset>
 
       <fieldset disabled>
-        <legend>Merchant Center (not available yet)</legend>
+        <legend>Merchant Center (dormant — ADR-0019)</legend>
         <label>
           <input type="checkbox" checked={values.merchantCenterEnabled} readOnly />
-          Merchant Center enabled — always rejected until a real versioned sellable-offer model
-          exists
+          Merchant Center enabled — the versioned Offer model exists but this flag is still always
+          rejected pending a real checkout, verified seller/policies, exact public offer facts, and
+          explicit Product Owner approval. See /admin/offers for the dormant feed preview.
         </label>
       </fieldset>
 
