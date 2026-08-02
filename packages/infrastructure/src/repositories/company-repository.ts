@@ -1,4 +1,9 @@
-import { clampPagination, type CompanyRepository, type Page } from '@eramix/application';
+import {
+  clampPagination,
+  type CompanyListFilter,
+  type CompanyRepository,
+  type Page,
+} from '@eramix/application';
 import { ResourceNotFoundError, type Company } from '@eramix/domain';
 import type { Company as CompanyRow } from '../generated/prisma/client.js';
 import { nullableJsonToRecord } from '../prisma-json.js';
@@ -27,16 +32,17 @@ export class PrismaCompanyRepository implements CompanyRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number; search?: string } = {},
+    input: { limit?: number; offset?: number } & CompanyListFilter = {},
   ): Promise<Page<Company>> {
     const { limit, offset } = clampPagination(input);
     const where =
       input.search !== undefined && input.search.trim().length > 0
         ? { legalName: { contains: input.search, mode: 'insensitive' as const } }
         : {};
+    const orderBy = buildCompanyOrderBy(input.sort);
     const client = resolveClient(this.prisma);
     const [rows, total] = await Promise.all([
-      client.company.findMany({ where, orderBy: { createdAt: 'asc' }, take: limit, skip: offset }),
+      client.company.findMany({ where, orderBy, take: limit, skip: offset }),
       client.company.count({ where }),
     ]);
     return { items: rows.map(toDomain), total, limit, offset };
@@ -62,6 +68,21 @@ export class PrismaCompanyRepository implements CompanyRepository {
       throw new ResourceNotFoundError(`Company ${id} not found after update.`, { id });
     }
     return toDomain(updated);
+  }
+}
+
+/** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
+function buildCompanyOrderBy(sort: CompanyListFilter['sort']): Record<string, 'asc' | 'desc'> {
+  switch (sort) {
+    case 'legalName_asc':
+      return { legalName: 'asc' };
+    case 'legalName_desc':
+      return { legalName: 'desc' };
+    case 'createdAt_desc':
+      return { createdAt: 'desc' };
+    case 'createdAt_asc':
+    default:
+      return { createdAt: 'asc' };
   }
 }
 

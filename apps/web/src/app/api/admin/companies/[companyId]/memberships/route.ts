@@ -2,7 +2,7 @@ import { getContainer } from '@/server/container';
 import { withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
-import { requirePermission } from '@eramix/application';
+import { requirePermission, type MembershipListFilter } from '@eramix/application';
 import { ResourceNotFoundError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -11,6 +11,16 @@ const createMembershipSchema = z.object({
   userId: z.string().min(1),
   role: z.enum(['OWNER', 'MEMBER']),
 });
+
+type MembershipSort = NonNullable<MembershipListFilter['sort']>;
+const SORTS: readonly MembershipSort[] = ['createdAt_asc', 'createdAt_desc'];
+
+/** DB-005: only an exact allowlist member is ever forwarded to the repository's `orderBy`. */
+function parseSort(value: string | null): MembershipSort | undefined {
+  return value !== null && (SORTS as readonly string[]).includes(value)
+    ? (value as MembershipSort)
+    : undefined;
+}
 
 export const GET = withApiHandler<{ companyId: string }>(
   'admin.companies.memberships.list',
@@ -23,10 +33,12 @@ export const GET = withApiHandler<{ companyId: string }>(
     const url = new URL(request.url);
     const limitParam = url.searchParams.get('limit');
     const offsetParam = url.searchParams.get('offset');
+    const sort = parseSort(url.searchParams.get('sort'));
     const container = getContainer();
     const { items, total, limit, offset } = await container.memberships.listByCompany(companyId, {
       ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
       ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
+      ...(sort !== undefined ? { sort } : {}),
     });
 
     return NextResponse.json({ items, total, limit, offset });

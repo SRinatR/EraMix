@@ -38,12 +38,17 @@ import type { Page, PaginationInput } from './pagination.js';
  * (submit order, publish content, ...) belong to later phases.
  */
 
+export interface UserListFilter {
+  readonly search?: string;
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc' | 'displayName_asc' | 'displayName_desc';
+}
+
 export interface UserRepository {
   findById(id: string): Promise<User | undefined>;
   findByIssuerAndSubject(issuer: string, subject: string): Promise<User | undefined>;
   create(input: Omit<User, 'version' | 'createdAt' | 'updatedAt'>): Promise<User>;
-  /** Admin `users.manage` listing (ADM-002/DB-005: bounded, paginated, optional email/displayName substring search). */
-  listAll(input?: PaginationInput & { search?: string }): Promise<Page<User>>;
+  /** Admin `users.manage` listing (ADM-002/DB-005: bounded, paginated, filterable, sortable). */
+  listAll(input?: PaginationInput & UserListFilter): Promise<Page<User>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updatePlatformRole(
     id: string,
@@ -52,21 +57,33 @@ export interface UserRepository {
   ): Promise<User>;
 }
 
+export interface CompanyListFilter {
+  readonly search?: string;
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc' | 'legalName_asc' | 'legalName_desc';
+}
+
 export interface CompanyRepository {
   findById(id: string): Promise<Company | undefined>;
   create(input: Omit<Company, 'version' | 'createdAt' | 'updatedAt'>): Promise<Company>;
-  /** Admin `users.manage` listing (TZ's Identity & Access module owns company data; ADM-002/DB-005: bounded, paginated, optional legalName substring search). */
-  listAll(input?: PaginationInput & { search?: string }): Promise<Page<Company>>;
+  /** Admin `users.manage` listing (TZ's Identity & Access module owns company data; ADM-002/DB-005: bounded, paginated, filterable, sortable). */
+  listAll(input?: PaginationInput & CompanyListFilter): Promise<Page<Company>>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(id: string, expectedVersion: number, status: Company['status']): Promise<Company>;
+}
+
+export interface MembershipListFilter {
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc';
 }
 
 export interface MembershipRepository {
   findById(id: string): Promise<Membership | undefined>;
   findByUserAndCompany(userId: string, companyId: string): Promise<Membership | undefined>;
   listByUser(userId: string): Promise<readonly Membership[]>;
-  /** ADM-002/DB-005: bounded, paginated. */
-  listByCompany(companyId: string, input?: PaginationInput): Promise<Page<Membership>>;
+  /** ADM-002/DB-005: bounded, paginated, sortable. */
+  listByCompany(
+    companyId: string,
+    input?: PaginationInput & MembershipListFilter,
+  ): Promise<Page<Membership>>;
   create(input: Omit<Membership, 'version' | 'createdAt' | 'updatedAt'>): Promise<Membership>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(

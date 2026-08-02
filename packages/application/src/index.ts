@@ -18,8 +18,11 @@ export type { Page, PaginationInput } from './pagination.js';
 export { clampPagination, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './pagination.js';
 export type {
   UserRepository,
+  UserListFilter,
   CompanyRepository,
+  CompanyListFilter,
   MembershipRepository,
+  MembershipListFilter,
   CategoryRepository,
   CategoryWithTranslations,
   CategoryTranslationEditPatch,

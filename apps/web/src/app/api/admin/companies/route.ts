@@ -2,7 +2,7 @@ import { getContainer } from '@/server/container';
 import { withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
-import { requirePermission } from '@eramix/application';
+import { requirePermission, type CompanyListFilter } from '@eramix/application';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -17,6 +17,21 @@ const createCompanySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+type CompanySort = NonNullable<CompanyListFilter['sort']>;
+const SORTS: readonly CompanySort[] = [
+  'createdAt_asc',
+  'createdAt_desc',
+  'legalName_asc',
+  'legalName_desc',
+];
+
+/** DB-005: only an exact allowlist member is ever forwarded to the repository's `orderBy`. */
+function parseSort(value: string | null): CompanySort | undefined {
+  return value !== null && (SORTS as readonly string[]).includes(value)
+    ? (value as CompanySort)
+    : undefined;
+}
+
 export const GET = withApiHandler('admin.companies.list', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
@@ -26,11 +41,13 @@ export const GET = withApiHandler('admin.companies.list', async (request) => {
   const limitParam = url.searchParams.get('limit');
   const offsetParam = url.searchParams.get('offset');
   const searchParam = url.searchParams.get('search');
+  const sort = parseSort(url.searchParams.get('sort'));
   const container = getContainer();
   const { items, total, limit, offset } = await container.companies.listAll({
     ...(limitParam !== null ? { limit: Number(limitParam) } : {}),
     ...(offsetParam !== null ? { offset: Number(offsetParam) } : {}),
     ...(searchParam !== null ? { search: searchParam } : {}),
+    ...(sort !== undefined ? { sort } : {}),
   });
 
   return NextResponse.json({

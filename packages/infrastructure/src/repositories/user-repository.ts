@@ -1,4 +1,9 @@
-import { clampPagination, type Page, type UserRepository } from '@eramix/application';
+import {
+  clampPagination,
+  type Page,
+  type UserListFilter,
+  type UserRepository,
+} from '@eramix/application';
 import { ResourceNotFoundError, type PlatformRole, type User } from '@eramix/domain';
 import type { User as UserRow } from '../generated/prisma/client.js';
 import type { PrismaClient } from '../prisma-client.js';
@@ -36,7 +41,7 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async listAll(
-    input: { limit?: number; offset?: number; search?: string } = {},
+    input: { limit?: number; offset?: number } & UserListFilter = {},
   ): Promise<Page<User>> {
     const { limit, offset } = clampPagination(input);
     const where =
@@ -48,9 +53,10 @@ export class PrismaUserRepository implements UserRepository {
             ],
           }
         : {};
+    const orderBy = buildUserOrderBy(input.sort);
     const client = resolveClient(this.prisma);
     const [rows, total] = await Promise.all([
-      client.user.findMany({ where, orderBy: { createdAt: 'asc' }, take: limit, skip: offset }),
+      client.user.findMany({ where, orderBy, take: limit, skip: offset }),
       client.user.count({ where }),
     ]);
     return { items: rows.map(toDomain), total, limit, offset };
@@ -76,6 +82,21 @@ export class PrismaUserRepository implements UserRepository {
       throw new ResourceNotFoundError(`User ${id} not found after update.`, { id });
     }
     return toDomain(updated);
+  }
+}
+
+/** DB-005: explicit allowlist, never a raw sort field passed straight into Prisma's `orderBy`. */
+function buildUserOrderBy(sort: UserListFilter['sort']): Record<string, 'asc' | 'desc'> {
+  switch (sort) {
+    case 'displayName_asc':
+      return { displayName: 'asc' };
+    case 'displayName_desc':
+      return { displayName: 'desc' };
+    case 'createdAt_desc':
+      return { createdAt: 'desc' };
+    case 'createdAt_asc':
+    default:
+      return { createdAt: 'asc' };
   }
 }
 

@@ -1707,6 +1707,42 @@ gap." This slice closes it for categories and products.
   added — no new distinct logic to test at the application layer).
   Production build and any Postgres-backed behaviour verified by CI only.
 
+### Rich search/sort for admin users, companies, and memberships; a real OpenAPI staleness bug found and fixed
+
+- **Sort added** (same explicit-allowlist pattern): `UserListFilter.sort`
+  (`createdAt_asc|createdAt_desc|displayName_asc|displayName_desc`),
+  `CompanyListFilter.sort`
+  (`createdAt_asc|createdAt_desc|legalName_asc|legalName_desc`),
+  `MembershipListFilter.sort` (`createdAt_asc|createdAt_desc`) — enforced
+  in each Prisma adapter's `orderBy` builder and independently at every
+  delivery-layer entry point (the three page components via
+  `parseAllowlistedParam`, the three API routes via a local `parseSort`
+  using the identical allowlist array). `/admin/users` gained its
+  first-ever search box (the route already accepted `?search=` from the
+  earlier slice, but no UI control existed to send it) plus a sort
+  `<select>` and an explicit "No users match this filter." empty state
+  (previously absent). `/admin/companies` and `/admin/companies/
+{companyId}/memberships` gained the same treatment.
+- **Found and fixed a real, pre-existing OpenAPI staleness bug while
+  documenting this**: `GET /api/admin/companies` and `GET /api/admin/
+companies/{companyId}/memberships` were still documented with their
+  original pre-pagination response shape (`{items}` only, no `total`/
+  `limit`/`offset`, no query parameters at all) — the earlier pagination
+  slice updated the actual route handlers and `GET /api/admin/users`'s
+  contract entry, but missed these two. `redocly lint` cannot catch this
+  class of bug (a schema that no longer matches the real response is still
+  valid OpenAPI); found only by re-reading every admin list endpoint's
+  contract entry against its route handler while adding `sort`, not by
+  any automated check. Both now correctly document `search`/`sort`/
+  `limit`/`offset` parameters and the real `{items, total, limit, offset}`
+  response.
+- **Verified locally** (laptop; no local `next build`/dev-server, same
+  disk-space policy): `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck`/`test` all exit 0 — 289 unit tests unchanged (same reasoning
+  as the previous entry — the allowlist-rejection logic is already covered
+  by `pagination.test.ts`). Production build and any Postgres-backed
+  behaviour verified by CI only.
+
 ## Required task format for the CLI agent
 
 For every task, report:

@@ -640,13 +640,22 @@ paths:
     get:
       operationId: listAdminUsers
       summary: List platform users (users.manage — Administrator only)
-      description: ADM-002/DB-005 — bounded, paginated, optional email/displayName substring search.
+      description: >-
+        ADM-002/DB-005 — bounded, paginated, optional email/displayName
+        substring search, allowlisted sort.
       tags: [Admin]
       parameters:
         - name: search
           in: query
           required: false
           schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt_asc, createdAt_desc, displayName_asc, displayName_desc]
+            default: createdAt_asc
         - name: limit
           in: query
           required: false
@@ -722,21 +731,45 @@ paths:
         TZ §3.1's RBAC matrix has no separate "Компании" resource; company
         data belongs to the same Identity & Access module as users/roles
         (§4.2), so this reuses the existing users.manage permission rather
-        than introducing a new one.
+        than introducing a new one. ADM-002/DB-005: bounded, paginated,
+        optional legalName substring search, allowlisted sort.
       tags: [Admin]
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [createdAt_asc, createdAt_desc, legalName_asc, legalName_desc]
+            default: createdAt_asc
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         '200':
-          description: Companies.
+          description: Paginated companies.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, offset]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/Company'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -799,25 +832,41 @@ paths:
     get:
       operationId: listCompanyMemberships
       summary: List a company's memberships (users.manage — Administrator only)
+      description: ADM-002/DB-005 — bounded, paginated, allowlisted sort.
       tags: [Admin]
       parameters:
         - name: companyId
           in: path
           required: true
           schema: { type: string }
+        - name: sort
+          in: query
+          required: false
+          schema: { type: string, enum: [createdAt_asc, createdAt_desc], default: createdAt_asc }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         '200':
-          description: Memberships.
+          description: Paginated memberships.
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, total, limit, offset]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/Membership'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
