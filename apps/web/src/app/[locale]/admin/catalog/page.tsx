@@ -1,5 +1,8 @@
+import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
+import { AddTranslationForm } from './add-translation-form';
+import { ChangeSlugForm } from './change-slug-form';
 import { TransitionStatusForm } from './transition-status-form';
 import { requirePermission } from '@eramix/application';
 import { notFound } from 'next/navigation';
@@ -35,13 +38,17 @@ export default async function AdminCatalogPage() {
     <main>
       <h1>Catalog</h1>
 
-      <h2>Categories</h2>
+      <h2>
+        Categories <Link href="/admin/catalog/categories/new">New category</Link>
+      </h2>
       <table>
         <thead>
           <tr>
             <th>Name</th>
             <th>Status</th>
             <th>Change status</th>
+            <th>Add translation</th>
+            <th>Slugs</th>
           </tr>
         </thead>
         <tbody>
@@ -56,12 +63,33 @@ export default async function AdminCatalogPage() {
                   expectedVersion={category.version}
                 />
               </td>
+              <td>
+                <AddTranslationForm
+                  endpoint={`/api/admin/categories/${category.id}/translations`}
+                  existingLocales={category.translations.map((t) => t.locale)}
+                  requireSlug={false}
+                />
+              </td>
+              <td>
+                {category.translations.map((translation) => (
+                  <div key={translation.id}>
+                    {translation.locale}:{' '}
+                    <ChangeSlugForm
+                      endpoint={`/api/admin/categories/${category.id}/translations/${translation.id}/slug`}
+                      currentSlug={translation.routes.find((route) => route.isCanonical)?.slug}
+                      extraBody={{ locale: translation.locale }}
+                    />
+                  </div>
+                ))}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <h2>Products</h2>
+      <h2>
+        Products <Link href="/admin/catalog/products/new">New product</Link>
+      </h2>
       <table>
         <thead>
           <tr>
@@ -69,6 +97,7 @@ export default async function AdminCatalogPage() {
             <th>Name</th>
             <th>Status</th>
             <th>Change status</th>
+            <th>Add translation</th>
           </tr>
         </thead>
         <tbody>
@@ -82,6 +111,13 @@ export default async function AdminCatalogPage() {
                   endpoint={`/api/admin/products/${product.id}/status`}
                   currentStatus={product.status}
                   expectedVersion={product.version}
+                />
+              </td>
+              <td>
+                <AddTranslationForm
+                  endpoint={`/api/admin/products/${product.id}/translations`}
+                  existingLocales={product.translations.map((t) => t.locale)}
+                  requireSlug={true}
                 />
               </td>
             </tr>

@@ -77,6 +77,11 @@ export interface CategoryRepository {
     category: Omit<Category, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>[],
   ): Promise<CategoryWithTranslations>;
+  /** Adds a translation to an existing category. Throws SlugConflictError if the (categoryId, locale) pair already exists. */
+  addTranslation(
+    categoryId: string,
+    translation: Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>,
+  ): Promise<CategoryWithTranslations>;
   setCanonicalRoute(
     route: Omit<CategoryRoute, 'id' | 'createdAt' | 'isCanonical'>,
   ): Promise<CategoryRoute>;
@@ -104,6 +109,11 @@ export interface ProductRepository {
   create(
     product: Omit<Product, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<ProductTranslation, 'createdAt' | 'updatedAt'>[],
+  ): Promise<ProductWithTranslations>;
+  /** Adds a translation to an existing product. Throws SlugConflictError if the (productId, locale) pair already exists. */
+  addTranslation(
+    productId: string,
+    translation: Omit<ProductTranslation, 'createdAt' | 'updatedAt'>,
   ): Promise<ProductWithTranslations>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
@@ -147,6 +157,11 @@ export interface ContentRepository {
   create(
     content: Omit<Content, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<ContentTranslation, 'createdAt' | 'updatedAt'>[],
+  ): Promise<ContentWithTranslations>;
+  /** Adds a translation to an existing content item. Throws SlugConflictError if the (contentId, locale) pair already exists. */
+  addTranslation(
+    contentId: string,
+    translation: Omit<ContentTranslation, 'createdAt' | 'updatedAt'>,
   ): Promise<ContentWithTranslations>;
   /**
    * Creates a new canonical route for a translation, demoting any previous

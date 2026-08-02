@@ -70,3 +70,25 @@ export {
 export type { ProductSearchResult } from './catalog-queries.js';
 export { uploadMedia } from './uploads.js';
 export type { UploadMediaDeps, UploadMediaInput } from './uploads.js';
+export {
+  createCategory,
+  addCategoryTranslation,
+  createProduct,
+  addProductTranslation,
+  createContent,
+  addContentTranslation,
+} from './authoring.js';
+export type {
+  CategoryAuthoringDeps,
+  CreateCategoryInput,
+  CreateCategoryTranslationInput,
+  AddCategoryTranslationInput,
+  ProductAuthoringDeps,
+  CreateProductInput,
+  CreateProductTranslationInput,
+  AddProductTranslationInput,
+  ContentAuthoringDeps,
+  CreateContentInput,
+  CreateContentTranslationInput,
+  AddContentTranslationInput,
+} from './authoring.js';

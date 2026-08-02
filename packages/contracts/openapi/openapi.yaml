@@ -630,6 +630,317 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/admin/categories:
+    post:
+      operationId: createCategory
+      summary: >-
+        Author a new category (DRAFT) plus its first translation(s)
+        (catalog.write — Administrator only). A translation that carries a
+        `slug` gets an initial canonical route in the same transaction.
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: The created category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: The slug is already used by another route in this locale.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/categories/{categoryId}/translations:
+    post:
+      operationId: addCategoryTranslation
+      summary: >-
+        Add a translation to an existing category (catalog.write —
+        Administrator only).
+      tags: [Admin]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryTranslationInput'
+      responses:
+        '201':
+          description: The updated category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A translation for this locale already exists, or the slug is taken.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/categories/{categoryId}/translations/{translationId}/slug:
+    patch:
+      operationId: changeCategorySlug
+      summary: >-
+        Explicit slug-change command for one translation (catalog.write —
+        Administrator only). The previous canonical route is demoted, never
+        deleted, so it keeps resolving as a one-hop 308 redirect.
+      tags: [Admin]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: translationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeSlugRequest'
+      responses:
+        '200':
+          description: The new canonical route.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeSlugResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: The new slug is already used by another route in this locale.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content/{contentId}/translations/{translationId}/slug:
+    patch:
+      operationId: changeContentSlug
+      summary: >-
+        Explicit slug-change command for one translation (content.write —
+        Administrator/Content editor). Same one-hop-redirect guarantee as the
+        category equivalent.
+      tags: [Admin]
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: translationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeContentSlugRequest'
+      responses:
+        '200':
+          description: The new canonical route.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeSlugResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: >-
+            The new slug is already used by another route in this
+            locale/namespace.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products:
+    post:
+      operationId: createProduct
+      summary: >-
+        Author a new product (DRAFT) with a generated, immutable publicId
+        plus its first translation(s) (catalog.write — Administrator only).
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: The created product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProductResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          description: The referenced categoryId does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: The sku is already in use.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products/{productId}/translations:
+    post:
+      operationId: addProductTranslation
+      summary: >-
+        Add a translation to an existing product (catalog.write —
+        Administrator only).
+      tags: [Admin]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductTranslationInput'
+      responses:
+        '201':
+          description: The updated product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A translation for this locale already exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content:
+    post:
+      operationId: createContent
+      summary: >-
+        Author a new Article/Page/FAQ item (DRAFT) plus its first
+        translation(s) (content.write — Administrator/Content editor).
+        ARTICLE/PAGE translations that carry a slug get an initial canonical
+        route in the matching namespace; FAQ_ITEM has none (TZ Appendix F.3).
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContentRequest'
+      responses:
+        '201':
+          description: The created content item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateContentResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: The slug is already used by another route in this locale/namespace.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content/{contentId}/translations:
+    post:
+      operationId: addContentTranslation
+      summary: >-
+        Add a translation to an existing content item (content.write —
+        Administrator/Content editor).
+      tags: [Admin]
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentTranslationInput'
+      responses:
+        '201':
+          description: The updated content item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            A translation for this locale already exists, or the slug is
+            taken.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/admin/audit:
     get:
       operationId: searchAuditEvents
@@ -1043,3 +1354,138 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProblemDetailsFieldError'
+    ChangeSlugRequest:
+      type: object
+      required: [locale, newSlug]
+      properties:
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        newSlug: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1 }
+    ChangeContentSlugRequest:
+      type: object
+      required: [locale, namespace, newSlug]
+      properties:
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        namespace:
+          type: string
+          enum: [ARTICLES, PAGES]
+        newSlug: { type: string, minLength: 1 }
+        reason: { type: string, minLength: 1 }
+    ChangeSlugResult:
+      type: object
+      required: [slug, isCanonical]
+      properties:
+        slug: { type: string }
+        isCanonical: { type: boolean }
+    CategoryTranslationInput:
+      type: object
+      required: [locale, name]
+      properties:
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        name: { type: string, minLength: 1 }
+        seoTitle: { type: string, minLength: 1 }
+        seoDescription: { type: string, minLength: 1 }
+        slug:
+          type: string
+          minLength: 1
+          description: When set, becomes this translation's initial canonical route.
+    CreateCategoryRequest:
+      type: object
+      required: [translations]
+      properties:
+        parentId: { type: string }
+        sortOrder: { type: integer }
+        translations:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CategoryTranslationInput'
+    ProductTranslationInput:
+      type: object
+      required: [locale, name, slug]
+      properties:
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        name: { type: string, minLength: 1 }
+        slug: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        seoTitle: { type: string, minLength: 1 }
+        seoDescription: { type: string, minLength: 1 }
+        indicativePrice:
+          $ref: '#/components/schemas/ProductIndicativePrice'
+    CreateProductRequest:
+      type: object
+      required: [sku, categoryId, translations]
+      properties:
+        sku: { type: string, minLength: 1 }
+        categoryId: { type: string }
+        translations:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ProductTranslationInput'
+    CreateProductResult:
+      type: object
+      required: [id, publicId, status, version]
+      properties:
+        id: { type: string }
+        publicId: { type: string }
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        version: { type: integer }
+    ContentType:
+      type: string
+      description: >-
+        FAQ_ITEM has no per-item route (TZ Appendix F.3) — a slug is only
+        valid for ARTICLE/PAGE translations.
+      enum: [ARTICLE, PAGE, FAQ_ITEM]
+    ContentBody:
+      description: >-
+        A single paragraph, or an ordered list of paragraphs, rendered as
+        plain text (no HTML/markdown in the MVP body format).
+      oneOf:
+        - type: string
+          minLength: 1
+        - type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+    ContentTranslationInput:
+      type: object
+      required: [locale, title, content]
+      properties:
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        title: { type: string, minLength: 1 }
+        summary: { type: string, minLength: 1 }
+        content:
+          $ref: '#/components/schemas/ContentBody'
+        seoTitle: { type: string, minLength: 1 }
+        seoDescription: { type: string, minLength: 1 }
+        slug:
+          type: string
+          minLength: 1
+          description: Only valid for ARTICLE/PAGE translations.
+    CreateContentRequest:
+      type: object
+      required: [type, translations]
+      properties:
+        type:
+          $ref: '#/components/schemas/ContentType'
+        translations:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ContentTranslationInput'
+    CreateContentResult:
+      type: object
+      required: [id, type, status, version]
+      properties:
+        id: { type: string }
+        type:
+          $ref: '#/components/schemas/ContentType'
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        version: { type: integer }

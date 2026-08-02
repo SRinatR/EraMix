@@ -1,3 +1,4 @@
+import { ContentBody } from '@/components/content-body';
 import { getContainer } from '@/server/container';
 import { contentAlternates } from '@/server/seo';
 import { resolveContentRoute } from '@eramix/application';
@@ -52,6 +53,7 @@ export default async function ArticlePage({ params }: { params: Promise<PagePara
     <main>
       <h1>{translation.title}</h1>
       {translation.summary && <p>{translation.summary}</p>}
+      <ContentBody content={translation.content} />
     </main>
   );
 }

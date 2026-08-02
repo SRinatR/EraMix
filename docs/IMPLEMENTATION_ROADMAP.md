@@ -342,10 +342,25 @@ products/{publicId}`, `/api/content/{type}` — all public (`security: []`
   application-layer `listCatalogCategories`/`listCatalogProducts`/
   `listContentByType` queries filter by status at the repository layer, not
   the delivery layer).
-- **Not yet built**: company information/certificates/instructions/contacts
-  pages (no such `Content`/`ContentType` beyond `ARTICLE`/`PAGE`/
-  `FAQ_ITEM` exists to back them — would need a product decision on
-  whether they're `PAGE`s or a new type, not invented here), product
+- **Update, 2026-08-02 (Phase 6 session)**: TZ §6.1 WEB-003 ("Разделы «О
+  компании», «Сертификаты», «Инструкции», FAQ, блог и контакты управляются
+  из admin без релиза кода") does not require a new `ContentType` — the
+  existing `PAGE` type plus its existing `/{locale}/pages/{localizedSlug}`
+  route already satisfy "admin-managed, no code release," and Phase 6's new
+  `/admin/content/new` authoring UI (see that phase's status block) can now
+  create a `PAGE` with any editorial slug (e.g. `about`, `certificates`,
+  `instructions`, `contacts`) end to end without a code change. This is a
+  conservative default the existing specification already permits (CLAUDE.md:
+  "Resolve non-blocking open questions conservatively only when the existing
+  specification already permits a default"), not a new product decision —
+  no such pages have actually been authored yet (that is editorial content
+  work, not implementation), and there is still no dedicated main-navigation
+  entry pointing at them (a site-structure/IA decision, not invented here).
+  Also fixed in the same session: `ContentTranslation.content` (the article/
+  page/FAQ body) was stored but never rendered on any public page — see
+  Phase 6's status block for `content-body.tsx`.
+- **Not yet built**: a main-navigation entry for company/certificates/
+  instructions/contacts pages once authored (site-structure decision), product
   media/document attachments (Phase 6 upload plumbing exists —
   `packages/domain/src/upload-validation.ts`, `POST /api/media` — but no
   `ProductAsset`-style association table or gallery UI), and any
@@ -492,9 +507,9 @@ Exit criteria:
 - Publication validates required SEO fields, canonical route, links, and slug
   uniqueness before it becomes public.
 
-### Phase 6 status: users/roles, publication workflow, status-transition admin CRUD, upload/media pipeline, and audit search UI are built; create/edit forms for new categories/products/content translations are not
+### Phase 6 status: users/roles, publication workflow, status-transition admin CRUD, catalog/content authoring (create + add-translation + explicit slug-change), upload/media pipeline, and audit search UI are built
 
-Evidence, 2026-08-02:
+Evidence, 2026-08-02 (continued session):
 
 - **Users/roles** (TZ §3.1 "Пользователи и роли: CRUD" — Admin only):
   `GET /api/admin/users`, `PATCH /api/admin/users/{userId}/role` both
@@ -551,16 +566,100 @@ upload-validation.ts`, `packages/application/src/uploads.ts`): allowlisted
   scanner remain the documented dev-only stand-ins (`LocalFilesystemStorageProvider`,
   `DevMalwareScanner`) pending ADR-0006/Q-06 — never to be used in
   production as-is.
-- **Not yet built**: creating a brand-new Category/Product/Content item
-  (with its first translation(s) and initial canonical route) through an
-  authenticated UI — Phase 1's repository `create` methods and Phase 2's
-  `changeContentSlug`/`changeCategorySlug` use cases exist and are now
-  reachable for _editing an existing_ item's slug/status, but there is no
-  route handler or form to author a new one, or to add/edit a translation
-  on an existing item. Admin E2E (role-specific access + protected-action
-  proof) also remains unbuilt (see Phase 8 — no browser-driven test exists
-  in this repository yet). Do not treat this status block as Phase 6
-  completion — it is not.
+- **Catalog/content authoring closes the gap the previous status block named**
+  (CLAUDE.md: "Status transitions alone are not sufficient: authoring new
+  catalog and content entities must work through real documented APIs and UI
+  forms"). New `packages/application/src/authoring.ts` (14 unit tests):
+  `createCategory`/`createProduct`/`createContent` each generate the
+  aggregate's id (and, for Product, its immutable `publicId` via
+  `generatePublicId()`) plus every submitted translation's id, write them
+  through the existing Phase 1 `*Repository.create()` methods, and — for any
+  Category/Content translation that supplies a `slug` — establish its initial
+  canonical route via `setCanonicalRoute` in the same `UnitOfWork` transaction
+  (Product translations carry `slug` directly, no separate route table, per
+  ADR-0010). A `FAQ_ITEM` translation that supplies a `slug` is rejected
+  (`ValidationFailedError`) rather than silently ignored, since `FAQ_ITEM` has
+  no `ContentRouteNamespace` (TZ Appendix F.3). Each create records an audit
+  event (`category.created`/`product.created`/`content.created`) and an
+  outbox message. `addCategoryTranslation`/`addProductTranslation`/
+  `addContentTranslation` add a translation (optionally with its own slug) to
+  an _existing_ item — the other half of "add/edit a translation on an
+  existing item" the previous status block named as missing — and needed a
+  new `addTranslation` port method on all three repositories (`packages/
+application/src/repositories.ts`, implemented in each Prisma adapter,
+  unique-`(entityId, locale)` violations mapped to `SlugConflictError` exactly
+  like the existing `create()` mapping).
+- **Wired to real, documented, permission-checked endpoints** (permission is
+  enforced inside the use case, same convention as the status-transition
+  routes — not duplicated at the route handler): `POST /api/admin/categories`,
+  `POST /api/admin/categories/{categoryId}/translations`,
+  `POST /api/admin/products`, `POST /api/admin/products/{productId}/
+translations`, `POST /api/admin/content`, `POST /api/admin/content/
+{contentId}/translations` — all rate-limited (`admin` bucket),
+  `requireActor`-gated, documented in `packages/contracts/openapi/
+openapi.yaml` (`CreateCategoryRequest`/`CreateProductRequest`/
+  `CreateContentRequest`/`*TranslationInput` schemas; `redocly lint` passes).
+  Content's rich body (`ContentTranslation.content: Json`) is accepted as a
+  single string or an array of paragraph strings (`ContentBody` schema) —
+  deliberately no HTML/markdown, so it renders through React's default text
+  escaping with no sanitizer needed.
+- **Explicit slug-change is now reachable, not just implemented**: Phase 2's
+  `changeContentSlug`/`changeCategorySlug` (`packages/application/src/
+slug-change.ts`) existed since that phase but had no route handler — Phase
+  6's own deliverable list names "explicit slug operation" directly. Added
+  `PATCH /api/admin/categories/{categoryId}/translations/{translationId}/slug`
+  and the content equivalent (which additionally takes `namespace`, since
+  `changeContentSlug` needs it and content items don't expose a
+  namespace-lookup endpoint of their own). Both return the new route's
+  `{slug, isCanonical}`; the demoted previous canonical route is untouched by
+  this session (already correct since Phase 2 — `setCanonicalRoute` demotes,
+  never deletes, so the old URL keeps 308-redirecting).
+- **Admin UI**: `/admin/catalog/categories/new`, `/admin/catalog/products/new`,
+  `/admin/content/new` (multi-translation authoring forms — add/remove
+  translation rows client-side, one submit); `/admin/catalog` and
+  `/admin/content` gained an "Add translation" inline form per row
+  (disables/hides locales that already have a translation) and a "Slugs"
+  column with one `ChangeSlugForm` per existing translation. All pages
+  re-check the permission server-side before rendering (`requirePermission`
+  in the Server Component, `notFound()` on failure) — the same
+  hidden-UI-is-never-the-control convention as every other admin page.
+- **Found and fixed a real pre-existing gap while wiring this**: the public
+  `articles/[slug]`, `pages/[slug]`, and `faq` pages rendered `title`/
+  `summary` but never `ContentTranslation.content` (the actual body) — so a
+  published article's body was unreachable even though the schema and now
+  the authoring UI both produce it. Added `apps/web/src/components/
+content-body.tsx` (renders the string-or-string-array body as one `<p>` per
+  paragraph) and wired it into all three pages.
+- **Verified locally** (laptop, no Postgres — see the standing Pi-pending
+  note below): `pnpm run check` (format, lint, typecheck, test, build) exit
+  0 — **191 unit tests** across 8 workspace packages/apps (14 of them new,
+  in `authoring.test.ts`; the rest is the pre-existing suite plus a handful
+  of new `addTranslation` stub methods on the in-memory test doubles in
+  `route-resolution.test.ts`, required once the repository ports gained that
+  method), `next build` registers 55 route-table entries, 11 of them new
+  this session (8 API routes — 6 create/add-translation + 2 slug-change —
+  plus the 3 `/admin/.../new` pages). `redocly lint openapi/openapi.yaml`
+  passes. Fixed a real strict-mode gap
+  surfaced by this work: `packages/application/src/slug-change.ts`'s
+  pre-existing `ChangeContentSlugInput`/`ChangeCategorySlugInput.reason?`/
+  `traceId?` were typed without `| undefined`, which only became a compile
+  error once a route handler actually spread a `zod`-`.optional()`-parsed
+  value into them under `exactOptionalPropertyTypes: true` — those two
+  interfaces (and every new one in `authoring.ts`) now explicitly type
+  optional fields as `T | undefined`, matching the existing domain-entity
+  convention (`packages/domain/src/entities.ts`).
+- **Not yet built**: Admin E2E (role-specific access + protected-action
+  proof) remains unbuilt (see Phase 8 — no browser-driven test exists in this
+  repository yet); the create forms accept at most the three MVP locales
+  per submission but do not yet validate cross-field slug unreachability
+  client-side (the server-side `SlugConflictError`/409 path is the actual
+  enforcement and is exercised by `authoring.test.ts`, just not from a real
+  browser). This laptop has no Postgres (per CLAUDE.md execution policy), so
+  none of the new endpoints/pages have been exercised against a live
+  database — `pnpm run check`'s production build and the in-memory-fake unit
+  tests are the laptop-safe ceiling; real-Postgres coverage is Pi-pending,
+  same as every other DB-backed surface in this repository (see Phase 7).
+  Do not treat this status block as Phase 6 completion — it is not.
 
 ## Phase 7 — observability, security, infrastructure, and CI/CD
 

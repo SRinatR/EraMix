@@ -68,6 +68,38 @@ export class PrismaCategoryRepository implements CategoryRepository {
     return route ? routeToDomain(route) : undefined;
   }
 
+  async addTranslation(
+    categoryId: string,
+    translation: Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>,
+  ): Promise<CategoryWithTranslations> {
+    await withUniqueConstraintMapping<CategoryTranslationRow>(
+      () =>
+        resolveClient(this.prisma).categoryTranslation.create({
+          data: {
+            id: translation.id,
+            categoryId,
+            locale: translation.locale,
+            name: translation.name,
+            seoTitle: translation.seoTitle ?? null,
+            seoDescription: translation.seoDescription ?? null,
+          },
+        }),
+      (meta) => {
+        throw new SlugConflictError(
+          `A translation for locale "${translation.locale}" already exists on this category.`,
+          { categoryId, locale: translation.locale, prismaMeta: meta },
+        );
+      },
+    );
+    const updated = await this.findById(categoryId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Category ${categoryId} not found after update.`, {
+        id: categoryId,
+      });
+    }
+    return updated;
+  }
+
   /**
    * Creates a canonical route for a translation, demoting any previously
    * canonical route for the same translation first so the partial unique

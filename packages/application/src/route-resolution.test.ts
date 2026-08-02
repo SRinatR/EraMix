@@ -88,6 +88,10 @@ class InMemoryContentRepository implements ContentRepository {
     throw new Error('not needed for these tests');
   }
 
+  addTranslation(): Promise<ContentWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
   listPublished(): Promise<readonly ContentWithTranslations[]> {
     return Promise.resolve([...this.contents.values()].filter((c) => c.status === 'PUBLISHED'));
   }
@@ -301,6 +305,9 @@ describe('resolveContentRoute', () => {
       create: () => {
         throw new Error('not needed for this test');
       },
+      addTranslation: () => {
+        throw new Error('not needed for this test');
+      },
       setCanonicalRoute: () => {
         throw new Error('not needed for this test');
       },
@@ -339,6 +346,10 @@ class InMemoryProductRepository implements ProductRepository {
   }
 
   create(): Promise<Product & { translations: ProductTranslation[] }> {
+    throw new Error('not needed for these tests');
+  }
+
+  addTranslation(): Promise<Product & { translations: ProductTranslation[] }> {
     throw new Error('not needed for these tests');
   }
 
@@ -451,6 +462,9 @@ describe('CanonicalRouteMissingError', () => {
       findRouteBySlug: () => Promise.resolve(historicalRoute),
       findCanonicalRouteByTranslationId: () => Promise.resolve(undefined),
       create: () => {
+        throw new Error('not needed for this test');
+      },
+      addTranslation: () => {
         throw new Error('not needed for this test');
       },
       setCanonicalRoute: () => {

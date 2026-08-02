@@ -34,8 +34,8 @@ export interface ChangeContentSlugInput {
   readonly newSlug: string;
   readonly actorUserId: string;
   readonly actorRole: PlatformRole;
-  readonly reason?: string;
-  readonly traceId?: string;
+  readonly reason?: string | undefined;
+  readonly traceId?: string | undefined;
 }
 
 export interface SlugChangeDeps {
@@ -97,8 +97,8 @@ export interface ChangeCategorySlugInput {
   readonly newSlug: string;
   readonly actorUserId: string;
   readonly actorRole: PlatformRole;
-  readonly reason?: string;
-  readonly traceId?: string;
+  readonly reason?: string | undefined;
+  readonly traceId?: string | undefined;
 }
 
 /** Category is part of the "Публичный каталог" resource — CRUD is Admin-only (TZ §3.1 table 8). */

@@ -116,6 +116,40 @@ export class PrismaContentRepository implements ContentRepository {
     return toDomain(row);
   }
 
+  async addTranslation(
+    contentId: string,
+    translation: Omit<ContentTranslation, 'createdAt' | 'updatedAt'>,
+  ): Promise<ContentWithTranslations> {
+    await withUniqueConstraintMapping<ContentTranslationRow>(
+      () =>
+        resolveClient(this.prisma).contentTranslation.create({
+          data: {
+            id: translation.id,
+            contentId,
+            locale: translation.locale,
+            title: translation.title,
+            summary: translation.summary ?? null,
+            content: translation.content as object,
+            seoTitle: translation.seoTitle ?? null,
+            seoDescription: translation.seoDescription ?? null,
+          },
+        }),
+      (meta) => {
+        throw new SlugConflictError(
+          `A translation for locale "${translation.locale}" already exists on this content item.`,
+          { contentId, locale: translation.locale, prismaMeta: meta },
+        );
+      },
+    );
+    const updated = await this.findById(contentId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Content ${contentId} not found after update.`, {
+        id: contentId,
+      });
+    }
+    return updated;
+  }
+
   /**
    * Creates a canonical route for a translation, demoting any previously
    * canonical route for the same translation first so the partial unique

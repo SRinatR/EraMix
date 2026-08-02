@@ -1,12 +1,20 @@
 import type { ProductRepository, ProductWithTranslations } from '@eramix/application';
-import { ResourceNotFoundError, type Product, type ProductTranslation } from '@eramix/domain';
+import {
+  ResourceNotFoundError,
+  SlugConflictError,
+  type Product,
+  type ProductTranslation,
+} from '@eramix/domain';
 import type {
   Product as ProductRow,
   ProductTranslation as ProductTranslationRow,
 } from '../generated/prisma/client.js';
 import { nullToUndefined } from '../prisma-json.js';
 import type { PrismaClient } from '../prisma-client.js';
-import { assertOptimisticLockAcquired } from '../prisma-error-mapping.js';
+import {
+  assertOptimisticLockAcquired,
+  withUniqueConstraintMapping,
+} from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
 
 const WITH_TRANSLATIONS = { translations: true } as const;
@@ -69,6 +77,43 @@ export class PrismaProductRepository implements ProductRepository {
       include: WITH_TRANSLATIONS,
     });
     return toDomain(row);
+  }
+
+  async addTranslation(
+    productId: string,
+    translation: Omit<ProductTranslation, 'createdAt' | 'updatedAt'>,
+  ): Promise<ProductWithTranslations> {
+    await withUniqueConstraintMapping<ProductTranslationRow>(
+      () =>
+        resolveClient(this.prisma).productTranslation.create({
+          data: {
+            id: translation.id,
+            productId,
+            locale: translation.locale,
+            name: translation.name,
+            slug: translation.slug,
+            description: translation.description ?? null,
+            seoTitle: translation.seoTitle ?? null,
+            seoDescription: translation.seoDescription ?? null,
+            priceFromMinor: translation.indicativePrice?.priceFromMinor ?? null,
+            currency: translation.indicativePrice?.currency ?? null,
+            priceDisclaimer: translation.indicativePrice?.priceDisclaimer ?? null,
+          },
+        }),
+      (meta) => {
+        throw new SlugConflictError(
+          `A translation for locale "${translation.locale}" already exists on this product.`,
+          { productId, locale: translation.locale, prismaMeta: meta },
+        );
+      },
+    );
+    const updated = await this.findById(productId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Product ${productId} not found after update.`, {
+        id: productId,
+      });
+    }
+    return updated;
   }
 
   async updateStatus(

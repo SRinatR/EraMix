@@ -1,3 +1,4 @@
+import { ContentBody } from '@/components/content-body';
 import { getContainer } from '@/server/container';
 import { listContentByType } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
@@ -40,7 +41,10 @@ export default async function FaqPage({ params }: { params: Promise<{ locale: st
             return (
               <div key={item.id}>
                 <dt>{translation.title}</dt>
-                {translation.summary && <dd>{translation.summary}</dd>}
+                <dd>
+                  {translation.summary && <p>{translation.summary}</p>}
+                  <ContentBody content={translation.content} />
+                </dd>
               </div>
             );
           })}
