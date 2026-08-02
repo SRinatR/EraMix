@@ -1,8 +1,51 @@
 # Runbook: upload/media security posture
 
-> This runbook also covers environment/secret handling — see "Environment
-> configuration and secrets" below — despite its upload-focused title; it is
-> the repository's one security runbook.
+> This runbook also covers environment/secret handling and application
+> security headers/CSRF — see the sections below — despite its
+> upload-focused title; it is the repository's one security runbook.
+
+## Application security headers, CSP, and CSRF (SEC-002/SEC-003)
+
+- **CSRF (SEC-002 — "CSRF-защита обязательна для cookie-authenticated
+  state-changing запросов; Origin/Referer policy используется как
+  дополнительный контроль")**: the session cookie is already
+  `SameSite=lax` (`apps/web/src/app/api/auth/{login,callback}/route.ts`),
+  which stops it being sent on a cross-site `POST`/`PATCH`/`DELETE` at all
+  — the primary defense. `apps/web/src/server/csrf.ts`'s
+  `assertSameOrigin`, wired into `withApiHandler`
+  (`apps/web/src/server/handler.ts`) so every API route gets it
+  automatically with no per-route change, is the required additional
+  Origin/Referer check: any non-safe-method request (`GET`/`HEAD`/`OPTIONS`
+  are exempt) whose `Origin` (or, if absent, `Referer`) header's host does
+  not match this request's own `Host` header is rejected with
+  `AccessDeniedError` (403) before the route handler runs. Verified live
+  against the dev server: a cross-origin `POST /api/orders` with
+  `Origin: https://evil.example` gets `403 ACCESS_DENIED`
+  ("Cross-origin state-changing request rejected"); the identical request
+  with a same-origin `Origin` reaches the normal `401 AUTH_REQUIRED` gate
+  instead.
+- **CSP/XSS (SEC-003 — "CSP, безопасный output encoding, ... и запрет
+  unsafe eval снижают риск XSS")**: `apps/web/next.config.ts`'s `headers()`
+  sends `Content-Security-Policy` (`default-src 'self'`, no `unsafe-eval`
+  in production — only Turbopack's dev-mode HMR runtime gets it — no
+  inline `<script>` ever allowed), plus `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy:
+strict-origin-when-cross-origin`, a minimal `Permissions-Policy`, and
+  `Strict-Transport-Security` (safe to always send — a browser only
+  enforces it over a connection that was actually HTTPS). Output encoding
+  itself is React's default JSX escaping (no `dangerouslySetInnerHTML`
+  anywhere in this codebase); rich text sanitization is moot because
+  `ContentTranslation.content` is deliberately plain string/string-array
+  paragraphs, never HTML/markdown (see Phase 6's roadmap status block).
+  Verified live against the dev server: `curl -D -` on `/en` shows every
+  header above present with the expected values.
+- **Known scope boundary**: this closes the CSP/CSRF half of Phase 7's
+  named "CSP/CSRF threat-model writeup" gap with a working implementation
+  and this document, not a full STRIDE write-up (SEC-009: "Threat model по
+  STRIDE обновляется для identity, orders, admin, upload и внешних
+  интеграций до production release") — that is a broader, separate
+  pre-production deliverable this MVP-completeness pass does not claim to
+  close.
 
 Status: describes the MVP implementation as it exists today (generic media
 uploads, `packages/application/src/uploads.ts`; product image/document

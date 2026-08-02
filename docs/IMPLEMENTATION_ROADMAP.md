@@ -1277,6 +1277,37 @@ presentational layer with no business logic of its own to unit-test —
 the existing route-resolution/locale-detection tests already cover the
 underlying routing behaviour this reuses).
 
+### CSRF protection + CSP/security headers (SEC-002/SEC-003)
+
+Closes the named Phase 7 gap ("a CSP/CSRF threat-model writeup" was listed
+as not-yet-done) with a real implementation, not only documentation —
+grepping the codebase before this slice found zero references to
+`CSRF`/`CSP`/`Content-Security-Policy`/`X-Frame-Options` anywhere.
+Extracted and read the TZ v1.3 `.docx` text directly for SEC-002/SEC-003's
+exact wording rather than assuming scope. Full detail, including live
+`curl` verification transcripts, is in `docs/runbooks/security.md`'s new
+"Application security headers, CSP, and CSRF" section; summary:
+
+- `apps/web/src/server/csrf.ts`'s `assertSameOrigin`, wired into
+  `withApiHandler` (`apps/web/src/server/handler.ts`) — every existing and
+  future API route gets the Origin/Referer same-host check with no
+  per-route change, exempting only `GET`/`HEAD`/`OPTIONS`. 6 new unit
+  tests (`apps/web/src/server/csrf.test.ts`).
+- `apps/web/next.config.ts`'s `headers()`: `Content-Security-Policy`
+  (`unsafe-eval` only outside production, for Turbopack's dev HMR),
+  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy`, `Strict-Transport-Security`, applied repository-wide.
+- **Verified against the real dev server**: cross-origin `POST
+/api/orders` (`Origin: https://evil.example`) → `403 ACCESS_DENIED`; the
+  identical same-origin request reaches the normal `401 AUTH_REQUIRED`
+  gate untouched; `curl -D -` on `/en` shows every new header present.
+- **Scope boundary, stated honestly**: this is SEC-002/SEC-003's working
+  controls plus documentation, not SEC-009's full STRIDE threat model
+  (identity/orders/admin/upload/external-integrations) — that remains a
+  separate, broader pre-production deliverable.
+  `pnpm run check` exit 0 — 254 unit tests (up from 248: +6 `csrf.test.ts`),
+  `next build` unaffected (headers/CSRF are cross-cutting, not new routes).
+
 ## Required task format for the CLI agent
 
 For every task, report:

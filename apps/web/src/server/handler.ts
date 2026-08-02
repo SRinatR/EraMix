@@ -1,5 +1,6 @@
 import { JsonLogger } from '@eramix/infrastructure';
 import { NextResponse, type NextRequest } from 'next/server';
+import { assertSameOrigin } from './csrf';
 import { problemResponse } from './problem-response';
 import { traceIdFromRequest } from './trace';
 
@@ -29,6 +30,7 @@ export function withApiHandler<Params = Record<string, never>>(
     const traceId = traceIdFromRequest(request);
     const startedAt = Date.now();
     try {
+      assertSameOrigin(request);
       const response = await handler(request, traceId, context);
       logger.log('info', 'http_request', {
         traceId,
