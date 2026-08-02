@@ -110,6 +110,18 @@ containers.
   diagnostics threshold, manual override/review, synchronization schedule and
   immediate disablement. The public Merchant feed is generated automatically;
   admins never edit feed rows manually.
+- **Status, 2026-08-03 (ADR-0019)**: launch-sequence step (1) — the versioned
+  `Offer` model, admin controls, and RBAC-protected `/admin/offers` UI — is
+  built. A deterministic feed generator and Product/Merchant JSON-LD
+  generator exist (step 3, in preview form only, via the RBAC-protected
+  `GET /api/admin/offers/feed-preview`), but emit real output to no public
+  route: `PlatformSettings.merchantCenterEnabled` stays hard-rejected at
+  write time, so every offer is provably always excluded from any feed
+  today. Steps (2) secure checkout/legal, (4) Merchant Center verification,
+  (5) rollout, and (6) monitoring/reconciliation remain entirely
+  unstarted — this status is prepared but disabled pending a real checkout,
+  verified seller/policies, exact public offer facts, and explicit Product
+  Owner approval.
 - Default crawler/snippet policy is maximum legitimate Search eligibility.
   Restrictive directives require an explicit documented reason and preview.
   Google-Extended is independent of Google Search crawling and must not be

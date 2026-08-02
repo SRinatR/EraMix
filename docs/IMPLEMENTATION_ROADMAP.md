@@ -2463,6 +2463,127 @@ inquiry/CTA initiation (`rfq_start`), `rfq_submit`, and telephone click
   explicitly deferred, same as the cross-platform reconciliation dashboards
   named in earlier slices).
 
+## Phase B slice 6: dormant Merchant Offer/feed foundation (ADR-0019)
+
+Product Owner amendment, 2026-08-03: "implement the future direct-sale
+Merchant Offer/feed foundation now as a dormant, fail-closed vertical
+slice. This is preparation for a future real checkout, not permission to
+publish Merchant output today." Delivered in four small, separately
+verified and pushed commits (`f47419d`, `cfea18c`, `3f2871b`, `cbb246a`),
+each green on CI including the real-Postgres integration-test job.
+
+- **Domain** (`packages/domain/src/offer.ts`, `entities.ts`, 29 unit
+  tests): a separate, versioned `Offer` entity — never overloads
+  `ProductTranslation` or the quote-only indicative "from" price
+  (ADR-0005). `validateEffectiveOffer` enforces positive price, ISO 4217
+  currency, non-blank seller/SKU, non-negative inventory, and
+  stock/availability consistency unconditionally; publishing (`state:
+'PUBLISHED'`) additionally requires the parent product's new
+  `directSaleEnabled` flag, a real `https://` `checkoutUrl`,
+  `deliveryPolicyRef`/`returnPolicyRef`, at least one valid
+  `eligibleCountries` entry, and a not-yet-expired `effectiveTo` — never
+  gates a transition _out of_ PUBLISHED. `offerIneligibilityReasons`
+  computes feed/JSON-LD-generation-time eligibility separately from
+  write-time validation; `MERCHANT_CENTER_DISABLED` is unconditionally
+  included whenever `PlatformSettings.merchantCenterEnabled` is false — the
+  existing (Phase B slice 1) always-false validator is reused, not
+  duplicated, as the dormancy gate for this entire feature.
+- **Schema** (migration `20260803180000_add_offer_foundation`): `Product`
+  gains `directSaleEnabled boolean @default(false)`; new `offers` table
+  with 8 CHECK constraints mirroring the domain validator (price, currency
+  format, seller-name-not-blank, inventory-non-negative,
+  availability/stock consistency, effective-date order, published-requires-
+  checkout-url, published-requires-policy-refs) — the data-layer half of
+  "no published offer without..." that survives even a raw write bypassing
+  the application layer. A quote-only product's cross-table exclusion is
+  intentionally domain/application-layer only (Postgres CHECK cannot
+  reference another table without triggers, documented inline in the
+  migration).
+- **Application/infrastructure** (`packages/application/src/offer.ts`,
+  `packages/infrastructure/src/repositories/offer-repository.ts`, 14 unit
+  tests): `createOffer` always creates DRAFT (publishing is a deliberate,
+  separate, audited second step); `updateOffer` re-validates the
+  _effective_ (merged) offer before writing; `getOfferEligibility` surfaces
+  `offerIneligibilityReasons` for the admin operational view;
+  `setProductDirectSaleEnabled` is the explicit per-product opt-in.
+  `PrismaOfferRepository` (OCC, cursor pagination) and
+  `PrismaProductRepository.setDirectSaleEnabled` mirror the codebase's
+  existing repository-adapter conventions. Two real-Postgres integration
+  tests assert the CHECK constraints reject a raw write bypassing the
+  validator.
+- **Delivery**: RBAC-protected (`settings.manage`, ADMIN-only) admin API —
+  `GET/POST /api/admin/offers`, `PATCH /api/admin/offers/{id}`,
+  `GET /api/admin/offers/{id}/eligibility`,
+  `PATCH /api/admin/products/{id}/direct-sale` — and an `/admin/offers`
+  page (linked from the admin nav) with a create form, a per-offer edit
+  form that exercises the full publish path end to end, and a per-product
+  direct-sale toggle. Full OpenAPI documentation (`Offers` tag, `Offer`/
+  `OfferState`/`OfferAvailability`/`TaxDisplayPolicy`/
+  `OfferIneligibilityReason` schemas, all 4 paths) in
+  `packages/contracts/openapi/openapi.yaml`, redocly-validated.
+- **Feed/JSON-LD generator** (`packages/application/src/merchant-feed.ts`,
+  10 unit tests): `buildMerchantFeedPreview` walks every offer
+  (cursor-paginated), computes eligibility per offer, and — only for
+  zero-ineligibility-reason offers — builds one item per (offer, product
+  translation with a non-blank description); every other offer/translation
+  becomes a diagnostic with its exact reason, fail-closed per item, sorted
+  deterministically by item id. Proven structurally dormant, not just
+  flag-gated: `MERCHANT_CENTER_DISABLED` is unconditionally present today,
+  so `items` is provably always empty (a dedicated test forces
+  `merchantCenterEnabled: true` in an in-memory fake only, to prove the
+  generator logic itself is correct without touching the real kill
+  switch). `formatMerchantFeedTsv` emits Google Merchant Center's
+  tab-separated primary feed format; `buildProductOfferJsonLd` emits
+  factual Product identity schema always, and a schema.org `Offer` block
+  only when the caller passes `eligible: true`. Neither generator is wired
+  into any public route — only into the new RBAC-protected
+  `GET /api/admin/offers/feed-preview` and its `FeedPreviewPanel` on
+  `/admin/offers` (itemCount, per-offer/per-locale diagnostics, raw TSV).
+  There is no persisted "last run" table: every call recomputes live
+  against the current database, which is the honest "last generation
+  result" for a dormant, on-demand-only feature with no scheduled job.
+- **Refreshed stale copy**: the Settings admin UI's Merchant Center
+  fieldset and the domain validator's rejection message both used to say
+  "no versioned sellable-offer model exists yet" — now that ADR-0019's
+  `Offer` model exists, both were corrected to state the accurate current
+  reason (intentionally disabled pending real checkout/policies/approval,
+  not blocked by a missing model).
+- **Explicitly out of scope for this slice, unchanged from the amendment**:
+  no public feed URL, no Google Merchant Center submission, no real
+  credentials, no Merchant structured data on any public product page. The
+  Settings admin UI's Merchant Center checkbox remains genuinely
+  impossible to enable — `validateEffectivePlatformSettings` unconditionally
+  throws on `merchantCenterEnabled: true`.
+- **Rollback decision**: same reasoning as the advertising-provider slice
+  (Phase B slice 4) — audit events (`offer.created`, `offer.updated`,
+  `product.direct_sale_enabled_changed`) plus optimistic concurrency are
+  the durable safety mechanism; no separate snapshot-history/rollback
+  table was built for Offer, consistent with that precedent, and
+  documented here rather than left implicit.
+- **Traceability matrix**: does not exist yet and none is fabricated here —
+  Phase 8's own precondition (a green staging/production-like verification)
+  has not happened (see Phase 8 status above). When that matrix is built,
+  this slice's requirement-to-evidence mapping is: ADR-0019 (architecture),
+  this status block (implementation), the 4 commits above (diffs), and the
+  CI run URLs for each push (verification).
+- **Verified locally, per commit**: `pnpm run format`/`lint` (incl.
+  `redocly lint`)/`typecheck` all exit 0 across all 7 workspace projects
+  after every commit; `pnpm run test` — **480 unit tests** (up from 427
+  before this slice: +29 domain, +14 application/offer, +10
+  application/merchant-feed, +2 Postgres integration; some intermediate
+  counts were folded into later commits). Every commit's CI run was
+  watched to completion and confirmed green, including the real-Postgres
+  migration-gate job exercising the two new CHECK-constraint integration
+  tests.
+- **Not yet verified / explicitly deferred**: real end-to-end Merchant
+  Center submission (impossible by design while dormant); a cookie-
+  consent-banner UI is still the blocker for the earlier analytics slice,
+  unrelated to this one; image/video sitemap extensions for Merchant feed
+  items (CLAUDE.md names these as a later requirement once real offers
+  exist) were not built — `MerchantFeedItem` has no `imageLink` field yet,
+  a documented, deliberate simplification since no item can ever be
+  eligible today.
+
 ## Required task format for the CLI agent
 
 For every task, report:
