@@ -1,6 +1,7 @@
 import { getContainer } from '@/server/container';
 import { withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
+import { isSecureRequest } from '@/server/request-protocol';
 import { PENDING_AUTH_COOKIE_NAME } from '@/server/session';
 import { NextResponse } from 'next/server';
 
@@ -22,7 +23,7 @@ export const GET = withApiHandler('auth.login', async (request) => {
   const response = NextResponse.redirect(authorizationRequest.authorizationUrl);
   response.cookies.set(PENDING_AUTH_COOKIE_NAME, pendingToken, {
     httpOnly: true,
-    secure: true,
+    secure: isSecureRequest(request),
     sameSite: 'lax',
     path: '/',
     maxAge: 600,

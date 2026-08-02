@@ -8,5 +8,5 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["prisma.config.ts", "prisma/seed.ts"]
+  "include": ["prisma.config.ts", "prisma/seed.ts", "prisma/seed-e2e.ts"]
 }

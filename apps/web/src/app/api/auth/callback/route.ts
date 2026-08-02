@@ -1,6 +1,7 @@
 import { getContainer } from '@/server/container';
 import { withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
+import { isSecureRequest } from '@/server/request-protocol';
 import { PENDING_AUTH_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/server/session';
 import { AuthCallbackFailedError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
@@ -68,7 +69,7 @@ export const GET = withApiHandler('auth.callback', async (request) => {
   const response = NextResponse.redirect(new URL('/', request.url));
   response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
     httpOnly: true,
-    secure: true,
+    secure: isSecureRequest(request),
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 12,

@@ -418,6 +418,36 @@ companyIds}`, never the raw OIDC tokens (CLAUDE.md: "Browser JavaScript
   before doing anything else; verified live (dev server, no session
   cookie) that `POST /api/media` and `GET /api/orders` both 401 rather
   than 200.
+- **Update, 2026-08-02 (Phase 8-prep session)**: found and fixed a real bug
+  while preparing the Pi browser-E2E fixtures — both the pending-auth and
+  session cookies (`apps/web/src/app/api/auth/login/route.ts`,
+  `.../callback/route.ts`) hardcoded `secure: true` unconditionally. A
+  `Secure` cookie is silently dropped by every real browser when the page
+  isn't actually served over HTTPS — which a local Docker demo deployment on
+  the Pi (Phase 7/8's own named exit criterion) legitimately is not, by
+  default. Would have made the entire login flow appear to redirect
+  successfully while silently never establishing a session — exactly the
+  kind of failure `curl` (used for all prior "verified live" claims in this
+  document) cannot catch, since curl doesn't enforce `Secure` the way a
+  browser does; only a real browser-driven check surfaces it. Fixed with
+  `apps/web/src/server/request-protocol.ts`'s `isSecureRequest` (checks
+  `x-forwarded-proto` first, for a TLS-terminating reverse proxy, then falls
+  back to the request's own scheme) — 5 new unit tests. Also added
+  `scripts/pi/oidc-fake-idp.mjs`: a zero-dependency (Node built-ins only)
+  standalone OIDC Authorization Code + PKCE identity provider implementing
+  real discovery/authorize/token/JWKS endpoints against fixed test
+  identities, wire-compatible with `OidcIdentityProvider` (verified locally
+  via a live curl-driven PKCE round trip — real RS256 signature, real JWKS,
+  single-use authorization codes, PKCE `code_verifier` mismatch rejected —
+  see the roadmap's own verification note; this is a test double for the
+  identity _provider_, not a substitute for the real ODS issuer once Q-01
+  resolves). `packages/infrastructure/prisma/seed-e2e.ts` (new, Pi-only,
+  never wired into `db:seed`/CI/deployment) seeds fixed
+  CUSTOMER/MANAGER/CONTENT_EDITOR/ADMIN/AUDITOR users matching the fake
+  IdP's identities, since first-login always creates a CUSTOMER
+  (`apps/web/src/app/api/auth/callback/route.ts`) and there is deliberately
+  no bootstrap-admin mechanism (ADR-0014) — an E2E suite exercising the
+  other roles needs these rows to pre-exist.
 - **Not yet built**: `/auth/login`→ODS redirect has never been exercised
   against a real IdP (no ODS test tenant — Q-01), account dashboard/
   profile/company views, onboarding/no-company state UI, and the OIDC
@@ -475,9 +505,16 @@ outbox-worker.ts`'s `processOutboxBatch` claims `PENDING`-or-backed-off-
   `status: 'PENDING'`, so a message that had ever failed once could never
   be retried again regardless of its backoff `availableAt` — now matches
   `PENDING` or `FAILED`.
-- **Not yet built**: no E2E/browser-driven test exists anywhere in this
-  repo (Phase 8's traceability matrix will need to name this gap
-  explicitly); the notification worker's `DevEmailSender` only logs
+- **Update, 2026-08-02 (Phase 8-prep session)**: `e2e/specs/ordering.spec.ts`
+  now exists (Playwright, Pi-only — see Phase 8's status block) covering
+  submit, duplicate-Idempotency-Key no-op, manager visibility of a submitted
+  order, and customer/company isolation (ORD-008) named directly in this
+  phase's own exit criteria — written, not yet executed (no browser on this
+  laptop). It documents, rather than works around, a real gap found while
+  writing it: the account UI has no "Submit order" button yet (only create +
+  cancel), so the spec calls `POST /api/orders/by-id/{orderId}/submit`
+  directly with the browser's session cookie — see that spec's own comment.
+- **Not yet built**: the notification worker's `DevEmailSender` only logs
   recipient/subject to structured JSON, it does not send real mail (ADR-0007
   blocked on Q-06); manager comments/status-timeline UI does not exist (the
   `order.transition` API + audit trail exist, but no admin page renders
@@ -843,7 +880,7 @@ Exit criteria:
 - All release-acceptance items from the technical specification have evidence.
 - Product Owner signs UAT after green staging/production-like verification.
 
-### Phase 8 status: not started — correctly blocked
+### Phase 8 status: acceptance itself not started — correctly blocked; Pi-session scripts/fixtures/E2E suite now prepared and ready to run
 
 No traceability matrix, UAT package, release notes, or operational handover
 exists yet, and none should: this phase's own precondition (a green
@@ -853,6 +890,94 @@ happened. Phase 7's CI is now genuinely green (see its status block above),
 which is necessary but not sufficient — Phase 8 remains correctly gated on
 work outside this session's authorized scope (the Pi session, and any
 staging/production environment). Do not claim any Phase 8 evidence exists.
+
+**Update, 2026-08-02 (Phase 8-prep session)**: every non-Pi preparation task
+CLAUDE.md named for this phase is now done — deterministic scripts, fixtures,
+and a browser E2E suite exist, all written but **none executed** (no Docker,
+Postgres, or browser on this laptop; nothing here has touched a live
+database or a real browser). Treat every script/spec below as
+first-run-unverified until the Pi session runs it once for real.
+
+- **`scripts/pi/`** (new, with its own `README.md` giving the exact order of
+  operations and cleanup commands):
+  - `01-postgres-migration-verify.sh` — brings up Postgres 19 Beta 2,
+    resolves and prints its exact image digest (ADR-0013's pinning
+    requirement), applies every migration from empty, greps for both
+    partial unique indexes and all four named `CHECK` constraints
+    (including this session's two new `product_asset_*` ones), then proves
+    one of them is a real, live-enforced constraint (attempts a negative
+    `sizeBytes` insert and asserts Postgres itself rejects it), and confirms
+    a second `migrate deploy` run is a no-op.
+  - `oidc-fake-idp.mjs` + `login-as.mjs` — see the Phase 4 status block
+    above.
+  - `02-storage-flow-verify.sh` — real HTTP, real bytes on disk: uploads a
+    genuine 1×1 PNG to the seeded sample product, asserts the response
+    identifies `assetType: IMAGE`, `malwareScanStatus: CLEAN`, and an
+    honest `malwareScanEngine` string; asserts a disallowed content type is
+    rejected (422) before ever reaching storage; asserts the public
+    download route is 404 for an unauthenticated caller (DRAFT
+    product/asset) and 200 for an authenticated admin preview; edits
+    metadata and checks the optimistic-concurrency version bump; asserts
+    removal requires `confirm: true` and that a removed asset's download
+    404s afterward.
+  - `03-oidc-login-verify.sh` — logs in as all five fixture roles via a real
+    HTTP Authorization Code + PKCE round trip, asserts `/api/auth/session`
+    reflects the correct `platformRole` for each, asserts logout
+    invalidates the session (401 afterward), and asserts the RBAC negative
+    cases that only mean something against a live server: no cookie → 401,
+    a tampered cookie → 401 (never 500), and a CUSTOMER session against
+    `/api/admin/users` → 403.
+  - `04-production-build-and-demo.sh` — builds the real Docker images,
+    brings up Postgres + runs the one-off migration gate + seeds + starts
+    web/worker, polls `/health/live`/`/health/ready` for a genuine `ok`,
+    smoke-tests public routes, and confirms the container is actually
+    running the production build (`NODE_ENV=production` inside the
+    container), not a dev server. This is the "local demo deployment" Phase
+    7/8 exit criterion.
+  - `05-browser-e2e-run.sh` — installs Playwright + Chromium (Pi-only —
+    never on the laptop) and runs the `e2e/` suite against the running demo.
+- **`packages/infrastructure/prisma/seed-e2e.ts`** (new, Pi-only, never
+  wired into `db:seed`/CI/deployment) — fixed test users for all five
+  platform roles, plus a fully `PUBLISHED` demo category/product (seeded
+  directly via Prisma, documented as a deliberate workaround for a real,
+  separately-tracked gap: there is currently no "edit an existing
+  translation's `seoTitle`/`seoDescription`" endpoint, only "add a new
+  translation" and "change slug," so an editor cannot yet take the
+  structural `seed.ts` sample product from `DRAFT` to `PUBLISHED` through
+  the UI/API alone).
+- **`e2e/`** (new Playwright suite, deliberately **outside the pnpm
+  workspace** — `pnpm-workspace.yaml` only globs `apps/*`/`packages/*`, so
+  nothing here is ever installed, linted, typechecked, or run by
+  `pnpm run check`/CI/the laptop; its own `README.md` lists every spec, what
+  each covers, and honest known gaps/caveats): `public-catalog.spec.ts`
+  (locale detection/redirect/explicit-prefix-wins, canonical routes, the
+  308-redirect-on-stale-slug and 404 cases Phase 2's own exit criteria name,
+  robots/sitemap), `auth-rbac.spec.ts` (real login per role, server-side RBAC
+  boundaries — IAM-008 — logout), `ordering.spec.ts` (see the Phase 5 status
+  block above), `admin-product-assets.spec.ts` (upload, the
+  IMAGE-publish-requires-altText gate, public visibility after publish,
+  confirm-gated removal), `accessibility.spec.ts` (axe-core WCAG 2.1 AA scan
+  on key pages, keyboard navigation to a link, `prefers-reduced-motion`, and
+  a network-mocked check that a rejected admin action surfaces via
+  `role="alert"` rather than failing silently — Phase 3's own named
+  accessibility exit criterion). All 7 spec/config files were parse-checked
+  with this workspace's own `esbuild` binary (zero syntax errors) since
+  installing `@playwright/test`'s type declarations here would require an
+  install this laptop is not permitted to run; a real `tsc`/Playwright run
+  is Pi-pending, and the specs are explicitly documented as
+  "should work, first pass may need small selector fixes."
+- **Every laptop-safe check still passes with all of the above added**:
+  `pnpm run check` exit 0 — **221 unit tests** (5 new in
+  `request-protocol.test.ts`), `next build` unaffected (`scripts/pi/` and
+  `e2e/` are outside every workspace glob, so neither is compiled, linted,
+  or bundled by anything the laptop runs).
+- **Not done, honestly, and correctly gated on the Pi session**: none of the
+  five numbered scripts above, the fake IdP, the seed fixtures, or the
+  Playwright suite have been executed even once; no traceability matrix, UAT
+  package, release notes, or operational handover exists; no staging or
+  production environment has been touched. Do not claim any Phase 8
+  acceptance evidence exists — only that the tooling to produce it is now
+  ready and waiting for explicit Pi authorization.
 
 ## Required task format for the CLI agent
 
