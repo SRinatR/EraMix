@@ -6,9 +6,16 @@ Implement the EraMix B2B MVP incrementally, with production-quality contracts
 and verification at every phase. The authoritative product and engineering
 requirements are in:
 
-- `docs/EraMix_Полное_техническое_задание_MVP_v1.3.docx` (supersedes v1.0/v1.1/v1.2,
-  retained for history)
 - `docs/IMPLEMENTATION_ROADMAP.md`
+- `docs/runbooks/search-visibility.md` (mandatory English SEO and search
+  operations contract)
+- `docs/EraMix_Полное_техническое_задание_MVP_v1.3.docx` (historical baseline
+  only; do not create new DOCX revisions for SEO requirements)
+
+For any public-site, content, SEO, analytics, or deployment task, read the
+roadmap and `docs/runbooks/search-visibility.md` completely before changing
+code. Markdown is the authoritative living SEO documentation; update it in the
+same change as any requirement or implementation change.
 
 Do not invent requirements that contradict these documents. If a requirement is
 ambiguous or a product decision is missing, record it in an ADR or open-question
@@ -106,6 +113,123 @@ must be treated as a tracked delivery risk with a reproducible clean-install CI
 gate.
 
 ## Public URL and localization policy — mandatory
+
+## Search visibility — highest public-site priority
+
+The mandatory Google Search Console and Yandex Webmaster operating contract is
+[`docs/runbooks/search-visibility.md`](docs/runbooks/search-visibility.md).
+For every public-route, content, metadata, or deployment change, preserve its
+canonical, indexation, sitemap, robots, hreflang, structured-data, performance,
+and monitoring rules. Legitimate search quality is required; cloaking, keyword
+stuffing, doorway pages, hidden text/links, deceptive redirects, and artificial
+link schemes are forbidden.
+Google AI features require no special AI markup or text file beyond normal
+indexability and helpful people-first content. Google ignores `llms.txt` and
+similar AI files for Search visibility. `llms.txt`/`ai.txt` may only be a
+separately approved, public, reviewed compatibility layer; never present them
+as an SEO control. WebMCP and Lighthouse Agentic Browsing are experimental and
+require separate authorization before enablement.
+
+SEO delivery requirements:
+
+- Build and maintain the semantic/content backlog outside Git for each locale:
+  audience segment, pain point, query cluster, intent, canonical target URL,
+  evidence source, owner, priority, CTA, and internal-link plan.
+- Prioritize commercial categories/products and trust pages first; then
+  industry/problem/FAQ pages; then comparisons, cases, guides and tools. No
+  page quota, forced word count, translated keyword list, or mass generation
+  substitutes for verified local demand and useful original content.
+- Each indexable page requires a canonical 200 URL, server-rendered primary
+  content/links, at least one internal incoming link, correct locale metadata,
+  and sitemap eligibility. Filters are indexable only by explicit reviewed
+  demand/content decision; no client-only crawl workaround or `nofollow`
+  blanket policy.
+- Quote-only “from” prices are never schema `Offer`/`AggregateOffer`. FAQPage
+  is emitted only for visible maintained FAQs and is not a rich-result or AI
+  inclusion promise.
+- Quote-only products may emit factual `Product` identity schema (name,
+  description, image, SKU/public ID and brand) but omit `offers` and any price
+  specification until a real public offer exists. Perform a quarterly
+  evidence-led content-quality review; do not use word-count quotas as a proxy
+  for quality or mass-publish pages without editorial review.
+- IndexNow is a P1, secret-managed notification adapter for Bing/Yandex only;
+  it never replaces sitemap/canonical correctness and is never used as a Google
+  indexing mechanism.
+- Treat traffic, rank, indexing speed, conversion rate and AI Overview presence
+  as monitored forecasts, not release gates or guarantees. The release gate is
+  verified technical indexability, P0 content, consent-aware analytics, and
+  post-release monitoring.
+- Technical SEO is automatic and data-driven. A publication, unpublication,
+  translation, localized-slug, public-asset, route-history or SEO-field state
+  change must regenerate affected canonical URLs, metadata, Open Graph,
+  hreflang/x-default, robots, JSON-LD, sitemap membership/`lastmod`, cache tags
+  and eligible IndexNow notification. Manual per-page sitemap, metadata or
+  schema editing is forbidden.
+- Automation fails closed: unpublished, incomplete, invalid, private,
+  non-canonical or non-indexable records never emit public metadata, sitemap
+  data, schema or IndexNow notifications. Human review confirms facts that code
+  cannot infer: language quality, technical claims, images, certificates,
+  approved offers and editorial usefulness.
+- Every automatic public behavior has an authorized, audited control surface in
+  admin settings. The Product Owner must be able to configure the public base
+  URL/host policy, locale availability/default and language routing, SEO
+  defaults/templates, indexation eligibility, canonical/redirect policy,
+  sitemap inclusion, organization/NAP/social data, analytics consent and IDs,
+  Search Console/Yandex/Bing/IndexNow integration state, and feature flags.
+  Settings validate before save, show an effective preview/diff, retain history
+  with actor/time/reason, use least privilege, and never expose secrets.
+- Generate image/video sitemap extensions from eligible public media. Keep
+  Google Business Profile synchronized only with approved real business facts.
+  Merchant Center/product feeds are conditional on accurate public offers and
+  must never use the MVP's quote-only/indicative prices. Crawler and snippet
+  controls require explicit audited settings and preview; Google-Extended is
+  independent of Google Search and AI Overview eligibility.
+- Prepare the domain and admin model for a future Merchant Center/direct-sale
+  mode now, without enabling it for quote-only products. A sellable offer is a
+  separate, versioned commercial record with exact tax/currency price,
+  availability, seller, condition, product identifiers, delivery regions/costs,
+  return policy, effective dates and checkout eligibility. Publishing or
+  changing an offer is validated, audited and synchronized to visible page
+  content, Product/Merchant structured data, the Merchant feed and the actual
+  checkout. If any required fact is missing or stale, the offer is excluded from
+  all merchant output and the product remains quote-only.
+- Instrument a privacy-safe product-interest event model from the first public
+  release. Capture anonymous/consented session and aggregate analytics for page
+  and product impressions, category views, search terms, filters, sort, media
+  and document views/downloads, internal-link/CTA/call clicks, comparison and
+  calculator use, language switch, quote/cart/checkout funnel steps, purchase
+  when enabled, and error/empty-result states. Events use stable IDs and locale
+  rather than raw personal data; never send credentials, tokens, full form
+  values, payment data, precise sensitive profiling or unnecessary PII.
+- Product analytics, heatmaps and session-behavior analysis are owned by the
+  separate Rust first-party analytics service (Matomo-class). EraMix integrates
+  through a versioned, consent-gated analytics contract/adapter. GA4 and Yandex
+  Metrica remain supported web-analytics destinations for acquisition,
+  advertising and cross-platform reporting; all three receive the same approved
+  semantic events subject to consent. The Rust service owns first-party storage,
+  heatmap/replay implementation, retention and detailed behavior reporting;
+  EraMix owns event semantics, consent enforcement, minimization, identity
+  boundaries and non-blocking delivery.
+- The Rust analytics service is a planned integration and must not block MVP
+  release before its team supplies a stable contract (currently expected no
+  earlier than October 2026). Prepare its adapter boundary, schemas, fixtures,
+  feature flag, health checks and disabled-by-default configuration now; do not
+  invent an endpoint, credentials or substitute service. GA4, Yandex Metrica,
+  advertising and Search adapters continue independently.
+- Build a governed comparison layer for Rust analytics, GA4, Yandex Metrica,
+  advertising platforms, Search Console and Yandex Webmaster. It defines metric
+  meaning, attribution window, timezone, currency, consent/sampling coverage,
+  freshness and reconciliation rules. Dashboards show source-native and
+  normalized comparisons beside discrepancies; never silently merge
+  incompatible counts into one "truth" number.
+- Implement an advertising-integration control plane for approved providers:
+  Google Ads, Yandex Direct, Microsoft Ads, Meta, LinkedIn, TikTok and
+  future providers through typed adapters. Admin controls provider enablement,
+  consent category, account/container/pixel identifiers, conversion mapping,
+  attribution/UTM rules, server-side conversion state, diagnostic health and
+  emergency disablement. It may never inject arbitrary vendor JavaScript,
+  expose access tokens, alter canonical SEO output, or send personal/form/
+  payment data without the required consent and lawful integration contract.
 
 Supported MVP locales are `ru`, `en`, and `uz`; `en` is the default locale.
 Locale is the first segment of every indexable public URL and must match the
