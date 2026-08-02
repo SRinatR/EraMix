@@ -1803,6 +1803,23 @@ the field an admin would actually type into a "find this thing" box
 (name/SKU/title/legalName/email/orderNumber), consistent with what was
 actually built, not a name-matching exercise against every string column.
 
+**CI failure and fix, same push**: the previous commit's `pnpm run
+typecheck` passed locally but CI's `Migration gate + real-PostgreSQL
+integration tests` job failed —
+`packages/infrastructure/src/repositories/postgres.integration.test.ts`
+(runs only against a live Postgres in CI, never locally on this laptop, so
+it was never exercised before pushing) still asserted
+`expect(events).toHaveLength(0)` against `AuditEventRepository.
+listByEntity`'s new `Page<AuditEvent>` return value — `toHaveLength` is
+untyped against its subject in this project's vitest/TS setup, so `tsc`
+never flagged it; the earlier "TypeScript-compiler-driven audit of every
+call site" claim was accurate for every `.test.ts` file `tsc -b` actually
+type-checks project-wide, but incomplete for this one specific assertion
+shape. Root-caused from the real CI log (not guessed), fixed
+(`events.items`), and re-verified: a repo-wide `grep -rln
+"listByEntity\|\.listAll(\|\.listByCompany(" packages apps --include=
+*.test.ts` now shows every remaining match already uses `.items`.
+
 ## Required task format for the CLI agent
 
 For every task, report:
