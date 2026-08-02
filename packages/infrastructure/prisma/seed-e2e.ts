@@ -1,5 +1,3 @@
-import path from 'node:path';
-import { config as loadDotenv } from 'dotenv';
 import { isValidPublicId } from '@eramix/domain';
 import { createPrismaClient } from '../src/prisma-client.js';
 
@@ -16,7 +14,9 @@ import { createPrismaClient } from '../src/prisma-client.js';
  * identities exactly.
  */
 
-loadDotenv({ path: path.join(import.meta.dirname, '..', '..', '..', '.env') });
+// Local runs go through `pnpm run db:seed:e2e`, which wraps this script with
+// `dotenvx run -f ../../.env --` (see ADR-0016); the Pi scripts export
+// DATABASE_URL directly instead of relying on a .env file at all.
 
 const databaseUrl = process.env['DATABASE_URL'];
 if (!databaseUrl) {

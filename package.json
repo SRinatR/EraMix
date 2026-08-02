@@ -20,6 +20,7 @@
     "docker:down": "docker compose -f infra/docker/docker-compose.yml down"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "2.19.1",
     "@eslint/js": "10.0.1",
     "@types/node": "24.13.3",
     "eslint": "10.8.0",

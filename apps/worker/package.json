@@ -6,7 +6,7 @@
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc -b",
-    "start": "node dist/main.js",
+    "start": "dotenvx run -f ../../.env --ignore MISSING_ENV_FILE -- node dist/main.js",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint": "eslint . -c ../../eslint.config.js --no-error-on-unmatched-pattern"

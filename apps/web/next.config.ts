@@ -1,13 +1,12 @@
-import path from 'node:path';
-import { config as loadDotenv } from 'dotenv';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
-// Monorepo-wide .env lives at the repository root, not per-app (mirrors
-// packages/infrastructure/prisma.config.ts) — Next.js only auto-loads a
-// .env colocated with this file, so apps/web needs its own explicit load.
-loadDotenv({ path: path.join(import.meta.dirname, '..', '..', '.env') });
-
+// Monorepo-wide .env lives at the repository root, not per-app. Next.js only
+// auto-loads a .env colocated with this file, so local dev/test runs of this
+// app go through a `dotenvx run -f ../../.env --` wrapper in package.json
+// (see ADR-0016) instead of loading it here — by the time this config module
+// runs, process.env is already populated. CI/Docker/production never rely on
+// a .env file at all; they set real process.env values directly.
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Produces a minimal, self-contained server bundle (.next/standalone) for
