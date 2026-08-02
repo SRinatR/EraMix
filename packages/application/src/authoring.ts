@@ -257,6 +257,7 @@ export async function createProduct(
         sku: input.sku.trim(),
         categoryId: input.categoryId,
         status: 'DRAFT',
+        directSaleEnabled: false,
       },
       input.translations.map((translation) => ({
         id: deps.idGen.nextId(),

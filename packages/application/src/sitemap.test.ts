@@ -83,6 +83,7 @@ const publishedProduct: ProductWithTranslations = {
   sku: 'SKU-1',
   categoryId: 'category-1',
   status: 'PUBLISHED',
+  directSaleEnabled: false,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-04'),
   version: 0,

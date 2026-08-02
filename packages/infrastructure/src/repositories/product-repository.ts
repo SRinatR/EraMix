@@ -75,6 +75,7 @@ export class PrismaProductRepository implements ProductRepository {
         categoryId: product.categoryId,
         status: product.status,
         publishedAt: product.publishedAt ?? null,
+        directSaleEnabled: product.directSaleEnabled,
         translations: {
           create: translations.map((translation) => ({
             id: translation.id,
@@ -315,6 +316,7 @@ function toDomain(row: ProductRowWithTranslations): ProductWithTranslations {
     publishedAt: nullToUndefined(row.publishedAt),
     retiredAt: nullToUndefined(row.retiredAt),
     retirementReason: nullToUndefined(row.retirementReason),
+    directSaleEnabled: row.directSaleEnabled,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,

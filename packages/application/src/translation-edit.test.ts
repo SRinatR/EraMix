@@ -231,6 +231,7 @@ const draftProduct: ProductWithTranslations = {
   sku: 'SKU-1',
   categoryId: 'category-1',
   status: 'DRAFT',
+  directSaleEnabled: false,
   createdAt: new Date(),
   updatedAt: new Date(),
   version: 0,

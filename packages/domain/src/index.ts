@@ -45,6 +45,8 @@ export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
 export { sanitizeFilenameForStorage, sanitizeDisplayName } from './filename.js';
 export { validateEffectivePlatformSettings } from './platform-settings.js';
 export { validateEffectiveAdvertisingProviderConfig } from './advertising.js';
+export { validateEffectiveOffer, offerIneligibilityReasons } from './offer.js';
+export type { OfferValidationContext, OfferIneligibilityReason } from './offer.js';
 export { validateAnalyticsEvent, ANALYTICS_SCHEMA_VERSION } from './analytics.js';
 export type {
   AnalyticsEvent,
@@ -95,4 +97,8 @@ export type {
   AdvertisingProvider,
   ConsentCategory,
   AdvertisingProviderConfig,
+  OfferState,
+  OfferAvailability,
+  TaxDisplayPolicy,
+  Offer,
 } from './entities.js';

@@ -431,6 +431,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     sku: 'SKU-1',
     categoryId: 'category-1',
     status: 'PUBLISHED',
+    directSaleEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     version: 0,

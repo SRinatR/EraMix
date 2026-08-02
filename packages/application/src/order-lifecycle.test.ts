@@ -97,6 +97,7 @@ function makeProduct(id: string, name: string): ProductWithTranslations {
     sku: `SKU-${id}`,
     categoryId: 'category-1',
     status: 'PUBLISHED',
+    directSaleEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     version: 0,

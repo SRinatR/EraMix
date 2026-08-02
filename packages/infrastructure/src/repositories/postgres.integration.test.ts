@@ -89,6 +89,7 @@ describe('PostgreSQL integration', () => {
           ])
         ).id,
         status: 'DRAFT',
+        directSaleEnabled: false,
       },
       [
         {

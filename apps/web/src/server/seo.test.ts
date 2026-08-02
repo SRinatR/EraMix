@@ -51,6 +51,7 @@ function makeProduct(translations: readonly ProductTranslation[]): ProductWithTr
     sku: 'SKU-1',
     categoryId: 'category-1',
     status: 'PUBLISHED',
+    directSaleEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     version: 0,

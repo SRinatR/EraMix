@@ -118,6 +118,16 @@ export interface Product extends Versioned, Timestamped {
   /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
   readonly retiredAt?: Date | undefined;
   readonly retirementReason?: string | undefined;
+  /**
+   * Explicit opt-in for the future direct-sale/Merchant commercial mode
+   * (ADR-0019) — defaults false (quote-only). A Product.Offer belonging to
+   * a product where this is false is invalid at the domain-validation
+   * layer, not merely excluded later by the feed generator (CLAUDE.md:
+   * "an offer belonging to a quote-only product must remain excluded
+   * unless the product is explicitly enabled for the direct-sale
+   * commercial mode").
+   */
+  readonly directSaleEnabled: boolean;
 }
 
 export interface ContentTranslation extends Versioned, Timestamped {
@@ -338,4 +348,56 @@ export interface AdvertisingProviderConfig extends Versioned, Timestamped {
   readonly pixelId?: string | undefined;
   readonly credentialSecretRef?: string | undefined;
   readonly testMode: boolean;
+}
+
+/**
+ * Dormant, fail-closed Merchant Offer foundation (ADR-0019) — a real,
+ * versioned, effective-dated sellable-offer record, entirely separate from
+ * ProductTranslation's quote-only indicative "from" price (ADR-0005). See
+ * packages/domain/src/offer.ts's validateEffectiveOffer for the invariants
+ * that gate a transition to PUBLISHED, and ADR-0019 for why this cannot
+ * produce real Merchant output in this repository's current state.
+ */
+export type OfferState = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+
+export type OfferAvailability =
+  'IN_STOCK' | 'OUT_OF_STOCK' | 'PREORDER' | 'BACKORDER' | 'DISCONTINUED';
+
+export type TaxDisplayPolicy = 'TAX_INCLUDED' | 'TAX_EXCLUDED';
+
+export interface Offer extends Versioned, Timestamped {
+  readonly id: string;
+  readonly productId: string;
+  readonly state: OfferState;
+
+  readonly sellerName: string;
+  readonly sellerUrl?: string | undefined;
+
+  readonly priceAmountMinor: number;
+  /** ISO 4217, e.g. "USD". */
+  readonly currency: string;
+  readonly taxDisplayPolicy: TaxDisplayPolicy;
+
+  readonly availability: OfferAvailability;
+  /** Preorder/backorder ship date or restock date. */
+  readonly availableFrom?: Date | undefined;
+  readonly inventoryQuantity?: number | undefined;
+
+  readonly sku: string;
+  readonly gtin?: string | undefined;
+  readonly mpn?: string | undefined;
+  readonly brand?: string | undefined;
+
+  /** ISO 3166-1 alpha-2 country codes. */
+  readonly eligibleCountries: readonly string[];
+
+  /** References (a URL or internal slug) to standalone delivery/return policy pages — never inline free text bundled with checkout logic. */
+  readonly deliveryPolicyRef?: string | undefined;
+  readonly returnPolicyRef?: string | undefined;
+
+  readonly effectiveFrom: Date;
+  readonly effectiveTo?: Date | undefined;
+
+  /** Present only when purchasable; absent is the explicit not-yet-purchasable state (CLAUDE.md) — PUBLISHED requires this set. */
+  readonly checkoutUrl?: string | undefined;
 }
