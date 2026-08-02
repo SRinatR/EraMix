@@ -2,6 +2,7 @@ import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
 import { AddContentTranslationForm } from './add-content-translation-form';
+import { EditContentTranslationForm } from './edit-content-translation-form';
 import { ChangeSlugForm } from '../catalog/change-slug-form';
 import { TransitionStatusForm } from '../catalog/transition-status-form';
 import { requirePermission } from '@eramix/application';
@@ -50,6 +51,7 @@ export default async function AdminContentPage() {
             <th>Status</th>
             <th>Change status</th>
             <th>Add translation</th>
+            <th>Edit translations</th>
             <th>Slugs</th>
           </tr>
         </thead>
@@ -74,6 +76,22 @@ export default async function AdminContentPage() {
                     existingLocales={item.translations.map((t) => t.locale)}
                     allowSlug={namespace !== undefined}
                   />
+                </td>
+                <td>
+                  {item.translations.map((translation) => (
+                    <div key={translation.id}>
+                      {translation.locale}:{' '}
+                      <EditContentTranslationForm
+                        endpoint={`/api/admin/content/${item.id}/translations/${translation.id}`}
+                        expectedVersion={translation.version}
+                        initialTitle={translation.title}
+                        initialSummary={translation.summary}
+                        initialContent={translation.content}
+                        initialSeoTitle={translation.seoTitle}
+                        initialSeoDescription={translation.seoDescription}
+                      />
+                    </div>
+                  ))}
                 </td>
                 <td>
                   {namespace &&

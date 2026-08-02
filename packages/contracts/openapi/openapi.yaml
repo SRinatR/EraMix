@@ -417,6 +417,43 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/orders/by-id/{orderId}/lines/{lineId}:
+    delete:
+      operationId: removeOrderLine
+      summary: Remove a line from a DRAFT order
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveOrderLineRequest'
+      responses:
+        '200':
+          description: The updated order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '409':
+          description: Order is no longer DRAFT (ORD-006), or a stale version was supplied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/orders/by-id/{orderId}/submit:
     post:
       operationId: submitOrder
@@ -744,7 +781,59 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
-
+  /api/admin/categories/{categoryId}/translations/{translationId}:
+    patch:
+      operationId: updateCategoryTranslation
+      summary: >-
+        Edit an existing translation's name/SEO fields (catalog.write —
+        Administrator only). Never accepts a slug — slug changes stay the
+        separate, explicitly audited command
+        (changeCategorySlug). If the category is already PUBLISHED, clearing
+        a required SEO field is rejected (422) rather than silently
+        producing a published item that fails the publish gate.
+      tags: [Admin]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: translationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryTranslationEditRequest'
+      responses:
+        '200':
+          description: The edited translation's new version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationEditResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale expectedVersion (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: >-
+            Invalid field values, or (when the category is PUBLISHED)
+            clearing a required SEO field.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/admin/products/{productId}/assets:
     get:
       operationId: listProductAssets
@@ -1172,6 +1261,59 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products/{productId}/translations/{translationId}:
+    patch:
+      operationId: updateProductTranslation
+      summary: >-
+        Edit an existing translation's name/description/SEO fields/
+        indicative price (catalog.write — Administrator only). Never accepts
+        a slug — slug changes stay a separate command. If the product is
+        already PUBLISHED, clearing a required SEO field is rejected (422)
+        rather than silently producing a published item that fails the
+        publish gate.
+      tags: [Admin]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: translationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductTranslationEditRequest'
+      responses:
+        '200':
+          description: The edited translation's new version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationEditResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale expectedVersion (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: >-
+            Invalid field values, or (when the product is PUBLISHED)
+            clearing a required SEO field.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/admin/content:
     post:
       operationId: createContent
@@ -1247,6 +1389,59 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/admin/content/{contentId}/translations/{translationId}:
+    patch:
+      operationId: updateContentTranslation
+      summary: >-
+        Edit an existing translation's title/summary/body/SEO fields
+        (content.write — Administrator/Content editor). Never accepts a
+        slug — slug changes stay a separate command. If the content item is
+        already PUBLISHED, clearing a required SEO field is rejected (422)
+        rather than silently producing a published item that fails the
+        publish gate.
+      tags: [Admin]
+      parameters:
+        - name: contentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: translationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContentTranslationEditRequest'
+      responses:
+        '200':
+          description: The edited translation's new version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationEditResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale expectedVersion (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: >-
+            Invalid field values, or (when the content item is PUBLISHED)
+            clearing a required SEO field.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 
   /api/admin/audit:
     get:
@@ -1597,6 +1792,11 @@ components:
         productId: { type: string }
         quantity: { type: integer, minimum: 1 }
         note: { type: string }
+    RemoveOrderLineRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
     SubmitOrderRequest:
       type: object
       required: [expectedVersion]
@@ -1699,6 +1899,29 @@ components:
           type: string
           minLength: 1
           description: When set, becomes this translation's initial canonical route.
+    CategoryTranslationEditRequest:
+      type: object
+      description: >-
+        Editable fields for an existing translation. Never includes `slug` —
+        slug changes stay the separate changeCategorySlug command. Omitting a
+        field leaves it unchanged; setting seoTitle/seoDescription to null
+        clears it (rejected with 422 if the category is PUBLISHED).
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        name: { type: string, minLength: 1 }
+        seoTitle:
+          type: [string, 'null']
+        seoDescription:
+          type: [string, 'null']
+    TranslationEditResult:
+      type: object
+      required: [translationId, version]
+      properties:
+        translationId: { type: string }
+        version:
+          type: integer
+          description: The translation's own new version, for the next edit's expectedVersion.
     CreateCategoryRequest:
       type: object
       required: [translations]
@@ -1723,6 +1946,28 @@ components:
         seoDescription: { type: string, minLength: 1 }
         indicativePrice:
           $ref: '#/components/schemas/ProductIndicativePrice'
+    ProductTranslationEditRequest:
+      type: object
+      description: >-
+        Editable fields for an existing translation. Never includes `slug` —
+        slug changes stay a separate command. Omitting a field leaves it
+        unchanged; setting a nullable field to null clears it (indicativePrice:
+        null clears the price entirely). Clearing seoTitle/seoDescription is
+        rejected with 422 if the product is PUBLISHED.
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        name: { type: string, minLength: 1 }
+        description:
+          type: [string, 'null']
+        seoTitle:
+          type: [string, 'null']
+        seoDescription:
+          type: [string, 'null']
+        indicativePrice:
+          anyOf:
+            - $ref: '#/components/schemas/ProductIndicativePrice'
+            - type: 'null'
     CreateProductRequest:
       type: object
       required: [sku, categoryId, translations]
@@ -1775,6 +2020,27 @@ components:
           type: string
           minLength: 1
           description: Only valid for ARTICLE/PAGE translations.
+    ContentTranslationEditRequest:
+      type: object
+      description: >-
+        Editable fields for an existing translation. Never includes `slug` —
+        slug changes stay the separate changeContentSlug command. Omitting a
+        field leaves it unchanged; setting summary/seoTitle/seoDescription to
+        null clears it (rejected with 422 if the content item is PUBLISHED).
+        `content` (the body) is never nullable — omit it to leave the body
+        unchanged, or supply a full replacement.
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        title: { type: string, minLength: 1 }
+        summary:
+          type: [string, 'null']
+        content:
+          $ref: '#/components/schemas/ContentBody'
+        seoTitle:
+          type: [string, 'null']
+        seoDescription:
+          type: [string, 'null']
     CreateContentRequest:
       type: object
       required: [type, translations]

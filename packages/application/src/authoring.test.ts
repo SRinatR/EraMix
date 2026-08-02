@@ -121,6 +121,7 @@ describe('createCategory', () => {
           name: 'Chairs',
           createdAt: new Date(),
           updatedAt: new Date(),
+          version: 0,
           routes: [
             {
               id: 'route-1',

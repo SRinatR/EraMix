@@ -80,6 +80,7 @@ function makeCategoryTranslation(
     seoDescription: 'Browse our chairs.',
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
     routes: [canonicalCategoryRoute],
     ...overrides,
   };
@@ -293,6 +294,7 @@ function makeContentTranslation(
     seoDescription: 'Read about the friendship festival.',
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
     routes: [canonicalContentRoute],
     ...overrides,
   };
@@ -403,6 +405,7 @@ function makeProductTranslation(overrides: Partial<ProductTranslation> = {}): Pr
     seoDescription: 'A sturdy oak table.',
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
     ...overrides,
   };
 }

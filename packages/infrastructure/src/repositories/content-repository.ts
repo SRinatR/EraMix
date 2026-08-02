@@ -1,4 +1,8 @@
-import type { ContentRepository, ContentWithTranslations } from '@eramix/application';
+import type {
+  ContentRepository,
+  ContentTranslationEditPatch,
+  ContentWithTranslations,
+} from '@eramix/application';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -82,7 +86,7 @@ export class PrismaContentRepository implements ContentRepository {
 
   async create(
     content: Omit<Content, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<ContentTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<ContentTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<ContentWithTranslations> {
     const row = await withUniqueConstraintMapping<ContentRowWithTranslations>(
       () =>
@@ -118,7 +122,7 @@ export class PrismaContentRepository implements ContentRepository {
 
   async addTranslation(
     contentId: string,
-    translation: Omit<ContentTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<ContentTranslation, 'version' | 'createdAt' | 'updatedAt'>,
   ): Promise<ContentWithTranslations> {
     await withUniqueConstraintMapping<ContentTranslationRow>(
       () =>
@@ -140,6 +144,38 @@ export class PrismaContentRepository implements ContentRepository {
           { contentId, locale: translation.locale, prismaMeta: meta },
         );
       },
+    );
+    const updated = await this.findById(contentId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Content ${contentId} not found after update.`, {
+        id: contentId,
+      });
+    }
+    return updated;
+  }
+
+  async updateTranslation(
+    contentId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: ContentTranslationEditPatch,
+  ): Promise<ContentWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.contentTranslation.updateMany({
+      where: { id: translationId, contentId, version: expectedVersion },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+        ...(patch.content !== undefined ? { content: patch.content as object } : {}),
+        ...(patch.seoTitle !== undefined ? { seoTitle: patch.seoTitle } : {}),
+        ...(patch.seoDescription !== undefined ? { seoDescription: patch.seoDescription } : {}),
+        version: { increment: 1 },
+      },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Content translation ${translationId} was modified by another operation (expected version ${expectedVersion}).`,
+      { contentId, translationId, expectedVersion },
     );
     const updated = await this.findById(contentId);
     if (!updated) {
@@ -258,6 +294,7 @@ function translationToDomain(row: ContentTranslationRow): ContentTranslation {
     seoDescription: nullToUndefined(row.seoDescription),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    version: row.version,
   };
 }
 

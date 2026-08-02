@@ -1,4 +1,8 @@
-import type { ProductRepository, ProductWithTranslations } from '@eramix/application';
+import type {
+  ProductRepository,
+  ProductTranslationEditPatch,
+  ProductWithTranslations,
+} from '@eramix/application';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -49,7 +53,7 @@ export class PrismaProductRepository implements ProductRepository {
 
   async create(
     product: Omit<Product, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<ProductTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<ProductTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<ProductWithTranslations> {
     const row = await resolveClient(this.prisma).product.create({
       data: {
@@ -81,7 +85,7 @@ export class PrismaProductRepository implements ProductRepository {
 
   async addTranslation(
     productId: string,
-    translation: Omit<ProductTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<ProductTranslation, 'version' | 'createdAt' | 'updatedAt'>,
   ): Promise<ProductWithTranslations> {
     await withUniqueConstraintMapping<ProductTranslationRow>(
       () =>
@@ -106,6 +110,44 @@ export class PrismaProductRepository implements ProductRepository {
           { productId, locale: translation.locale, prismaMeta: meta },
         );
       },
+    );
+    const updated = await this.findById(productId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Product ${productId} not found after update.`, {
+        id: productId,
+      });
+    }
+    return updated;
+  }
+
+  async updateTranslation(
+    productId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: ProductTranslationEditPatch,
+  ): Promise<ProductWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.productTranslation.updateMany({
+      where: { id: translationId, productId, version: expectedVersion },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.seoTitle !== undefined ? { seoTitle: patch.seoTitle } : {}),
+        ...(patch.seoDescription !== undefined ? { seoDescription: patch.seoDescription } : {}),
+        ...(patch.indicativePrice !== undefined
+          ? {
+              priceFromMinor: patch.indicativePrice?.priceFromMinor ?? null,
+              currency: patch.indicativePrice?.currency ?? null,
+              priceDisclaimer: patch.indicativePrice?.priceDisclaimer ?? null,
+            }
+          : {}),
+        version: { increment: 1 },
+      },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Product translation ${translationId} was modified by another operation (expected version ${expectedVersion}).`,
+      { productId, translationId, expectedVersion },
     );
     const updated = await this.findById(productId);
     if (!updated) {
@@ -217,6 +259,7 @@ function translationToDomain(row: ProductTranslationRow): ProductTranslation {
     seoDescription: nullToUndefined(row.seoDescription),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    version: row.version,
     ...(hasPrice
       ? {
           indicativePrice: {

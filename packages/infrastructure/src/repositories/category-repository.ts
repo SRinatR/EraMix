@@ -1,4 +1,8 @@
-import type { CategoryRepository, CategoryWithTranslations } from '@eramix/application';
+import type {
+  CategoryRepository,
+  CategoryTranslationEditPatch,
+  CategoryWithTranslations,
+} from '@eramix/application';
 import {
   ResourceNotFoundError,
   SlugConflictError,
@@ -70,7 +74,7 @@ export class PrismaCategoryRepository implements CategoryRepository {
 
   async addTranslation(
     categoryId: string,
-    translation: Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<CategoryTranslation, 'version' | 'createdAt' | 'updatedAt'>,
   ): Promise<CategoryWithTranslations> {
     await withUniqueConstraintMapping<CategoryTranslationRow>(
       () =>
@@ -90,6 +94,36 @@ export class PrismaCategoryRepository implements CategoryRepository {
           { categoryId, locale: translation.locale, prismaMeta: meta },
         );
       },
+    );
+    const updated = await this.findById(categoryId);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Category ${categoryId} not found after update.`, {
+        id: categoryId,
+      });
+    }
+    return updated;
+  }
+
+  async updateTranslation(
+    categoryId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: CategoryTranslationEditPatch,
+  ): Promise<CategoryWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.categoryTranslation.updateMany({
+      where: { id: translationId, categoryId, version: expectedVersion },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.seoTitle !== undefined ? { seoTitle: patch.seoTitle } : {}),
+        ...(patch.seoDescription !== undefined ? { seoDescription: patch.seoDescription } : {}),
+        version: { increment: 1 },
+      },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Category translation ${translationId} was modified by another operation (expected version ${expectedVersion}).`,
+      { categoryId, translationId, expectedVersion },
     );
     const updated = await this.findById(categoryId);
     if (!updated) {
@@ -136,7 +170,7 @@ export class PrismaCategoryRepository implements CategoryRepository {
 
   async create(
     category: Omit<Category, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<CategoryTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<CategoryWithTranslations> {
     const row = await withUniqueConstraintMapping<CategoryRowWithTranslations>(
       () =>
@@ -243,6 +277,7 @@ function translationToDomain(row: CategoryTranslationRow): CategoryTranslation {
     seoDescription: nullToUndefined(row.seoDescription),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    version: row.version,
   };
 }
 

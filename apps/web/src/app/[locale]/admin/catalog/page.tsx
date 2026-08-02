@@ -3,6 +3,8 @@ import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
 import { AddTranslationForm } from './add-translation-form';
 import { ChangeSlugForm } from './change-slug-form';
+import { EditCategoryTranslationForm } from './edit-category-translation-form';
+import { EditProductTranslationForm } from './edit-product-translation-form';
 import { TransitionStatusForm } from './transition-status-form';
 import { requirePermission } from '@eramix/application';
 import { notFound } from 'next/navigation';
@@ -48,6 +50,7 @@ export default async function AdminCatalogPage() {
             <th>Status</th>
             <th>Change status</th>
             <th>Add translation</th>
+            <th>Edit translations</th>
             <th>Slugs</th>
           </tr>
         </thead>
@@ -69,6 +72,20 @@ export default async function AdminCatalogPage() {
                   existingLocales={category.translations.map((t) => t.locale)}
                   requireSlug={false}
                 />
+              </td>
+              <td>
+                {category.translations.map((translation) => (
+                  <div key={translation.id}>
+                    {translation.locale}:{' '}
+                    <EditCategoryTranslationForm
+                      endpoint={`/api/admin/categories/${category.id}/translations/${translation.id}`}
+                      expectedVersion={translation.version}
+                      initialName={translation.name}
+                      initialSeoTitle={translation.seoTitle}
+                      initialSeoDescription={translation.seoDescription}
+                    />
+                  </div>
+                ))}
               </td>
               <td>
                 {category.translations.map((translation) => (
@@ -98,6 +115,7 @@ export default async function AdminCatalogPage() {
             <th>Status</th>
             <th>Change status</th>
             <th>Add translation</th>
+            <th>Edit translations</th>
             <th>Media</th>
           </tr>
         </thead>
@@ -120,6 +138,24 @@ export default async function AdminCatalogPage() {
                   existingLocales={product.translations.map((t) => t.locale)}
                   requireSlug={true}
                 />
+              </td>
+              <td>
+                {product.translations.map((translation) => (
+                  <div key={translation.id}>
+                    {translation.locale}:{' '}
+                    <EditProductTranslationForm
+                      endpoint={`/api/admin/products/${product.id}/translations/${translation.id}`}
+                      expectedVersion={translation.version}
+                      initialName={translation.name}
+                      initialDescription={translation.description}
+                      initialSeoTitle={translation.seoTitle}
+                      initialSeoDescription={translation.seoDescription}
+                      initialPriceFromMinor={translation.indicativePrice?.priceFromMinor}
+                      initialCurrency={translation.indicativePrice?.currency}
+                      initialPriceDisclaimer={translation.indicativePrice?.priceDisclaimer}
+                    />
+                  </div>
+                ))}
               </td>
               <td>
                 <Link href={`/admin/catalog/products/${product.id}/assets`}>Manage media</Link>

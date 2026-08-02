@@ -8,6 +8,7 @@ import type {
   ContentRoute,
   ContentRouteNamespace,
   ContentTranslation,
+  IndicativePrice,
   LocaleCode,
   Membership,
   Order,
@@ -66,6 +67,19 @@ export interface CategoryWithTranslations extends Category {
   })[];
 }
 
+/**
+ * Editable-only fields for an existing translation (never `slug` — slug
+ * changes are the separate, explicitly audited slug-change.ts command;
+ * CLAUDE.md: "title edits must never silently change slugs"). `undefined`
+ * means "leave this field unchanged"; `null` on a nullable field means
+ * "clear it" — the same tri-state idiom as ProductAssetMetadataPatch.
+ */
+export interface CategoryTranslationEditPatch {
+  readonly name?: string;
+  readonly seoTitle?: string | null;
+  readonly seoDescription?: string | null;
+}
+
 export interface CategoryRepository {
   findById(id: string): Promise<CategoryWithTranslations | undefined>;
   findByCanonicalSlug(
@@ -77,12 +91,19 @@ export interface CategoryRepository {
   findCanonicalRouteByTranslationId(translationId: string): Promise<CategoryRoute | undefined>;
   create(
     category: Omit<Category, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<CategoryTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<CategoryWithTranslations>;
   /** Adds a translation to an existing category. Throws SlugConflictError if the (categoryId, locale) pair already exists. */
   addTranslation(
     categoryId: string,
-    translation: Omit<CategoryTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<CategoryTranslation, 'version' | 'createdAt' | 'updatedAt'>,
+  ): Promise<CategoryWithTranslations>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion, ResourceNotFoundError if translationId doesn't belong to categoryId. */
+  updateTranslation(
+    categoryId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: CategoryTranslationEditPatch,
   ): Promise<CategoryWithTranslations>;
   setCanonicalRoute(
     route: Omit<CategoryRoute, 'id' | 'createdAt' | 'isCanonical'>,
@@ -104,18 +125,34 @@ export interface ProductWithTranslations extends Product {
   readonly translations: readonly ProductTranslation[];
 }
 
+/** See CategoryTranslationEditPatch's tri-state doc comment — same idiom. Never `slug` (slug-change.ts owns that). `indicativePrice: null` clears the price entirely; an object replaces it wholesale (already validated by the caller via createIndicativePrice). */
+export interface ProductTranslationEditPatch {
+  readonly name?: string;
+  readonly description?: string | null;
+  readonly seoTitle?: string | null;
+  readonly seoDescription?: string | null;
+  readonly indicativePrice?: IndicativePrice | null;
+}
+
 export interface ProductRepository {
   findById(id: string): Promise<ProductWithTranslations | undefined>;
   findByPublicId(publicId: string): Promise<ProductWithTranslations | undefined>;
   findBySku(sku: string): Promise<ProductWithTranslations | undefined>;
   create(
     product: Omit<Product, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<ProductTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<ProductTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<ProductWithTranslations>;
   /** Adds a translation to an existing product. Throws SlugConflictError if the (productId, locale) pair already exists. */
   addTranslation(
     productId: string,
-    translation: Omit<ProductTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<ProductTranslation, 'version' | 'createdAt' | 'updatedAt'>,
+  ): Promise<ProductWithTranslations>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion, ResourceNotFoundError if translationId doesn't belong to productId. */
+  updateTranslation(
+    productId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: ProductTranslationEditPatch,
   ): Promise<ProductWithTranslations>;
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   updateStatus(
@@ -173,6 +210,15 @@ export interface ContentWithTranslations extends Content {
   })[];
 }
 
+/** See CategoryTranslationEditPatch's tri-state doc comment — same idiom. Never `slug` (slug-change.ts owns that, and only ARTICLE/PAGE have one). `content` (the JSON body) is never nullable at the DB layer, so it has no clear-to-null state — omit it to leave the body unchanged, or supply a full replacement. */
+export interface ContentTranslationEditPatch {
+  readonly title?: string;
+  readonly summary?: string | null;
+  readonly content?: unknown;
+  readonly seoTitle?: string | null;
+  readonly seoDescription?: string | null;
+}
+
 export interface ContentRepository {
   findById(id: string): Promise<ContentWithTranslations | undefined>;
   /** Route uniqueness — and therefore lookup — is scoped per (namespace, locale). */
@@ -190,12 +236,19 @@ export interface ContentRepository {
   findCanonicalRouteByTranslationId(translationId: string): Promise<ContentRoute | undefined>;
   create(
     content: Omit<Content, 'version' | 'createdAt' | 'updatedAt'>,
-    translations: readonly Omit<ContentTranslation, 'createdAt' | 'updatedAt'>[],
+    translations: readonly Omit<ContentTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<ContentWithTranslations>;
   /** Adds a translation to an existing content item. Throws SlugConflictError if the (contentId, locale) pair already exists. */
   addTranslation(
     contentId: string,
-    translation: Omit<ContentTranslation, 'createdAt' | 'updatedAt'>,
+    translation: Omit<ContentTranslation, 'version' | 'createdAt' | 'updatedAt'>,
+  ): Promise<ContentWithTranslations>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion, ResourceNotFoundError if translationId doesn't belong to contentId. */
+  updateTranslation(
+    contentId: string,
+    translationId: string,
+    expectedVersion: number,
+    patch: ContentTranslationEditPatch,
   ): Promise<ContentWithTranslations>;
   /**
    * Creates a new canonical route for a translation, demoting any previous

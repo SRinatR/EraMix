@@ -51,12 +51,15 @@ if (!isValidPublicId(DEMO_PRODUCT_PUBLIC_ID)) {
 /**
  * A fully PUBLISHED category + product, seeded directly via Prisma (not
  * through the app's own authoring API) so the ordering/catalog E2E specs
- * have something orderable without first working around a real product gap:
- * there is currently no "edit an existing translation's seoTitle/
- * seoDescription" endpoint (only "add a new translation" and "change slug"),
- * so an editor cannot yet take packages/infrastructure/prisma/seed.ts's
- * DRAFT sample product to PUBLISHED through the UI/API alone. Track that gap
- * separately; this fixture works around it for E2E purposes only.
+ * have something orderable without a Pi-only fixture script having to open
+ * its own authenticated actor/session context. `updateCategoryTranslation`/
+ * `updateProductTranslation` (packages/application/src/translation-edit.ts)
+ * now exist and can take an existing translation's seoTitle/seoDescription
+ * from empty to set — the "edit an existing translation" gap this comment
+ * used to name is closed — but this fixture keeps using fixed, upserted ids
+ * directly via Prisma rather than the authoring API's generated ids, which
+ * remains the simpler, deterministic choice for seed data specifically (not
+ * a product gap).
  */
 async function seedPublishedDemoProduct(): Promise<void> {
   const category = await prisma.category.upsert({

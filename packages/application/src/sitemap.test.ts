@@ -22,6 +22,7 @@ const publishedArticle: ContentWithTranslations = {
       content: {},
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
+      version: 0,
       routes: [
         {
           id: 'route-1',
@@ -61,6 +62,7 @@ const publishedCategory: CategoryWithTranslations = {
       name: 'Costumes',
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
+      version: 0,
       routes: [
         {
           id: 'cat-route-1',
@@ -91,6 +93,7 @@ const publishedProduct: ProductWithTranslations = {
       locale: 'en',
       name: 'Red T-shirt',
       slug: 'red-t-shirt',
+      version: 0,
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
     },

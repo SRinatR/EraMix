@@ -68,7 +68,7 @@ export interface Membership extends Versioned, Timestamped {
   readonly status: MembershipStatus;
 }
 
-export interface CategoryTranslation extends Timestamped {
+export interface CategoryTranslation extends Versioned, Timestamped {
   readonly id: string;
   readonly categoryId: string;
   readonly locale: LocaleCode;
@@ -93,7 +93,7 @@ export interface Category extends Versioned, Timestamped {
   readonly sortOrder: number;
 }
 
-export interface ProductTranslation extends Timestamped {
+export interface ProductTranslation extends Versioned, Timestamped {
   readonly id: string;
   readonly productId: string;
   readonly locale: LocaleCode;
@@ -114,7 +114,7 @@ export interface Product extends Versioned, Timestamped {
   readonly publishedAt?: Date | undefined;
 }
 
-export interface ContentTranslation extends Timestamped {
+export interface ContentTranslation extends Versioned, Timestamped {
   readonly id: string;
   readonly contentId: string;
   readonly locale: LocaleCode;

@@ -92,6 +92,10 @@ class InMemoryContentRepository implements ContentRepository {
     throw new Error('not needed for these tests');
   }
 
+  updateTranslation(): Promise<ContentWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
   listPublished(): Promise<readonly ContentWithTranslations[]> {
     return Promise.resolve([...this.contents.values()].filter((c) => c.status === 'PUBLISHED'));
   }
@@ -156,6 +160,7 @@ function makeTranslation(overrides: Partial<ContentTranslation> = {}): ContentTr
     content: {},
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
     ...overrides,
   };
 }
@@ -308,6 +313,9 @@ describe('resolveContentRoute', () => {
       addTranslation: () => {
         throw new Error('not needed for this test');
       },
+      updateTranslation: () => {
+        throw new Error('not needed for this test');
+      },
       setCanonicalRoute: () => {
         throw new Error('not needed for this test');
       },
@@ -353,6 +361,10 @@ class InMemoryProductRepository implements ProductRepository {
     throw new Error('not needed for these tests');
   }
 
+  updateTranslation(): Promise<Product & { translations: ProductTranslation[] }> {
+    throw new Error('not needed for these tests');
+  }
+
   updateStatus(): Promise<Product & { translations: ProductTranslation[] }> {
     throw new Error('not needed for these tests');
   }
@@ -393,6 +405,7 @@ function makeProductTranslation(overrides: Partial<ProductTranslation> = {}): Pr
     slug: 'red-t-shirt',
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 0,
     ...overrides,
   };
 }
@@ -465,6 +478,9 @@ describe('CanonicalRouteMissingError', () => {
         throw new Error('not needed for this test');
       },
       addTranslation: () => {
+        throw new Error('not needed for this test');
+      },
+      updateTranslation: () => {
         throw new Error('not needed for this test');
       },
       setCanonicalRoute: () => {

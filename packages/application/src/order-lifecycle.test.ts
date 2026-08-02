@@ -86,6 +86,7 @@ function makeProduct(id: string, name: string): ProductWithTranslations {
     locale: 'en',
     name,
     slug: name.toLowerCase().replaceAll(' ', '-'),
+    version: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

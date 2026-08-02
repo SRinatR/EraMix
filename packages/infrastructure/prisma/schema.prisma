@@ -255,6 +255,11 @@ model ContentTranslation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  /// Backs optimistic concurrency for the translation-edit use case (editing
+  /// title/summary/content/SEO fields never touches the parent Content's own
+  /// `version`, which is reserved for status transitions — see
+  /// packages/application/src/translation-edit.ts).
+  version   Int      @default(0)
 
   @@unique([contentId, locale])
   @@unique([id, locale])
@@ -315,6 +320,9 @@ model CategoryTranslation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  /// Backs optimistic concurrency for the translation-edit use case — see
+  /// the matching comment on ContentTranslation.version.
+  version   Int      @default(0)
 
   @@unique([categoryId, locale])
   @@unique([id, locale])
@@ -389,6 +397,9 @@ model ProductTranslation {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  /// Backs optimistic concurrency for the translation-edit use case — see
+  /// the matching comment on ContentTranslation.version.
+  version   Int      @default(0)
 
   @@unique([productId, locale])
   @@index([locale, slug])

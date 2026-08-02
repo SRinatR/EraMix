@@ -20,12 +20,15 @@ export type {
   MembershipRepository,
   CategoryRepository,
   CategoryWithTranslations,
+  CategoryTranslationEditPatch,
   ProductRepository,
   ProductWithTranslations,
+  ProductTranslationEditPatch,
   ProductAssetRepository,
   ProductAssetMetadataPatch,
   ContentRepository,
   ContentWithTranslations,
+  ContentTranslationEditPatch,
   OrderRepository,
   OrderWithLines,
   AuditEventRepository,
@@ -109,3 +112,13 @@ export type {
   CreateContentTranslationInput,
   AddContentTranslationInput,
 } from './authoring.js';
+export {
+  updateCategoryTranslation,
+  updateProductTranslation,
+  updateContentTranslation,
+} from './translation-edit.js';
+export type {
+  UpdateCategoryTranslationInput,
+  UpdateProductTranslationInput,
+  UpdateContentTranslationInput,
+} from './translation-edit.js';
