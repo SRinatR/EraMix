@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadEnv } from '../env.js';
 import { createPrismaClient, type PrismaClient } from '../prisma-client.js';
 import { PrismaUnitOfWork } from '../unit-of-work.js';
+import { PrismaAdvertisingProviderConfigRepository } from './advertising-provider-config-repository.js';
 import { PrismaAuditEventRepository } from './audit-event-repository.js';
 import { PrismaCategoryRepository } from './category-repository.js';
 import { PrismaProductRepository } from './product-repository.js';
@@ -23,6 +24,7 @@ describe('PostgreSQL integration', () => {
   const categoryRepo = () => new PrismaCategoryRepository(prisma);
   const productRepo = () => new PrismaProductRepository(prisma);
   const auditRepo = () => new PrismaAuditEventRepository(prisma);
+  const advertisingRepo = () => new PrismaAdvertisingProviderConfigRepository(prisma);
 
   beforeAll(() => {
     const env = loadEnv();
@@ -183,5 +185,30 @@ describe('PostgreSQL integration', () => {
         data: { retiredAt: new Date(), retirementReason: 'Should be rejected.' },
       }),
     ).rejects.toThrow();
+  });
+
+  it('advertising_provider_requires_identifier_when_enabled CHECK rejects an enabled provider with no identifier', async () => {
+    const config = await prisma.advertisingProviderConfig.create({
+      data: { provider: 'TIKTOK' },
+    });
+    expect(config.enabled).toBe(false);
+
+    // A raw write bypassing the application-layer validator must still fail
+    // — the data-layer half of CLAUDE.md's "never activate a provider with
+    // nothing to integrate" guarantee.
+    await expect(
+      prisma.advertisingProviderConfig.update({
+        where: { id: config.id },
+        data: { enabled: true },
+      }),
+    ).rejects.toThrow();
+
+    // The same write succeeds once a real identifier is present.
+    const updated = await advertisingRepo().update('TIKTOK', config.version, {
+      enabled: true,
+      accountId: 'tiktok-account-123',
+    });
+    expect(updated.enabled).toBe(true);
+    expect(updated.accountId).toBe('tiktok-account-123');
   });
 });

@@ -88,6 +88,27 @@ async function main(): Promise<void> {
     update: {},
   });
 
+  // Each AdvertisingProvider (CLAUDE.md's named allowlist) always exists as
+  // a row — disabled, no identifiers — never implicitly materialized on
+  // read (same "seed once, never auto-create" convention as
+  // PlatformSettings). A Product Owner enables/configures each one
+  // explicitly via /admin/advertising.
+  const ADVERTISING_PROVIDERS = [
+    'GOOGLE_ADS',
+    'YANDEX_DIRECT',
+    'MICROSOFT_ADS',
+    'META',
+    'LINKEDIN',
+    'TIKTOK',
+  ] as const;
+  for (const provider of ADVERTISING_PROVIDERS) {
+    await prisma.advertisingProviderConfig.upsert({
+      where: { provider },
+      create: { provider },
+      update: {},
+    });
+  }
+
   console.log(JSON.stringify({ msg: 'seed complete', categoryId: category.id, sampleSku }));
 }
 

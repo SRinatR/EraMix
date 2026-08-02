@@ -2245,6 +2245,100 @@ heap out of memory` — immediately after `Get-PSDrive C` showed free space
   the advertising-provider control plane and the unified GA4/Yandex-Metrica
   analytics event registry are separate, already-named next slices.
 
+## Phase B slice 4: advertising-integration control-plane foundation
+
+CLAUDE.md/roadmap: "Implement an advertising-integration control plane for
+approved providers: Google Ads, Yandex Direct, Microsoft Ads, Meta,
+LinkedIn, TikTok and future providers through typed adapters. Admin controls
+provider enablement, consent category, account/container/pixel
+identifiers... credentials are secret-store references only." Product
+Owner correction (2026-08-03): this slice covers configuration/enablement
+only — conversion mapping, attribution/UTM rules, and server-side
+conversion dispatch are deliberately deferred to the next slice, since they
+need the GA4/Yandex Metrica analytics event registry as their data source
+and CLAUDE.md itself lists that registry as the higher (P0) priority.
+
+- **Domain** (`packages/domain/src/entities.ts`, `advertising.ts`, 6 unit
+  tests): `AdvertisingProvider` — a closed 6-value enum (CLAUDE.md's named
+  allowlist), never an open string. `AdvertisingProviderConfig` —
+  `enabled`/`consentCategory`/`accountId`/`containerId`/`pixelId`/
+  `credentialSecretRef`/`testMode`; `credentialSecretRef` is structurally
+  only ever a string (the _name_ of a deployment-secret-store entry, never
+  a value) — this type has no field capable of carrying a script, HTML, or
+  access-token value (CLAUDE.md: "may never inject arbitrary vendor
+  JavaScript... expose access tokens"). `validateEffectiveAdvertisingProviderConfig`
+  is fail-closed: a provider cannot be saved `enabled: true` without a
+  consent category and at least one real (non-blank) identifier.
+- **Schema**: migration `20260803150000_add_advertising_provider_config`
+  adds the `AdvertisingProvider`/`ConsentCategory` enums and the
+  `advertising_provider_configs` table (one row per provider, unique on
+  `provider`), plus a manual `advertising_provider_requires_identifier_when_enabled`
+  CHECK constraint — the data-layer half of the same guarantee the domain
+  validator enforces at the application layer. `prisma/seed.ts` seeds all 6
+  provider rows disabled, no identifiers — never implicitly materialized on
+  read (same convention as the `PlatformSettings` singleton).
+- **Application** (`packages/application/src/advertising.ts`, 7 unit
+  tests): `listAdvertisingProviderConfigs`/`updateAdvertisingProviderConfig`
+  (`settings.manage` — ADMIN only, reusing the same permission/RBAC surface
+  PlatformSettings already established) — the tri-state patch idiom
+  (omitted=unchanged/null=clear/value=set) exactly matches
+  `PlatformSettingsPatch`'s existing convention. Every update validates the
+  _effective_ (merged) state before writing, same "invalid patch never
+  reaches the database" guarantee as `updatePlatformSettings`, and records
+  an audit event (`advertising_provider.updated`, with actor/changed-fields/
+  reason) — a lighter audit trail than `PlatformSettings`' full
+  snapshot-history-and-rollback mechanism (deliberately not replicated for
+  6 independent, low-stakes rows in this first slice; `AuditEventRepository`
+  already gives "actor/time" per CLAUDE.md's audit requirement).
+- **Delivery**: `GET /api/admin/advertising-providers` (list all 6),
+  `PATCH /api/admin/advertising-providers/{provider}` (provider path
+  segment is itself zod-validated against the same 6-value allowlist before
+  ever reaching the application layer) — both rate-limited,
+  `requireActor`-gated, documented in `openapi.yaml` (new `Advertising` tag,
+  `AdvertisingProvider`/`AdvertisingProviderConfig`/
+  `UpdateAdvertisingProviderConfigRequest` schemas — OpenAPI 3.2/JSON
+  Schema 2020-12 nullable fields use `type: [string, 'null']`, not the
+  OpenAPI 3.0 `nullable: true` keyword this file's own `struct` lint rule
+  correctly rejected on first attempt; fixed to match the file's own
+  existing convention). `redocly lint` passes. `/admin/advertising`
+  (Server Component, `notFound()` without `settings.manage`) renders one
+  row per provider with a `ProviderConfigForm` client component (enabled/
+  consent-category/identifiers/test-mode/credential-reference fields, no
+  field capable of accepting markup or a script).
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **378 unit tests** (up from 365: +6 `advertising.test.ts` in
+  `packages/domain`, +7 `advertising.test.ts` in `packages/application`).
+  A new `postgres.integration.test.ts` case exercises the
+  `advertising_provider_requires_identifier_when_enabled` CHECK constraint
+  against a real migrated database (a raw `enabled: true` write with no
+  identifier is rejected; the same write succeeds through the repository
+  once a real identifier is supplied) — CI-only, same as every other
+  Postgres-backed test in this repository.
+- **A real environment incident found and resolved mid-session, recorded
+  for anyone debugging a similar failure on this laptop**: `redocly lint`
+  and even a bare `Get-PSDrive` PowerShell call started crashing with
+  `FATAL ERROR: ... out of memory` partway through this slice. Root cause,
+  confirmed via `tasklist`: a `next dev` server started for Phase B slice
+  2's proxy verification and believed killed (`pkill -f "next dev --port
+3117"`) had **not actually been killed** — Git Bash's `pkill` process-name
+  matching is unreliable against Windows `node.exe` processes — and had
+  been idly consuming ~1.6 GB of RAM the entire time since. Found via
+  `tasklist //FI "IMAGENAME eq node.exe"` and terminated with `taskkill
+//F //PID <pid>`, which immediately resolved the crashes. This is a real,
+  reusable lesson (not specific to this slice's code): after any
+  `next dev`/background-server verification step on Windows, confirm the
+  process actually exited via `tasklist`, not just the `pkill` exit code.
+  This is a separate, laptop-local issue from the pre-existing chronic
+  low-disk-space constraint Phase B slices 1-3 already documented.
+- **Not yet built — explicitly scoped out of this slice, not forgotten**:
+  conversion mapping, attribution/UTM rules, server-side conversion state/
+  dispatch/idempotency, retry/reconciliation, and non-blocking provider
+  failure behavior at the actual event-emission layer (all depend on the
+  GA4/Yandex Metrica analytics event registry, the next and P0 slice per
+  Product Owner correction). No script/pixel is ever loaded on any public
+  page yet — this slice is configuration-only, by design.
+
 ## Required task format for the CLI agent
 
 For every task, report:

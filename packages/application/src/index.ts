@@ -57,6 +57,8 @@ export type {
   PlatformSettingsPatch,
   PlatformSettingsRepository,
   PlatformSettingsHistoryRepository,
+  AdvertisingProviderConfigPatch,
+  AdvertisingProviderConfigRepository,
 } from './repositories.js';
 export {
   resolveContentRoute,
@@ -172,3 +174,8 @@ export type {
   PlatformSettingsPreview,
   OrganizationJsonLd,
 } from './settings.js';
+export { listAdvertisingProviderConfigs, updateAdvertisingProviderConfig } from './advertising.js';
+export type {
+  AdvertisingProviderDeps,
+  UpdateAdvertisingProviderConfigInput,
+} from './advertising.js';

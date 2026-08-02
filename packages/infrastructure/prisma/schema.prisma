@@ -731,3 +731,49 @@ model PlatformSettingsHistory {
   @@index([settingsId, createdAt])
   @@map("platform_settings_history")
 }
+
+// ---------- Advertising-integration control plane (CLAUDE.md's named
+// allowlist: Google Ads, Yandex Direct, Microsoft Ads, Meta, LinkedIn,
+// TikTok — "future providers" means growing this enum, never accepting an
+// arbitrary caller-chosen name) ----------
+
+enum AdvertisingProvider {
+  GOOGLE_ADS
+  YANDEX_DIRECT
+  MICROSOFT_ADS
+  META
+  LINKEDIN
+  TIKTOK
+}
+
+enum ConsentCategory {
+  ANALYTICS
+  ADVERTISING
+}
+
+/// One row per AdvertisingProvider, seeded disabled by default (prisma/
+/// seed.ts) — never implicitly materialized for an unknown provider.
+/// `credentialSecretRef` is the *name* of a deployment-secret-store entry,
+/// never a credential value (CLAUDE.md: "credentials are secret-store
+/// references only"). No column here can carry a script/HTML/token value —
+/// this table cannot itself become an arbitrary-JavaScript-injection vector.
+model AdvertisingProviderConfig {
+  id                  String              @id @default(uuid()) @db.Uuid
+  provider            AdvertisingProvider @unique
+  enabled             Boolean             @default(false)
+  consentCategory     ConsentCategory     @default(ADVERTISING)
+  accountId           String?
+  containerId         String?
+  pixelId             String?
+  credentialSecretRef String?
+  /// Provider-side test/sandbox mode — defaults true so a newly configured
+  /// integration never sends live conversion data until explicitly
+  /// promoted (a deliberate, audited second step, not this flag alone).
+  testMode            Boolean             @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(0)
+
+  @@map("advertising_provider_configs")
+}

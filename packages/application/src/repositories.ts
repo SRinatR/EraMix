@@ -1,4 +1,6 @@
 import type {
+  AdvertisingProvider,
+  AdvertisingProviderConfig,
   AuditEvent,
   Category,
   CategoryRoute,
@@ -495,4 +497,27 @@ export interface PlatformSettingsHistoryRepository {
   ): Promise<PlatformSettingsHistoryEntry>;
   /** Newest first — ADM-002/DB-005: bounded, paginated. */
   list(input?: CursorPaginationInput): Promise<CursorPage<PlatformSettingsHistoryEntry>>;
+}
+
+/** Same tri-state idiom as PlatformSettingsPatch: omitted=unchanged, null=clear, value=set. `provider` is never patchable (it is the row's identity). */
+export type AdvertisingProviderConfigPatch = Partial<
+  Pick<AdvertisingProviderConfig, 'enabled' | 'consentCategory' | 'testMode'>
+> & {
+  readonly accountId?: string | null;
+  readonly containerId?: string | null;
+  readonly pixelId?: string | null;
+  readonly credentialSecretRef?: string | null;
+};
+
+export interface AdvertisingProviderConfigRepository {
+  /** Every provider always has a row (seeded once — prisma/seed.ts); throws ResourceNotFoundError if genuinely missing (a seed/migration gap, never implicitly materialized). */
+  findByProvider(provider: AdvertisingProvider): Promise<AdvertisingProviderConfig | undefined>;
+  /** All 6 allowlisted providers, ordered by provider name. */
+  listAll(): Promise<readonly AdvertisingProviderConfig[]>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  update(
+    provider: AdvertisingProvider,
+    expectedVersion: number,
+    patch: AdvertisingProviderConfigPatch,
+  ): Promise<AdvertisingProviderConfig>;
 }

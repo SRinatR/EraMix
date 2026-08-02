@@ -44,6 +44,7 @@ export {
 export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
 export { sanitizeFilenameForStorage, sanitizeDisplayName } from './filename.js';
 export { validateEffectivePlatformSettings } from './platform-settings.js';
+export { validateEffectiveAdvertisingProviderConfig } from './advertising.js';
 export { validateRetirementReason } from './retirement.js';
 export { validateIndexNowSubmission } from './indexnow.js';
 export type { IndexNowSubmissionInput } from './indexnow.js';
@@ -83,4 +84,7 @@ export type {
   OutboxMessage,
   PlatformSettings,
   PlatformSettingsHistoryEntry,
+  AdvertisingProvider,
+  ConsentCategory,
+  AdvertisingProviderConfig,
 } from './entities.js';

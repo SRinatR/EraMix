@@ -18,6 +18,7 @@ export {
   PrismaPlatformSettingsRepository,
   PrismaPlatformSettingsHistoryRepository,
 } from './repositories/platform-settings-repository.js';
+export { PrismaAdvertisingProviderConfigRepository } from './repositories/advertising-provider-config-repository.js';
 export { CryptoIdGenerator } from './id-generator.js';
 export { JsonLogger } from './logger.js';
 export type { Logger, LogLevel, LogFields } from './logger.js';

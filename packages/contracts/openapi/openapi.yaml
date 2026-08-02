@@ -54,6 +54,15 @@ tags:
       Yandex Webmaster, Bing, IndexNow, Merchant Center) are configuration
       scaffolding only in this phase — merchantCenterEnabled is rejected at
       write time until a real versioned Offer model exists.
+  - name: Advertising
+    description: >-
+      Advertising-integration control plane (settings.manage, ADMIN-only —
+      CLAUDE.md's named provider allowlist: Google Ads, Yandex Direct,
+      Microsoft Ads, Meta, LinkedIn, TikTok). Enablement/consent-category/
+      non-secret-identifier configuration only in this phase; conversion
+      mapping, attribution/UTM rules, and server-side conversion dispatch
+      are a later slice. credentialSecretRef is always a deployment-secret-
+      store reference name, never a credential value.
 security:
   - sessionCookie: []
 paths:
@@ -2127,6 +2136,81 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /api/admin/advertising-providers:
+    get:
+      operationId: listAdvertisingProviderConfigs
+      summary: >-
+        List every advertising provider's control-plane configuration
+        (settings.manage — ADMIN only). Always returns exactly the 6
+        allowlisted providers (CLAUDE.md: Google Ads, Yandex Direct,
+        Microsoft Ads, Meta, LinkedIn, TikTok) — each seeded disabled by
+        default. This is enablement/identifier configuration only;
+        conversion mapping, attribution/UTM rules, and server-side
+        conversion dispatch are a separate, later slice.
+      tags: [Advertising]
+      responses:
+        '200':
+          description: All advertising provider configurations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdvertisingProviderConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+  /api/admin/advertising-providers/{provider}:
+    patch:
+      operationId: updateAdvertisingProviderConfig
+      summary: >-
+        Update one advertising provider's configuration (settings.manage —
+        ADMIN only). Fail-closed: a provider cannot be saved as `enabled`
+        without a consent category and at least one of accountId/
+        containerId/pixelId. `credentialSecretRef` is only ever the *name*
+        of a deployment-secret-store entry — never a credential value; this
+        endpoint accepts no field capable of injecting a script, HTML tag,
+        or access token (CLAUDE.md).
+      tags: [Advertising]
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/AdvertisingProvider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdvertisingProviderConfigRequest'
+      responses:
+        '200':
+          description: The updated provider configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvertisingProviderConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -3089,3 +3173,39 @@ components:
             bing: { type: string, enum: [verified, not_verified] }
             indexNow: { type: string, enum: [enabled, disabled] }
             merchantCenter: { type: string, enum: [enabled, disabled] }
+    AdvertisingProvider:
+      type: string
+      description: CLAUDE.md's closed, named provider allowlist — never an open string.
+      enum: [GOOGLE_ADS, YANDEX_DIRECT, MICROSOFT_ADS, META, LINKEDIN, TIKTOK]
+    AdvertisingProviderConfig:
+      type: object
+      required: [provider, enabled, consentCategory, testMode, updatedAt, version]
+      properties:
+        provider:
+          $ref: '#/components/schemas/AdvertisingProvider'
+        enabled: { type: boolean }
+        consentCategory: { type: string, enum: [ANALYTICS, ADVERTISING] }
+        accountId: { type: [string, 'null'] }
+        containerId: { type: [string, 'null'] }
+        pixelId: { type: [string, 'null'] }
+        credentialSecretRef:
+          type: [string, 'null']
+          description: >-
+            The *name* of a deployment-secret-store entry — never a
+            credential value.
+        testMode: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer }
+    UpdateAdvertisingProviderConfigRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        enabled: { type: boolean }
+        consentCategory: { type: string, enum: [ANALYTICS, ADVERTISING] }
+        accountId: { type: [string, 'null'] }
+        containerId: { type: [string, 'null'] }
+        pixelId: { type: [string, 'null'] }
+        credentialSecretRef: { type: [string, 'null'] }
+        testMode: { type: boolean }

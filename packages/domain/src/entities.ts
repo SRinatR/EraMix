@@ -303,3 +303,39 @@ export interface PlatformSettingsHistoryEntry {
   readonly changedByUserId?: string | undefined;
   readonly createdAt: Date;
 }
+
+/**
+ * CLAUDE.md's named allowlist ("Google Ads, Yandex Direct, Microsoft Ads,
+ * Meta, LinkedIn, TikTok and future providers") — a closed enum, not an
+ * open string, so a provider can never be added by a client-supplied
+ * value. "Future providers" means growing this list via a new migration,
+ * never accepting an arbitrary caller-chosen name.
+ */
+export type AdvertisingProvider =
+  'GOOGLE_ADS' | 'YANDEX_DIRECT' | 'MICROSOFT_ADS' | 'META' | 'LINKEDIN' | 'TIKTOK';
+
+/** Consent-mode taxonomy a provider's activation is gated by (search-visibility.md's consent-aware analytics/advertising requirement). */
+export type ConsentCategory = 'ANALYTICS' | 'ADVERTISING';
+
+/**
+ * Advertising-integration control-plane row (CLAUDE.md: "Admin controls
+ * provider enablement, consent category, account/container/pixel
+ * identifiers... credentials are secret-store references only"). One row
+ * per AdvertisingProvider, seeded disabled by default — never implicitly
+ * materialized for an unknown provider. `credentialSecretRef` is the *name*
+ * of a deployment-secret-store entry, never a credential value; this
+ * interface structurally has no field capable of carrying a script, HTML,
+ * or token value (CLAUDE.md: "may never inject arbitrary vendor
+ * JavaScript... expose access tokens").
+ */
+export interface AdvertisingProviderConfig extends Versioned, Timestamped {
+  readonly id: string;
+  readonly provider: AdvertisingProvider;
+  readonly enabled: boolean;
+  readonly consentCategory: ConsentCategory;
+  readonly accountId?: string | undefined;
+  readonly containerId?: string | undefined;
+  readonly pixelId?: string | undefined;
+  readonly credentialSecretRef?: string | undefined;
+  readonly testMode: boolean;
+}

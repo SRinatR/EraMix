@@ -6,6 +6,7 @@ import {
   LocalFilesystemStorageProvider,
   OidcIdentityProvider,
   PendingAuthCodec,
+  PrismaAdvertisingProviderConfigRepository,
   PrismaAuditEventRepository,
   PrismaCategoryRepository,
   PrismaCompanyRepository,
@@ -67,6 +68,7 @@ function buildContainer() {
     outbox: new PrismaOutboxMessageRepository(prisma),
     settingsRepo: new PrismaPlatformSettingsRepository(prisma),
     settingsHistoryRepo: new PrismaPlatformSettingsHistoryRepository(prisma),
+    advertisingProviders: new PrismaAdvertisingProviderConfigRepository(prisma),
     get identityProvider() {
       if (env.OIDC_ISSUER_URL === undefined || env.OIDC_CLIENT_ID === undefined) {
         throw new Error(
