@@ -1,4 +1,5 @@
 import { ContentBody } from '@/components/content-body';
+import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { contentAlternates } from '@/server/seo';
 import { resolveContentRoute } from '@eramix/application';
@@ -48,9 +49,22 @@ export default async function ArticlePage({ params }: { params: Promise<PagePara
     permanentRedirect(resolution.canonicalUrl);
   }
 
-  const { translation } = resolution;
+  const { content, translation } = resolution;
   return (
     <main>
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: translation.title,
+          ...(translation.summary !== undefined ? { description: translation.summary } : {}),
+          inLanguage: locale,
+          ...(content.publishedAt !== undefined
+            ? { datePublished: content.publishedAt.toISOString() }
+            : {}),
+          dateModified: translation.updatedAt.toISOString(),
+        }}
+      />
       <h1>{translation.title}</h1>
       {translation.summary && <p>{translation.summary}</p>}
       <ContentBody content={translation.content} />

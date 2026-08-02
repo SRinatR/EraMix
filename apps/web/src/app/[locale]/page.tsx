@@ -1,15 +1,24 @@
-import { SUPPORTED_LOCALES, isSupportedLocale } from '@eramix/domain';
+import { JsonLd } from '@/components/json-ld';
+import { staticPageAlternates } from '@/server/seo';
+import { isSupportedLocale } from '@eramix/domain';
 import { useTranslations } from 'next-intl';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-export function generateMetadata(): Metadata {
-  const languages: Record<string, string> = {};
-  for (const locale of SUPPORTED_LOCALES) {
-    languages[locale] = `/${locale}`;
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isSupportedLocale(locale)) {
+    return {};
   }
-  return { alternates: { canonical: '/', languages: { ...languages, 'x-default': '/en' } } };
+  return staticPageAlternates(locale, '', {
+    title: 'EraMix',
+    description: 'B2B catalog, quote requests, and order tracking.',
+  });
 }
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -22,7 +31,25 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   // requires hooks in a synchronous component), hence the split below.
   setRequestLocale(locale);
 
-  return <HomePageContent />;
+  return (
+    <>
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: 'EraMix',
+          // Matches layout.tsx's own metadataBase idiom — schema.org "url"
+          // must be absolute; a relative path is not auto-resolved here the
+          // way Next's typed Metadata fields are.
+          url: new URL(
+            `/${locale}`,
+            process.env['PUBLIC_ORIGIN'] ?? 'https://eramix.example',
+          ).toString(),
+        }}
+      />
+      <HomePageContent />
+    </>
+  );
 }
 
 function HomePageContent() {

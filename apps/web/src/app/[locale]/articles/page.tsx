@@ -1,4 +1,5 @@
 import { getContainer } from '@/server/container';
+import { staticPageAlternates } from '@/server/seo';
 import { Link } from '@/i18n/navigation';
 import { listContentByType } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
@@ -8,7 +9,21 @@ import type { Metadata } from 'next';
 
 // DB-backed; must not be statically prerendered at build time (no live DB then).
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Articles' };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isSupportedLocale(locale)) {
+    return {};
+  }
+  return staticPageAlternates(locale, '/articles', {
+    title: 'Articles',
+    description: 'Published articles and blog posts.',
+  });
+}
 
 export default async function ArticleIndexPage({
   params,

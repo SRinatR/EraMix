@@ -1394,6 +1394,75 @@ memberships`) are deliberately bounded (`{limit: 200}`) rather than given
   on its own runner, unaffected) is the production-build and
   Postgres-integration gate until more local disk space is freed.
 
+### Public-site gaps: category browse, SEO title/description, Open Graph, JSON-LD, loading state
+
+Audit of every public page against CLAUDE.md's SEO/localization policy and
+the Phase 3 deliverable list ("catalog browse, category hierarchy...
+responsive, accessible UI with explicit loading, empty... states") found
+several real gaps, not just missing polish:
+
+- **Category pages rendered no products or subcategories at all** — the
+  category branch of `/{locale}/catalog/{slug}` only ever rendered
+  `<h1>{name}</h1><p>Category id: {category.id}</p>`, exposing an internal
+  UUID and giving a visitor no way to browse into or below a category
+  (CAT-002: "искать по названию, SKU... фильтровать по категории"). Fixed:
+  the category branch now lists subcategories (`listCatalogCategories`,
+  `parentId`) and published products in that category
+  (`listCatalogProducts`, reusing the same `categoryId`/`search`/
+  pagination contract the top-level `/api/catalog/products` search
+  endpoint already had), with a `<form method="get">` search box and
+  `PaginationControls`, plus an explicit "No products match this search."
+  empty state distinct from "this category has no subcategories" (which
+  simply omits that section rather than showing a redundant empty message).
+- **SEO title/description were validated at publish time but never
+  rendered**: `publication.ts`'s publish gate has always required
+  `seoTitle`/`seoDescription` on every translation, but
+  `apps/web/src/server/seo.ts` only ever built `alternates`
+  (canonical/hreflang/x-default) — the actual `<title>`/meta description
+  were whatever Next's default inheritance produced, and Open Graph tags
+  did not exist at all anywhere in the app. Fixed: `toMetadata` now sets
+  `title`/`description` from the resolved translation's `seoTitle`/
+  `seoDescription` (falling back to the display name only for the
+  theoretical unpublished-preview case) and a matching `openGraph` block
+  (`type: 'article'` for `ARTICLE` content, `'website'` otherwise). New
+  `staticPageAlternates` gives the same canonical/hreflang/x-default/OG
+  treatment to the previously bare `export const metadata` on
+  `/catalog`, `/articles`, `/faq`, and the home page — the home page's
+  canonical was also a real bug fix: it hardcoded `canonical: '/'`
+  regardless of the actual requested locale.
+- **JSON-LD structured data added** (`apps/web/src/components/json-ld.tsx`
+  — inert `<script type="application/ld+json">`, not governed by CSP
+  `script-src`, so no policy exception needed): `Product` (product pages —
+  deliberately **no `offers`/price**, since ADR-0005's indicative price is
+  explicitly non-binding and an `Offer` risks a search engine treating it
+  as a real transactable price), `CollectionPage` (category pages),
+  `Article` (articles, using the real `Content.publishedAt`/
+  `ContentTranslation.updatedAt` — never fabricated dates),
+  `WebPage` (CMS pages), `FAQPage` with real `Question`/`acceptedAnswer`
+  pairs (FAQ index — required exporting `content-body.tsx`'s
+  paragraph-extraction helper for reuse), and `Organization` (home page).
+- **No `loading.tsx` existed anywhere** — every public/account/admin page
+  is `force-dynamic`, so a slow DB-backed render showed nothing until
+  fully ready. New `apps/web/src/app/[locale]/loading.tsx` (one file,
+  applies as the Suspense-boundary fallback to every nested route) closes
+  this for the whole site at once.
+- **Confirmed already adequate, no change needed**: `robots.ts`/
+  `sitemap.ts` (disallow `/api/`, `/admin`, `/account`; sitemap already
+  canonical-published-only and unit-tested), `[locale]/not-found.tsx`/
+  `error.tsx` (404/500 exist, plain but functional), and — verified by
+  extracting and reading the TZ v1.3 `.docx` text directly, not
+  assumed — there is no distinct "legal/privacy" page requirement in the
+  TZ at all; "о компании/сертификаты/инструкции/контакты" remain the
+  existing admin-authored `PAGE`-content-type answer (Phase 3/6), not a
+  new code surface.
+- **Verified locally** (laptop; **no local `next build`/dev-server this
+  slice**, same disk-space policy as the previous entry): `pnpm run
+format`/`lint` (incl. `redocly lint`)/`typecheck`/`test` all exit 0 —
+  259 unit tests unchanged (this is presentational/metadata wiring with no
+  new business logic to unit-test beyond what `route-resolution.test.ts`/
+  `catalog-queries` tests already cover). Production build and real
+  rendering are verified by CI only for this commit.
+
 ## Required task format for the CLI agent
 
 For every task, report:

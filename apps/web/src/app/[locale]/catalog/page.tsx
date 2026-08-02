@@ -1,4 +1,5 @@
 import { getContainer } from '@/server/container';
+import { staticPageAlternates } from '@/server/seo';
 import { listCatalogCategories } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { Link } from '@/i18n/navigation';
@@ -8,7 +9,21 @@ import type { Metadata } from 'next';
 
 // DB-backed; must not be statically prerendered at build time (no live DB then).
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'Catalog' };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isSupportedLocale(locale)) {
+    return {};
+  }
+  return staticPageAlternates(locale, '/catalog', {
+    title: 'Catalog',
+    description: 'Browse the published product catalog.',
+  });
+}
 
 export default async function CatalogIndexPage({
   params,

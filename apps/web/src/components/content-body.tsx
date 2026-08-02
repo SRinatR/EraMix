@@ -20,7 +20,7 @@ export function ContentBody({ content }: { readonly content: unknown }) {
   );
 }
 
-function toParagraphs(content: unknown): readonly string[] {
+export function toParagraphs(content: unknown): readonly string[] {
   if (typeof content === 'string') {
     return content.length > 0 ? [content] : [];
   }

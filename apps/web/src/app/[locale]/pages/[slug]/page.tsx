@@ -1,4 +1,5 @@
 import { ContentBody } from '@/components/content-body';
+import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { contentAlternates } from '@/server/seo';
 import { resolveContentRoute } from '@eramix/application';
@@ -51,6 +52,15 @@ export default async function CmsPage({ params }: { params: Promise<PageParams> 
   const { translation } = resolution;
   return (
     <main>
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'WebPage',
+          name: translation.title,
+          ...(translation.summary !== undefined ? { description: translation.summary } : {}),
+          inLanguage: locale,
+        }}
+      />
       <h1>{translation.title}</h1>
       {translation.summary && <p>{translation.summary}</p>}
       <ContentBody content={translation.content} />

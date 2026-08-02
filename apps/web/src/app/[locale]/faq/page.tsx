@@ -1,5 +1,7 @@
-import { ContentBody } from '@/components/content-body';
+import { ContentBody, toParagraphs } from '@/components/content-body';
+import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
+import { staticPageAlternates } from '@/server/seo';
 import { listContentByType } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
@@ -8,7 +10,21 @@ import type { Metadata } from 'next';
 
 // DB-backed; must not be statically prerendered at build time (no live DB then).
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = { title: 'FAQ' };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isSupportedLocale(locale)) {
+    return {};
+  }
+  return staticPageAlternates(locale, '/faq', {
+    title: 'FAQ',
+    description: 'Frequently asked questions.',
+  });
+}
 
 /**
  * FAQ items have no per-item route (ContentRouteNamespace only covers
@@ -25,9 +41,30 @@ export default async function FaqPage({ params }: { params: Promise<{ locale: st
 
   const container = getContainer();
   const items = await listContentByType(container.content, 'FAQ_ITEM');
+  const localizedItems = items
+    .map((item) => item.translations.find((t) => t.locale === (locale as LocaleCode)))
+    .filter(
+      (translation): translation is NonNullable<typeof translation> => translation !== undefined,
+    );
 
   return (
     <main>
+      {localizedItems.length > 0 && (
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: localizedItems.map((translation) => ({
+              '@type': 'Question',
+              name: translation.title,
+              acceptedAnswer: {
+                '@type': 'Answer',
+                text: toParagraphs(translation.content).join('\n\n'),
+              },
+            })),
+          }}
+        />
+      )}
       <h1>FAQ</h1>
       {items.length === 0 ? (
         <p>No FAQ entries are published yet.</p>

@@ -1,6 +1,16 @@
+import { formatIndicativePrice } from '@/components/indicative-price';
+import { JsonLd } from '@/components/json-ld';
+import { PaginationControls } from '@/components/pagination-controls';
+import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
+import { parsePaginationParams } from '@/server/pagination';
 import { productAlternates, categoryAlternates } from '@/server/seo';
-import { resolveCategoryRoute, resolveProductRoute } from '@eramix/application';
+import {
+  listCatalogCategories,
+  listCatalogProducts,
+  resolveCategoryRoute,
+  resolveProductRoute,
+} from '@eramix/application';
 import {
   isSupportedLocale,
   isValidPublicId,
@@ -65,7 +75,13 @@ export async function generateMetadata({
     : categoryAlternates(locale, resolved.resolution.category);
 }
 
-export default async function CatalogEntryPage({ params }: { params: Promise<PageParams> }) {
+export default async function CatalogEntryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<PageParams>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { locale, slug } = await params;
   if (!isSupportedLocale(locale)) {
     notFound();
@@ -91,16 +107,25 @@ export default async function CatalogEntryPage({ params }: { params: Promise<Pag
 
     return (
       <main>
+        {/* schema.org Product — deliberately no "offers"/price: ADR-0005's
+            quote-only model means indicativePrice is explicitly non-binding,
+            and an Offer/price in structured data risks a search engine
+            treating it as a real, transactable price. */}
+        <JsonLd
+          data={{
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            name: translation.name,
+            sku: product.sku,
+            ...(translation.description !== undefined
+              ? { description: translation.description }
+              : {}),
+          }}
+        />
         <h1>{translation.name}</h1>
         <p>SKU: {product.sku}</p>
         {translation.description && <p>{translation.description}</p>}
-        {translation.indicativePrice && (
-          <p>
-            {translation.indicativePrice.priceDisclaimer ?? 'from'}{' '}
-            {(translation.indicativePrice.priceFromMinor / 100).toFixed(2)}{' '}
-            {translation.indicativePrice.currency}
-          </p>
-        )}
+        {translation.indicativePrice && <p>{formatIndicativePrice(translation.indicativePrice)}</p>}
         {images.length > 0 && (
           <section aria-label="Product images">
             {images.map((image) => (
@@ -127,10 +152,90 @@ export default async function CatalogEntryPage({ params }: { params: Promise<Pag
   }
 
   const { category, translation } = resolved.resolution;
+  const container = getContainer();
+  const resolvedSearchParams = await searchParams;
+  const searchParam =
+    typeof resolvedSearchParams['search'] === 'string' ? resolvedSearchParams['search'] : undefined;
+
+  const [subcategories, productPage] = await Promise.all([
+    listCatalogCategories(container.categories, category.id),
+    listCatalogProducts(container.products, {
+      categoryId: category.id,
+      ...(searchParam !== undefined ? { search: searchParam } : {}),
+      ...parsePaginationParams(resolvedSearchParams),
+    }),
+  ]);
+
   return (
     <main>
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: translation.name,
+        }}
+      />
       <h1>{translation.name}</h1>
-      <p>Category id: {category.id}</p>
+
+      {subcategories.length > 0 && (
+        <>
+          <h2>Subcategories</h2>
+          <ul>
+            {subcategories.map((subcategory) => {
+              const subTranslation = subcategory.translations.find((t) => t.locale === locale);
+              const canonicalRoute = subTranslation?.routes.find((route) => route.isCanonical);
+              if (!subTranslation || !canonicalRoute) {
+                return null;
+              }
+              return (
+                <li key={subcategory.id}>
+                  <Link href={`/catalog/${canonicalRoute.slug}`}>{subTranslation.name}</Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+
+      <h2>Products</h2>
+      {/* CAT-002: search by name/SKU/indexable description within this category. */}
+      <form method="get">
+        <label>
+          Search
+          <input type="search" name="search" defaultValue={searchParam ?? ''} />
+        </label>
+        <button type="submit">Search</button>
+      </form>
+      {productPage.items.length === 0 ? (
+        <p>No products match this search.</p>
+      ) : (
+        <ul>
+          {productPage.items.map((product) => {
+            const productTranslation = product.translations.find((t) => t.locale === locale);
+            if (!productTranslation) {
+              return null;
+            }
+            return (
+              <li key={product.id}>
+                <Link href={`/catalog/${product.publicId}-${productTranslation.slug}`}>
+                  {productTranslation.name}
+                </Link>{' '}
+                (SKU: {product.sku})
+                {productTranslation.indicativePrice && (
+                  <> — {formatIndicativePrice(productTranslation.indicativePrice)}</>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <PaginationControls
+        basePath={`/catalog/${slug}`}
+        total={productPage.total}
+        limit={productPage.limit}
+        offset={productPage.offset}
+        extraParams={searchParam !== undefined ? { search: searchParam } : {}}
+      />
     </main>
   );
 }
