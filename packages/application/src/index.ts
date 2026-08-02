@@ -63,6 +63,9 @@ export type {
   PlatformSettingsHistoryRepository,
   AdvertisingProviderConfigPatch,
   AdvertisingProviderConfigRepository,
+  OfferListFilter,
+  OfferPatch,
+  OfferRepository,
 } from './repositories.js';
 export {
   resolveContentRoute,
@@ -185,3 +188,17 @@ export type {
 } from './advertising.js';
 export { recordAnalyticsEvents, dispatchAnalyticsEvent } from './analytics.js';
 export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';
+export {
+  createOffer,
+  updateOffer,
+  listOffers,
+  getOfferEligibility,
+  setProductDirectSaleEnabled,
+} from './offer.js';
+export type {
+  OfferDeps,
+  CreateOfferInput,
+  UpdateOfferInput,
+  OfferEligibility,
+  SetProductDirectSaleEnabledInput,
+} from './offer.js';

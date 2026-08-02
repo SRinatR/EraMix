@@ -12,6 +12,7 @@ import {
   PrismaCompanyRepository,
   PrismaContentRepository,
   PrismaMembershipRepository,
+  PrismaOfferRepository,
   PrismaOrderCommentRepository,
   PrismaOrderRepository,
   PrismaOutboxMessageRepository,
@@ -69,6 +70,7 @@ function buildContainer() {
     settingsRepo: new PrismaPlatformSettingsRepository(prisma),
     settingsHistoryRepo: new PrismaPlatformSettingsHistoryRepository(prisma),
     advertisingProviders: new PrismaAdvertisingProviderConfigRepository(prisma),
+    offers: new PrismaOfferRepository(prisma),
     get identityProvider() {
       if (env.OIDC_ISSUER_URL === undefined || env.OIDC_CLIENT_ID === undefined) {
         throw new Error(

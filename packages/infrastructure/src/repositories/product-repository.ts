@@ -219,6 +219,28 @@ export class PrismaProductRepository implements ProductRepository {
     return updated;
   }
 
+  async setDirectSaleEnabled(
+    id: string,
+    expectedVersion: number,
+    directSaleEnabled: boolean,
+  ): Promise<ProductWithTranslations> {
+    const client = resolveClient(this.prisma);
+    const { count } = await client.product.updateMany({
+      where: { id, version: expectedVersion },
+      data: { directSaleEnabled, version: { increment: 1 } },
+    });
+    await assertOptimisticLockAcquired(
+      count,
+      `Product ${id} was modified by another operation (expected version ${expectedVersion}).`,
+      { id, expectedVersion },
+    );
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new ResourceNotFoundError(`Product ${id} not found after update.`, { id });
+    }
+    return updated;
+  }
+
   /** Public catalog search (ADR-0017/API-005) — cursor-paginated, PUBLISHED only. */
   async listPublished(
     input: { categoryId?: string; search?: string } & CursorPaginationInput,

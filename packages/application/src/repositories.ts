@@ -18,6 +18,8 @@ import type {
   OrderLine,
   OrderStatus,
   OrderStatusHistoryEntry,
+  Offer,
+  OfferState,
   OutboxMessage,
   PlatformRole,
   PlatformSettings,
@@ -225,6 +227,12 @@ export interface ProductRepository {
   ): Promise<CursorPage<ProductWithTranslations>>;
   /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
   retire(id: string, expectedVersion: number, reason: string): Promise<ProductWithTranslations>;
+  /** Explicit opt-in/out for the future direct-sale/Merchant commercial mode (ADR-0019). Throws ConcurrencyConflictError on a stale expectedVersion. */
+  setDirectSaleEnabled(
+    id: string,
+    expectedVersion: number,
+    directSaleEnabled: boolean,
+  ): Promise<ProductWithTranslations>;
 }
 
 /** Patch shape for editing an existing asset's editorial metadata (never storageKey/checksum/scan fields — those are set once at upload time and are otherwise immutable). */
@@ -520,4 +528,46 @@ export interface AdvertisingProviderConfigRepository {
     expectedVersion: number,
     patch: AdvertisingProviderConfigPatch,
   ): Promise<AdvertisingProviderConfig>;
+}
+
+export interface OfferListFilter {
+  readonly productId?: string;
+  readonly state?: OfferState;
+  readonly sort?: 'createdAt_asc' | 'createdAt_desc';
+}
+
+/** Same tri-state idiom as every other patch type in this file: omitted=unchanged, null=clear, value=set. `productId` is never patchable (it is the row's identity — a re-parented offer is a new offer). */
+export type OfferPatch = Partial<
+  Pick<
+    Offer,
+    | 'state'
+    | 'sellerName'
+    | 'priceAmountMinor'
+    | 'currency'
+    | 'taxDisplayPolicy'
+    | 'availability'
+    | 'sku'
+    | 'eligibleCountries'
+    | 'effectiveFrom'
+  >
+> & {
+  readonly sellerUrl?: string | null;
+  readonly availableFrom?: Date | null;
+  readonly inventoryQuantity?: number | null;
+  readonly gtin?: string | null;
+  readonly mpn?: string | null;
+  readonly brand?: string | null;
+  readonly deliveryPolicyRef?: string | null;
+  readonly returnPolicyRef?: string | null;
+  readonly effectiveTo?: Date | null;
+  readonly checkoutUrl?: string | null;
+};
+
+export interface OfferRepository {
+  findById(id: string): Promise<Offer | undefined>;
+  /** ADM-002/DB-005-style bounded, paginated, filterable, sortable listing. */
+  listAll(input?: CursorPaginationInput & OfferListFilter): Promise<CursorPage<Offer>>;
+  create(offer: Omit<Offer, 'version' | 'createdAt' | 'updatedAt'>): Promise<Offer>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  update(id: string, expectedVersion: number, patch: OfferPatch): Promise<Offer>;
 }

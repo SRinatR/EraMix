@@ -7,6 +7,7 @@ import { PrismaUnitOfWork } from '../unit-of-work.js';
 import { PrismaAdvertisingProviderConfigRepository } from './advertising-provider-config-repository.js';
 import { PrismaAuditEventRepository } from './audit-event-repository.js';
 import { PrismaCategoryRepository } from './category-repository.js';
+import { PrismaOfferRepository } from './offer-repository.js';
 import { PrismaProductRepository } from './product-repository.js';
 
 /**
@@ -25,6 +26,7 @@ describe('PostgreSQL integration', () => {
   const productRepo = () => new PrismaProductRepository(prisma);
   const auditRepo = () => new PrismaAuditEventRepository(prisma);
   const advertisingRepo = () => new PrismaAdvertisingProviderConfigRepository(prisma);
+  const offerRepo = () => new PrismaOfferRepository(prisma);
 
   beforeAll(() => {
     const env = loadEnv();
@@ -211,5 +213,105 @@ describe('PostgreSQL integration', () => {
     });
     expect(updated.enabled).toBe(true);
     expect(updated.accountId).toBe('tiktok-account-123');
+  });
+
+  it('offer_published_requires_checkout_url CHECK rejects a raw PUBLISHED write with no checkoutUrl', async () => {
+    const category = await categoryRepo().create(
+      { id: randomUUID(), status: 'PUBLISHED', sortOrder: 0 },
+      [{ id: randomUUID(), categoryId: '', locale: 'en', name: `Category ${randomUUID()}` }],
+    );
+    const product = await productRepo().create(
+      {
+        id: randomUUID(),
+        publicId: randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase(),
+        sku: `SKU-${randomUUID()}`,
+        categoryId: category.id,
+        status: 'PUBLISHED',
+        directSaleEnabled: true,
+      },
+      [],
+    );
+    const offer = await offerRepo().create({
+      id: randomUUID(),
+      productId: product.id,
+      state: 'DRAFT',
+      sellerName: 'EraMix LLC',
+      priceAmountMinor: 15_000,
+      currency: 'USD',
+      taxDisplayPolicy: 'TAX_EXCLUDED',
+      availability: 'IN_STOCK',
+      inventoryQuantity: 10,
+      sku: `SKU-${randomUUID()}`,
+      eligibleCountries: ['US'],
+      effectiveFrom: new Date(),
+    });
+
+    // A raw write bypassing the application-layer validator must still fail
+    // — the data-layer half of CLAUDE.md's "no published/syndicatable offer
+    // without... a real checkout URL" guarantee.
+    await expect(
+      prisma.offer.update({ where: { id: offer.id }, data: { state: 'PUBLISHED' } }),
+    ).rejects.toThrow();
+
+    // The same write succeeds once checkoutUrl/policy refs are present.
+    const published = await offerRepo().update(offer.id, offer.version, {
+      state: 'PUBLISHED',
+      checkoutUrl: 'https://eramix.example/checkout',
+      deliveryPolicyRef: 'https://eramix.example/delivery',
+      returnPolicyRef: 'https://eramix.example/returns',
+    });
+    expect(published.state).toBe('PUBLISHED');
+    expect(published.checkoutUrl).toBe('https://eramix.example/checkout');
+  });
+
+  it('offer_price_positive and offer_availability_stock_consistency CHECK constraints reject raw invalid writes', async () => {
+    const category = await categoryRepo().create(
+      { id: randomUUID(), status: 'PUBLISHED', sortOrder: 0 },
+      [{ id: randomUUID(), categoryId: '', locale: 'en', name: `Category ${randomUUID()}` }],
+    );
+    const product = await productRepo().create(
+      {
+        id: randomUUID(),
+        publicId: randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase(),
+        sku: `SKU-${randomUUID()}`,
+        categoryId: category.id,
+        status: 'DRAFT',
+        directSaleEnabled: false,
+      },
+      [],
+    );
+
+    await expect(
+      prisma.offer.create({
+        data: {
+          productId: product.id,
+          sellerName: 'EraMix LLC',
+          priceAmountMinor: 0,
+          currency: 'USD',
+          taxDisplayPolicy: 'TAX_EXCLUDED',
+          availability: 'IN_STOCK',
+          sku: `SKU-${randomUUID()}`,
+          eligibleCountries: [],
+          effectiveFrom: new Date(),
+        },
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      prisma.offer.create({
+        data: {
+          productId: product.id,
+          sellerName: 'EraMix LLC',
+          priceAmountMinor: 1000,
+          currency: 'USD',
+          taxDisplayPolicy: 'TAX_EXCLUDED',
+          availability: 'OUT_OF_STOCK',
+          inventoryQuantity: 5,
+          sku: `SKU-${randomUUID()}`,
+          eligibleCountries: [],
+          effectiveFrom: new Date(),
+        },
+      }),
+    ).rejects.toThrow();
   });
 });

@@ -412,6 +412,10 @@ class InMemoryProductRepository implements ProductRepository {
     throw new Error('not needed for these tests');
   }
 
+  setDirectSaleEnabled(): Promise<Product & { translations: ProductTranslation[] }> {
+    throw new Error('not needed for these tests');
+  }
+
   listPublished(): Promise<CursorPage<Product & { translations: ProductTranslation[] }>> {
     return Promise.resolve({
       data: this.product ? [this.product] : [],
