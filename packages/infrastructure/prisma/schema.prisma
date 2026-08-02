@@ -119,6 +119,21 @@ enum PriceDisplayMode {
   FROM_PRICE_INDICATIVE
 }
 
+enum ProductAssetType {
+  IMAGE
+  DOCUMENT
+}
+
+/// Only ever persisted as CLEAN — an INFECTED result is rejected before a
+/// ProductAsset row is ever created (mirrors packages/application/src/
+/// uploads.ts's "never call storage.put on a failed scan"). The enum still
+/// names INFECTED so the historical/audit trail vocabulary is complete, and
+/// so a future async re-scan pipeline has a place to write a changed result.
+enum MalwareScanStatus {
+  CLEAN
+  INFECTED
+}
+
 enum OrderStatus {
   DRAFT
   SUBMITTED
@@ -153,10 +168,11 @@ model User {
   /// explicit admin `users.manage` action, never inferred from an OIDC claim.
   platformRole PlatformRole @default(CUSTOMER)
 
-  memberships        Membership[]
-  createdOrders      Order[]              @relation("OrderCreatedBy")
-  orderStatusEvents  OrderStatusHistory[]
-  auditEvents        AuditEvent[]
+  memberships           Membership[]
+  createdOrders         Order[]              @relation("OrderCreatedBy")
+  orderStatusEvents     OrderStatusHistory[]
+  auditEvents           AuditEvent[]
+  uploadedProductAssets ProductAsset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -337,6 +353,7 @@ model Product {
 
   translations ProductTranslation[]
   orderLines   OrderLine[]
+  assets       ProductAsset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -376,6 +393,63 @@ model ProductTranslation {
   @@unique([productId, locale])
   @@index([locale, slug])
   @@map("product_translations")
+}
+
+/// Product image/document attachment (Phase 6 media/documents deliverable).
+/// Binary content lives only in the StorageProvider (packages/application/
+/// src/ports.ts); this table is metadata only (CLAUDE.md: "Keep file
+/// metadata separate from binary storage"). `storageKey` is always a
+/// generated, opaque value — never the caller-supplied `originalFilename`
+/// or any derivative of it that could traverse a path (see uploadProductAsset,
+/// packages/application/src/product-assets.ts).
+model ProductAsset {
+  id        String           @id @default(uuid()) @db.Uuid
+  productId String           @db.Uuid
+  assetType ProductAssetType
+  /// DRAFT assets are visible only in the admin UI; PUBLISHED assets render
+  /// on the public product page; ARCHIVED is a soft-remove that keeps the
+  /// audit/outbox trail intact instead of a hard delete.
+  status    PublicationStatus @default(DRAFT)
+
+  storageKey       String @unique @db.VarChar(255)
+  originalFilename String @db.VarChar(255)
+  /// Editorial display name — distinct from originalFilename, never used to
+  /// build a storage path (CLAUDE.md: "Never use a user-supplied filename or
+  /// path as a storage path").
+  displayName      String @db.VarChar(255)
+  contentType      String @db.VarChar(120)
+  /// CHECK (sizeBytes > 0) added in migration.sql (`product_asset_size_positive`).
+  sizeBytes        Int
+  checksumSha256   String @db.Char(64)
+
+  /// Null when the asset applies to every locale (e.g. a language-neutral
+  /// diagram); set when alt text/caption is locale-specific (DB-007/DB-008
+  /// translation-per-locale convention extended to assets).
+  locale  Locale?
+  altText String? @db.VarChar(255)
+  caption String? @db.VarChar(500)
+
+  /// CHECK (sortOrder >= 0) added in migration.sql (`product_asset_sort_order_non_negative`).
+  sortOrder Int @default(0)
+
+  malwareScanStatus MalwareScanStatus
+  /// Free-text scan-engine identity, always populated and always honest
+  /// about provenance (CLAUDE.md: "do not falsely claim files were
+  /// scanned") — e.g. "dev-stub (not production-grade; ADR-0006 pending)"
+  /// until a real scanner is wired.
+  malwareScanEngine String @db.VarChar(160)
+
+  uploadedByUserId String? @db.Uuid
+
+  product        Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uploadedByUser User?   @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(0)
+
+  @@index([productId, assetType, status, sortOrder])
+  @@map("product_assets")
 }
 
 // ---------- Ordering ----------

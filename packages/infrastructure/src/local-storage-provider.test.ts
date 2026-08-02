@@ -47,6 +47,20 @@ describe('LocalFilesystemStorageProvider', () => {
     expect(provider.verifySignedDownload('different-key', expires, sig)).toBe(false);
   });
 
+  it('embeds downloadFilename in the URL and requires it to match at verify time', async () => {
+    const url = await provider.createSignedDownloadUrl('key-1', 60, 'Datasheet v2.pdf');
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('filename')).toBe('Datasheet v2.pdf');
+    const expires = Number(parsed.searchParams.get('expires'));
+    const sig = parsed.searchParams.get('sig')!;
+
+    expect(provider.verifySignedDownload('key-1', expires, sig, 'Datasheet v2.pdf')).toBe(true);
+    // A different (or missing) filename than what was signed fails — the
+    // visible download name can't be swapped independently of the key.
+    expect(provider.verifySignedDownload('key-1', expires, sig, 'evil.exe')).toBe(false);
+    expect(provider.verifySignedDownload('key-1', expires, sig)).toBe(false);
+  });
+
   it('rejects a signed URL past its expiry', async () => {
     const url = await provider.createSignedDownloadUrl('key-1', -1);
     const parsed = new URL(url);

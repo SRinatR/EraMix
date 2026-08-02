@@ -98,6 +98,7 @@ export default async function AdminCatalogPage() {
             <th>Status</th>
             <th>Change status</th>
             <th>Add translation</th>
+            <th>Media</th>
           </tr>
         </thead>
         <tbody>
@@ -119,6 +120,9 @@ export default async function AdminCatalogPage() {
                   existingLocales={product.translations.map((t) => t.locale)}
                   requireSlug={true}
                 />
+              </td>
+              <td>
+                <Link href={`/admin/catalog/products/${product.id}/assets`}>Manage media</Link>
               </td>
             </tr>
           ))}

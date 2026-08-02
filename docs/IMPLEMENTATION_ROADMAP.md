@@ -648,18 +648,101 @@ content-body.tsx` (renders the string-or-string-array body as one `<p>` per
   interfaces (and every new one in `authoring.ts`) now explicitly type
   optional fields as `T | undefined`, matching the existing domain-entity
   convention (`packages/domain/src/entities.ts`).
-- **Not yet built**: Admin E2E (role-specific access + protected-action
-  proof) remains unbuilt (see Phase 8 — no browser-driven test exists in this
-  repository yet); the create forms accept at most the three MVP locales
-  per submission but do not yet validate cross-field slug unreachability
-  client-side (the server-side `SlugConflictError`/409 path is the actual
-  enforcement and is exercised by `authoring.test.ts`, just not from a real
-  browser). This laptop has no Postgres (per CLAUDE.md execution policy), so
-  none of the new endpoints/pages have been exercised against a live
-  database — `pnpm run check`'s production build and the in-memory-fake unit
-  tests are the laptop-safe ceiling; real-Postgres coverage is Pi-pending,
-  same as every other DB-backed surface in this repository (see Phase 7).
-  Do not treat this status block as Phase 6 completion — it is not.
+- **Product media/document attachments** (continued session, 2026-08-02):
+  closes the other half of Phase 6's "Upload validation" deliverable — the
+  generic `POST /api/media` pipeline existed, but nothing associated an
+  upload with a product, gave it editorial metadata, or exposed a real
+  admin/public workflow. New `ProductAsset` Prisma model
+  (`packages/infrastructure/prisma/migrations/20260802120000_add_product_assets`,
+  generated fully offline via `prisma migrate diff --from-schema <previous
+committed schema.prisma> --to-schema prisma/schema.prisma --script`, same
+  method as every prior incremental migration in this repo) — metadata only
+  (`storageKey`, `originalFilename`, `displayName`, `contentType`,
+  `sizeBytes`, `checksumSha256`, optional `locale`/`altText`/`caption`,
+  `sortOrder`, `malwareScanStatus`/`malwareScanEngine`, `uploadedByUserId`,
+  `version`), never the binary itself (CLAUDE.md: "Keep file metadata
+  separate from binary storage"). Two manual `CHECK` constraints
+  (`product_asset_size_positive`, `product_asset_sort_order_non_negative`)
+  added the same way as the init migration's constraints.
+  - **Domain**: `packages/domain/src/filename.ts` — `sanitizeFilenameForStorage`
+    (extracted from the pre-existing inline regex in `uploads.ts`, now
+    shared) and `sanitizeDisplayName`; `ALLOWED_UPLOAD_TYPES` gained an
+    `assetCategory: 'IMAGE' | 'DOCUMENT'` field so asset type is inferred
+    from the already-validated content type, never trusted from client
+    input.
+  - **Application** (`packages/application/src/product-assets.ts`, 16 unit
+    tests): `uploadProductAsset` (validate → scan → store → create row, one
+    transaction for the DB write, matching `uploads.ts`'s "never call
+    storage.put on a failed scan/validation" and extending it to "never
+    create the row either"), `updateProductAssetMetadata`,
+    `reorderProductAssets` (rejects any request whose id set doesn't exactly
+    match the product's current assets — never silently drops one),
+    `transitionProductAssetStatus` (rejects publishing an `IMAGE` with no
+    `altText` — an accessibility gate this phase's public-rendering
+    requirement names directly), `removeProductAsset` (irreversible; requires
+    a literal `{confirm: true}` body; deletes the storage object before the
+    DB row, so a row can never outlive its file). New `addTranslation`-style
+    `ProductAssetRepository` port + Prisma adapter
+    (`packages/infrastructure/src/repositories/product-asset-repository.ts`).
+  - **Malware-scan honesty** (CLAUDE.md: "do not falsely claim files were
+    scanned"): every `ProductAsset` records `malwareScanEngine`, a
+    composition-root-supplied provenance string
+    (`apps/web/src/server/container.ts`'s `malwareScanEngineName`, currently
+    `"dev-stub (EICAR-only detection, not production-grade — ADR-0006
+pending)"`) — never inferred from the port itself, since the port
+    carries no identity/version information. `MalwareScanStatus` only ever
+    persists as `CLEAN` (an infected result is rejected before the row
+    exists); see `docs/runbooks/security.md` (new) for the full posture.
+  - **Controlled downloads, not internal storage keys**: extended
+    `StorageProvider.createSignedDownloadUrl`/`verifySignedDownload` with an
+    optional `downloadFilename`, signed alongside the key/expiry so it can't
+    be swapped independently; `apps/web/src/app/api/media/download/route.ts`
+    now uses it for `Content-Disposition` (sanitized against header
+    injection) instead of ever exposing the raw generated storage key as the
+    visible filename. New public route `GET /api/catalog/products/{publicId}/
+assets/{assetId}/download` is visibility-aware: `PUBLISHED` assets are
+    downloadable by anyone; `DRAFT`/`ARCHIVED` assets require an
+    authenticated `catalog.write` caller (admin preview), and an unauthorized
+    request gets the identical 404 a genuinely unknown asset would — it never
+    confirms an unpublished asset exists.
+  - **Admin API + UI**: 6 new endpoints under `/api/admin/products/
+{productId}/assets/**` (list, multipart upload, metadata edit, status
+    transition, reorder, confirm-gated remove — all rate-limited via the
+    existing `admin`/`upload` buckets, permission-checked inside the use
+    cases per this repo's established convention) plus a new admin page
+    `/admin/catalog/products/{productId}/assets` (upload form; per-asset
+    metadata edit, up/down reorder, the shared `TransitionStatusForm`
+    component reused as-is for publish/unpublish/archive, and a
+    `window.confirm`-gated remove button) linked from `/admin/catalog`'s
+    product rows ("Manage media").
+  - **Public rendering**: `/{locale}/catalog/{publicId}-{slug}` now renders
+    published images (`<img>` with `alt`, ordered by `sortOrder`) and a
+    documents list (download links with caption) below the existing
+    product fields, sourced from `listPublishedByProduct`.
+  - **OpenAPI**: new `Product Assets` tag; all 7 endpoints (6 admin + 1
+    public download) fully documented (`ProductAsset`,
+    `UpdateProductAssetMetadataRequest`, `ProductAssetType`,
+    `MalwareScanStatus` schemas); `redocly lint` passes (needed a
+    JSON-Schema-2020-12-style `type: [string, 'null']`/`anyOf` fix for the
+    nullable metadata fields — OpenAPI 3.2 does not use the old 3.0-style
+    `nullable: true`).
+  - **Verified locally** (laptop, no Postgres): `pnpm run check` exit 0 —
+    **216 unit tests** (up from 191: +16 `product-assets.test.ts`, +8
+    `filename.test.ts`, +1 `local-storage-provider.test.ts`'s new
+    `downloadFilename` case), `next build` registers 60 top-level route
+    entries (6 new this session). `redocly lint openapi/openapi.yaml`
+    passes.
+  - **Not yet built**: Admin E2E (role-specific access + protected-action
+    proof) remains unbuilt (see Phase 8 — no browser-driven test exists in
+    this repository yet); no thumbnail/resize pipeline (images render at
+    original resolution — a real object-storage provider's CDN/transform
+    layer is the natural place for this, blocked on ADR-0006, not invented
+    here); the reorder UI is up/down buttons, not drag-and-drop (keyboard-
+    operable by construction, a deliberate accessibility-first choice, not
+    an oversight). This laptop has no Postgres, so none of this has been
+    exercised against a live database — same Pi-pending status as every
+    other DB-backed surface (see Phase 7).
+    Do not treat this status block as Phase 6 completion — it is not.
 
 ## Phase 7 — observability, security, infrastructure, and CI/CD
 

@@ -22,6 +22,8 @@ export type {
   CategoryWithTranslations,
   ProductRepository,
   ProductWithTranslations,
+  ProductAssetRepository,
+  ProductAssetMetadataPatch,
   ContentRepository,
   ContentWithTranslations,
   OrderRepository,
@@ -70,6 +72,21 @@ export {
 export type { ProductSearchResult } from './catalog-queries.js';
 export { uploadMedia } from './uploads.js';
 export type { UploadMediaDeps, UploadMediaInput } from './uploads.js';
+export {
+  uploadProductAsset,
+  updateProductAssetMetadata,
+  reorderProductAssets,
+  transitionProductAssetStatus,
+  removeProductAsset,
+} from './product-assets.js';
+export type {
+  ProductAssetDeps,
+  UploadProductAssetInput,
+  UpdateProductAssetMetadataInput,
+  ReorderProductAssetsInput,
+  TransitionProductAssetStatusInput,
+  RemoveProductAssetInput,
+} from './product-assets.js';
 export {
   createCategory,
   addCategoryTranslation,

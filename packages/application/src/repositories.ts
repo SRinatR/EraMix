@@ -17,7 +17,9 @@ import type {
   OutboxMessage,
   PlatformRole,
   Product,
+  ProductAsset,
   ProductTranslation,
+  PublicationStatus,
   User,
 } from '@eramix/domain';
 
@@ -131,6 +133,38 @@ export interface ProductRepository {
   countPublished(input: { categoryId?: string; search?: string }): Promise<number>;
   /** All statuses (DRAFT/PUBLISHED/ARCHIVED) — admin catalog listing only, small MVP volume, no pagination yet. */
   listAll(): Promise<readonly ProductWithTranslations[]>;
+}
+
+/** Patch shape for editing an existing asset's editorial metadata (never storageKey/checksum/scan fields — those are set once at upload time and are otherwise immutable). */
+export interface ProductAssetMetadataPatch {
+  readonly displayName?: string;
+  readonly altText?: string | null;
+  readonly caption?: string | null;
+  readonly locale?: LocaleCode | null;
+  readonly sortOrder?: number;
+}
+
+export interface ProductAssetRepository {
+  findById(id: string): Promise<ProductAsset | undefined>;
+  /** All statuses — admin management view for one product, ordered by sortOrder. */
+  listByProduct(productId: string): Promise<readonly ProductAsset[]>;
+  /** PUBLISHED only — public product page rendering, ordered by sortOrder. */
+  listPublishedByProduct(productId: string): Promise<readonly ProductAsset[]>;
+  create(asset: Omit<ProductAsset, 'version' | 'createdAt' | 'updatedAt'>): Promise<ProductAsset>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateMetadata(
+    id: string,
+    expectedVersion: number,
+    patch: ProductAssetMetadataPatch,
+  ): Promise<ProductAsset>;
+  /** Throws ConcurrencyConflictError on a stale expectedVersion. */
+  updateStatus(
+    id: string,
+    expectedVersion: number,
+    status: PublicationStatus,
+  ): Promise<ProductAsset>;
+  /** Hard delete — the caller is responsible for also deleting the underlying storage object first. */
+  delete(id: string): Promise<void>;
 }
 
 export interface ContentWithTranslations extends Content {

@@ -34,15 +34,24 @@ export class LocalFilesystemStorageProvider implements StorageProvider {
    * `publicBaseUrl` is the fixed download *route* (e.g.
    * `/api/media/download`), not a per-file path — the key travels as a
    * query parameter so the route itself can stay a static path with no
-   * dynamic segment.
+   * dynamic segment. `downloadFilename`, when given, is signed alongside the
+   * key/expiry so the download route can set a Content-Disposition filename
+   * that was never exposed to the client as free-form input.
    */
-  createSignedDownloadUrl(key: string, expiresInSeconds: number): Promise<string> {
+  createSignedDownloadUrl(
+    key: string,
+    expiresInSeconds: number,
+    downloadFilename?: string,
+  ): Promise<string> {
     const expiresAt = Date.now() + expiresInSeconds * 1000;
-    const signature = this.sign(key, expiresAt);
+    const signature = this.sign(key, expiresAt, downloadFilename ?? '');
     const url = new URL(this.publicBaseUrl);
     url.searchParams.set('key', key);
     url.searchParams.set('expires', String(expiresAt));
     url.searchParams.set('sig', signature);
+    if (downloadFilename) {
+      url.searchParams.set('filename', downloadFilename);
+    }
     return Promise.resolve(url.toString());
   }
 
@@ -50,16 +59,23 @@ export class LocalFilesystemStorageProvider implements StorageProvider {
     await unlink(path.join(this.baseDir, key)).catch(() => undefined);
   }
 
-  private sign(key: string, expiresAt: number): string {
-    return createHmac('sha256', this.signingSecret).update(`${key}:${expiresAt}`).digest('hex');
+  private sign(key: string, expiresAt: number, downloadFilename = ''): string {
+    return createHmac('sha256', this.signingSecret)
+      .update(`${key}:${expiresAt}:${downloadFilename}`)
+      .digest('hex');
   }
 
   /** Verifies a URL produced by createSignedDownloadUrl — used by the download route handler. */
-  verifySignedDownload(key: string, expiresAt: number, signature: string): boolean {
+  verifySignedDownload(
+    key: string,
+    expiresAt: number,
+    signature: string,
+    downloadFilename = '',
+  ): boolean {
     if (Date.now() > expiresAt) {
       return false;
     }
-    const expected = Buffer.from(this.sign(key, expiresAt), 'hex');
+    const expected = Buffer.from(this.sign(key, expiresAt, downloadFilename), 'hex');
     const actual = Buffer.from(signature, 'hex');
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   }

@@ -82,6 +82,13 @@ export default async function CatalogEntryPage({ params }: { params: Promise<Pag
 
   if (resolved.kind === 'product') {
     const { product, translation } = resolved.resolution;
+    const container = getContainer();
+    const assets = await container.productAssets.listPublishedByProduct(product.id);
+    const images = assets.filter((asset) => asset.assetType === 'IMAGE');
+    const documents = assets.filter((asset) => asset.assetType === 'DOCUMENT');
+    const downloadUrl = (assetId: string) =>
+      `/api/catalog/products/${product.publicId}/assets/${assetId}/download`;
+
     return (
       <main>
         <h1>{translation.name}</h1>
@@ -93,6 +100,27 @@ export default async function CatalogEntryPage({ params }: { params: Promise<Pag
             {(translation.indicativePrice.priceFromMinor / 100).toFixed(2)}{' '}
             {translation.indicativePrice.currency}
           </p>
+        )}
+        {images.length > 0 && (
+          <section aria-label="Product images">
+            {images.map((image) => (
+              // eslint-disable-next-line @next/next/no-img-element -- dev-only local storage provider; a real CDN-backed provider would use next/image (ADR-0006 pending)
+              <img key={image.id} src={downloadUrl(image.id)} alt={image.altText ?? ''} />
+            ))}
+          </section>
+        )}
+        {documents.length > 0 && (
+          <section aria-label="Product documents">
+            <h2>Documents</h2>
+            <ul>
+              {documents.map((document) => (
+                <li key={document.id}>
+                  <a href={downloadUrl(document.id)}>{document.displayName}</a>
+                  {document.caption && <p>{document.caption}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </main>
     );

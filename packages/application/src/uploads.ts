@@ -1,4 +1,4 @@
-import { ValidationFailedError, validateUpload } from '@eramix/domain';
+import { ValidationFailedError, sanitizeFilenameForStorage, validateUpload } from '@eramix/domain';
 import type {
   IdGenerator,
   MalwareScanner,
@@ -44,7 +44,7 @@ export async function uploadMedia(
     });
   }
 
-  const sanitizedFilename = input.filename.replaceAll(/[^a-zA-Z0-9._-]/g, '_');
+  const sanitizedFilename = sanitizeFilenameForStorage(input.filename);
   const key = `${deps.idGen.nextId()}-${sanitizedFilename}`;
   return deps.storage.put(key, input.content, input.contentType);
 }

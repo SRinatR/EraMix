@@ -37,6 +37,7 @@ export {
   validateUpload,
 } from './upload-validation.js';
 export type { AllowedFileType, UploadCandidate } from './upload-validation.js';
+export { sanitizeFilenameForStorage, sanitizeDisplayName } from './filename.js';
 export type {
   Versioned,
   Timestamped,
@@ -58,6 +59,9 @@ export type {
   Category,
   ProductTranslation,
   Product,
+  ProductAssetType,
+  MalwareScanStatus,
+  ProductAsset,
   ContentTranslation,
   ContentRoute,
   Content,

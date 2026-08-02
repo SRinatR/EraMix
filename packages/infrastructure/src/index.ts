@@ -10,6 +10,7 @@ export { PrismaCategoryRepository } from './repositories/category-repository.js'
 export { PrismaAuditEventRepository } from './repositories/audit-event-repository.js';
 export { PrismaOutboxMessageRepository } from './repositories/outbox-message-repository.js';
 export { PrismaProductRepository } from './repositories/product-repository.js';
+export { PrismaProductAssetRepository } from './repositories/product-asset-repository.js';
 export { PrismaContentRepository } from './repositories/content-repository.js';
 export { PrismaOrderRepository } from './repositories/order-repository.js';
 export { CryptoIdGenerator } from './id-generator.js';

@@ -5,6 +5,13 @@ export interface AllowedFileType {
   readonly extensions: readonly string[];
   /** One or more possible magic-byte signatures at the start of the file; any match is accepted. */
   readonly signatures: readonly (readonly number[])[];
+  /**
+   * Single source of truth for "is this an image or a document" (used by
+   * product-asset uploads to categorize a file without trusting a
+   * client-supplied type field) — kept next to the MIME/extension/signature
+   * triple it is derived from rather than re-derived elsewhere.
+   */
+  readonly assetCategory: 'IMAGE' | 'DOCUMENT';
 }
 
 /**
@@ -14,13 +21,33 @@ export interface AllowedFileType {
  * extending it is a product decision, not something to infer.
  */
 export const ALLOWED_UPLOAD_TYPES: readonly AllowedFileType[] = [
-  { mimeType: 'image/jpeg', extensions: ['jpg', 'jpeg'], signatures: [[0xff, 0xd8, 0xff]] },
-  { mimeType: 'image/png', extensions: ['png'], signatures: [[0x89, 0x50, 0x4e, 0x47]] },
+  {
+    mimeType: 'image/jpeg',
+    extensions: ['jpg', 'jpeg'],
+    signatures: [[0xff, 0xd8, 0xff]],
+    assetCategory: 'IMAGE',
+  },
+  {
+    mimeType: 'image/png',
+    extensions: ['png'],
+    signatures: [[0x89, 0x50, 0x4e, 0x47]],
+    assetCategory: 'IMAGE',
+  },
   // WEBP: RIFF container ("RIFF....WEBP"); the WEBP marker sits at byte
   // offset 8, so this signature is checked against headerBytes[8..11] by
   // validateUpload's isWebp special case below, not the generic prefix match.
-  { mimeType: 'image/webp', extensions: ['webp'], signatures: [[0x52, 0x49, 0x46, 0x46]] },
-  { mimeType: 'application/pdf', extensions: ['pdf'], signatures: [[0x25, 0x50, 0x44, 0x46]] },
+  {
+    mimeType: 'image/webp',
+    extensions: ['webp'],
+    signatures: [[0x52, 0x49, 0x46, 0x46]],
+    assetCategory: 'IMAGE',
+  },
+  {
+    mimeType: 'application/pdf',
+    extensions: ['pdf'],
+    signatures: [[0x25, 0x50, 0x44, 0x46]],
+    assetCategory: 'DOCUMENT',
+  },
 ];
 
 export const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;

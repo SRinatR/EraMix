@@ -13,6 +13,7 @@ import {
   PrismaMembershipRepository,
   PrismaOrderRepository,
   PrismaOutboxMessageRepository,
+  PrismaProductAssetRepository,
   PrismaProductRepository,
   PrismaUnitOfWork,
   PrismaUserRepository,
@@ -42,11 +43,20 @@ function buildContainer() {
     clock: new SystemClock(),
     idGen: new CryptoIdGenerator(),
     scanner: new DevMalwareScanner(logger),
+    /**
+     * Honest scan-engine provenance recorded on every ProductAsset
+     * (CLAUDE.md: "do not falsely claim files were scanned") — only
+     * DevMalwareScanner exists pending ADR-0006/Q-06; this string must be
+     * updated the moment a real scanner is wired.
+     */
+    malwareScanEngineName:
+      'dev-stub (EICAR-only detection, not production-grade — ADR-0006 pending)',
     users: new PrismaUserRepository(prisma),
     companies: new PrismaCompanyRepository(prisma),
     memberships: new PrismaMembershipRepository(prisma),
     categories: new PrismaCategoryRepository(prisma),
     products: new PrismaProductRepository(prisma),
+    productAssets: new PrismaProductAssetRepository(prisma),
     content: new PrismaContentRepository(prisma),
     orders: new PrismaOrderRepository(prisma),
     auditEvents: new PrismaAuditEventRepository(prisma),

@@ -16,6 +16,9 @@ export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'REVOKED';
 export type ContentType = 'ARTICLE' | 'PAGE' | 'FAQ_ITEM';
 export type ContentRouteNamespace = 'ARTICLES' | 'PAGES';
 export type OutboxStatus = 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED' | 'DEAD_LETTER';
+export type ProductAssetType = 'IMAGE' | 'DOCUMENT';
+/** See packages/infrastructure/prisma/schema.prisma's MalwareScanStatus comment: INFECTED is never persisted in MVP (rejected before the row is created), the value exists for vocabulary completeness. */
+export type MalwareScanStatus = 'CLEAN' | 'INFECTED';
 
 /** Mirrors Prisma's OrderStatus enum (packages/infrastructure/prisma/schema.prisma). */
 export type OrderStatus =
@@ -137,6 +140,27 @@ export interface Content extends Versioned, Timestamped {
   readonly type: ContentType;
   readonly status: PublicationStatus;
   readonly publishedAt?: Date | undefined;
+}
+
+export interface ProductAsset extends Versioned, Timestamped {
+  readonly id: string;
+  readonly productId: string;
+  readonly assetType: ProductAssetType;
+  readonly status: PublicationStatus;
+  /** Opaque, generated key — never the caller-supplied filename or a derivative of it (CLAUDE.md). */
+  readonly storageKey: string;
+  readonly originalFilename: string;
+  readonly displayName: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly checksumSha256: string;
+  readonly locale?: LocaleCode | undefined;
+  readonly altText?: string | undefined;
+  readonly caption?: string | undefined;
+  readonly sortOrder: number;
+  readonly malwareScanStatus: MalwareScanStatus;
+  readonly malwareScanEngine: string;
+  readonly uploadedByUserId?: string | undefined;
 }
 
 export interface OrderLine {

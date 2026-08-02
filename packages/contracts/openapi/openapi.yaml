@@ -34,6 +34,16 @@ tags:
       permission). The concrete object-storage provider is blocked on
       Q-06/ADR-0006; the current implementation is a dev-only local-disk
       stand-in behind the same StorageProvider port.
+  - name: Product Assets
+    description: >-
+      Product image/document attachments (catalog.write for admin
+      mutations). Metadata (packages/infrastructure/prisma/schema.prisma's
+      ProductAsset) is stored separately from the binary, which lives only in
+      the StorageProvider port; downloads are always a time-limited signed
+      redirect, never a permanent public object URL or the internal storage
+      key. Malware-scan status/engine are recorded honestly — the current
+      scanner is a documented dev stand-in, never claimed as production
+      antivirus coverage (see ADR-0006).
 security:
   - sessionCookie: []
 paths:
@@ -236,6 +246,38 @@ paths:
                 $ref: '#/components/schemas/Product'
         '404':
           description: Unknown publicId, unpublished product, or no translation for the locale.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/catalog/products/{publicId}/assets/{assetId}/download:
+    get:
+      operationId: downloadProductAsset
+      summary: Download a product image/document
+      description: >-
+        PUBLISHED assets are downloadable by anyone; DRAFT/ARCHIVED assets
+        require an authenticated caller with catalog.write (admin preview) —
+        an unauthorized request gets the same 404 as a genuinely unknown
+        asset, never a 403 that would confirm the asset exists. Redirects to
+        a time-limited signed URL carrying a safe, editorial
+        Content-Disposition filename, never the internal storage key.
+      tags: [Product Assets]
+      security: []
+      parameters:
+        - name: publicId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to a time-limited signed download URL.
+        '404':
+          description: Unknown product, unknown asset, or (unauthenticated/unauthorized) an unpublished asset.
           content:
             application/problem+json:
               schema:
@@ -702,6 +744,271 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+
+  /api/admin/products/{productId}/assets:
+    get:
+      operationId: listProductAssets
+      summary: List every image/document attached to a product, all statuses (catalog.write)
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: All assets for the product, ordered by sortOrder.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductAsset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+    post:
+      operationId: uploadProductAsset
+      summary: Upload a product image/document (catalog.write)
+      description: >-
+        Validated against the allowlisted MIME/extension/magic-byte
+        signature triple, then malware-scanned, before ever reaching
+        storage. Never accepts a client-supplied assetType or storage path —
+        assetType is inferred from the validated content type, and the
+        storage key is always generated server-side.
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                displayName: { type: string }
+                locale:
+                  $ref: '#/components/schemas/LocaleCode'
+                altText: { type: string }
+                caption: { type: string }
+      responses:
+        '201':
+          description: The created asset (status DRAFT).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          description: The referenced productId does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: >-
+            Rejected by validation (disallowed content type, extension
+            mismatch, signature mismatch, size limit) or malware scanning.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/admin/products/{productId}/assets/{assetId}:
+    patch:
+      operationId: updateProductAssetMetadata
+      summary: Edit a product asset's editorial metadata (catalog.write)
+      description: >-
+        Never touches storageKey/checksum/scan fields — those are set once
+        at upload time. altText/caption/locale accept null to clear them.
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductAssetMetadataRequest'
+      responses:
+        '200':
+          description: The updated asset metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAsset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version (concurrency conflict).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      operationId: removeProductAsset
+      summary: Permanently remove a product asset (catalog.write)
+      description: >-
+        Irreversible: deletes the storage object, then the metadata row.
+        Requires an explicit `{"confirm": true}` body — the anti-footgun for
+        an irreversible action (CLAUDE.md: "Every destructive or sensitive
+        action must require appropriate permission and confirmation").
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: boolean
+                  enum: [true]
+      responses:
+        '204':
+          description: The asset and its storage object were removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Missing or false `confirm`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/admin/products/{productId}/assets/{assetId}/status:
+    patch:
+      operationId: transitionProductAssetStatus
+      summary: >-
+        Transition a product asset's publication status (catalog.write).
+        Publishing an IMAGE with no altText is rejected (accessibility
+        requirement); DOCUMENT publishing has no such gate.
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: assetId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicationStatusUpdate'
+      responses:
+        '200':
+          description: The updated asset status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationTransitionResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Stale version, or (publishing an IMAGE) missing altText.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/admin/products/{productId}/assets/reorder:
+    patch:
+      operationId: reorderProductAssets
+      summary: Reorder a product's assets (catalog.write)
+      description: >-
+        Body must list every current asset id for the product, in the new
+        display order — a partial or mismatched list is rejected (never
+        silently drops or ignores an asset).
+      tags: [Product Assets]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderedAssetIds]
+              properties:
+                orderedAssetIds:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+      responses:
+        '200':
+          description: The reordered assets (id, new sortOrder, new version).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, sortOrder, version]
+                      properties:
+                        id: { type: string }
+                        sortOrder: { type: integer }
+                        version: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
   /api/admin/categories/{categoryId}/translations/{translationId}/slug:
     patch:
       operationId: changeCategorySlug
@@ -1489,3 +1796,75 @@ components:
         status:
           $ref: '#/components/schemas/PublicationStatus'
         version: { type: integer }
+    ProductAssetType:
+      type: string
+      enum: [IMAGE, DOCUMENT]
+    MalwareScanStatus:
+      type: string
+      description: >-
+        Only ever CLEAN in the persisted record — an INFECTED scan result is
+        rejected before a ProductAsset row is ever created.
+      enum: [CLEAN, INFECTED]
+    ProductAsset:
+      type: object
+      required:
+        - id
+        - productId
+        - assetType
+        - status
+        - originalFilename
+        - displayName
+        - contentType
+        - sizeBytes
+        - checksumSha256
+        - sortOrder
+        - malwareScanStatus
+        - malwareScanEngine
+        - version
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        assetType:
+          $ref: '#/components/schemas/ProductAssetType'
+        status:
+          $ref: '#/components/schemas/PublicationStatus'
+        originalFilename: { type: string }
+        displayName: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        checksumSha256: { type: string }
+        locale:
+          $ref: '#/components/schemas/LocaleCode'
+        altText: { type: string }
+        caption: { type: string }
+        sortOrder: { type: integer }
+        malwareScanStatus:
+          $ref: '#/components/schemas/MalwareScanStatus'
+        malwareScanEngine:
+          type: string
+          description: >-
+            Honest scan-engine provenance string (e.g. "dev-stub, not
+            production-grade") — never implies certified antivirus coverage
+            unless a real scanner is wired (ADR-0006).
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    UpdateProductAssetMetadataRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer }
+        displayName: { type: string, minLength: 1 }
+        altText:
+          type: [string, 'null']
+          description: null clears the field.
+        caption:
+          type: [string, 'null']
+          description: null clears the field.
+        locale:
+          description: null clears the field.
+          anyOf:
+            - $ref: '#/components/schemas/LocaleCode'
+            - type: 'null'

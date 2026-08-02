@@ -80,8 +80,18 @@ export interface UploadedFileDescriptor {
  */
 export interface StorageProvider {
   put(key: string, content: Uint8Array, contentType: string): Promise<UploadedFileDescriptor>;
-  /** Time-limited, controlled download URL — never a permanently public object URL. */
-  createSignedDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
+  /**
+   * Time-limited, controlled download URL — never a permanently public
+   * object URL. `downloadFilename`, when given, is the editorial name the
+   * browser should save the file as (Content-Disposition), signed alongside
+   * the key so it can't be swapped independently — callers use this instead
+   * of ever exposing the internal storage key as the visible filename.
+   */
+  createSignedDownloadUrl(
+    key: string,
+    expiresInSeconds: number,
+    downloadFilename?: string,
+  ): Promise<string>;
   delete(key: string): Promise<void>;
 }
 
