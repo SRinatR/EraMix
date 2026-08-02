@@ -19,4 +19,13 @@ worker/notifier dispatch tests around it; never a real secret. The real
 INDEXNOW_KEY only ever lives in the deployment secret store (never
 committed) — see .env.example and packages/infrastructure/src/env.ts.
 """
-regexes = ['''a1b2c3d4e5f6''']
+regexes = [
+  '''a1b2c3d4e5f6''',
+  # apps/worker/src/main.ts: `apiSecret: env.GA4_API_SECRET` — an env-var
+  # *reference* (never a literal value), flagged only because gitleaks'
+  # generic-api-key rule matches the "apiSecret:" key shape plus the
+  # identifier's own entropy. Scoped to this exact call site, not a broad
+  # "apiSecret" or "env." exemption — a real literal secret assigned here
+  # instead would still fail the scan.
+  '''apiSecret: env\.GA4_API_SECRET''',
+]
