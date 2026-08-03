@@ -9,5 +9,16 @@
     "articles": "Articles",
     "faq": "FAQ",
     "account": "Account"
+  },
+  "Consent": {
+    "bannerLabel": "Cookie and privacy preferences",
+    "bannerText": "We use cookies for essential site operation and, only with your consent, for analytics and advertising measurement. You can change this choice at any time.",
+    "preferencesLegend": "Preferences",
+    "analyticsLabel": "Analytics (helps us understand which pages and products are useful)",
+    "advertisingLabel": "Advertising measurement",
+    "acceptAll": "Accept all",
+    "rejectNonEssential": "Reject non-essential",
+    "savePreferences": "Save preferences",
+    "manageLink": "Cookie preferences"
   }
 }

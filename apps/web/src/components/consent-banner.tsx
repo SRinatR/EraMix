@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { getStoredConsent, setStoredConsent } from './consent-store';
 
 /** Dispatched by ManageConsentLink to reopen the banner after an initial choice was already made — no global state/context provider needed for a single boolean. */
@@ -15,6 +16,7 @@ export const OPEN_CONSENT_BANNER_EVENT = 'eramix:open-consent-banner';
  * record this writes).
  */
 export function ConsentBanner() {
+  const t = useTranslations('Consent');
   const [visible, setVisible] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [advertising, setAdvertising] = useState(false);
@@ -48,20 +50,17 @@ export function ConsentBanner() {
   }
 
   return (
-    <div role="dialog" aria-modal="false" aria-label="Cookie and privacy preferences">
-      <p>
-        We use cookies for essential site operation and, only with your consent, for analytics and
-        advertising measurement. You can change this choice at any time.
-      </p>
+    <div role="dialog" aria-modal="false" aria-label={t('bannerLabel')}>
+      <p>{t('bannerText')}</p>
       <fieldset>
-        <legend>Preferences</legend>
+        <legend>{t('preferencesLegend')}</legend>
         <label>
           <input
             type="checkbox"
             checked={analytics}
             onChange={(event) => setAnalytics(event.target.checked)}
           />
-          Analytics (helps us understand which pages and products are useful)
+          {t('analyticsLabel')}
         </label>
         <label>
           <input
@@ -69,17 +68,17 @@ export function ConsentBanner() {
             checked={advertising}
             onChange={(event) => setAdvertising(event.target.checked)}
           />
-          Advertising measurement
+          {t('advertisingLabel')}
         </label>
       </fieldset>
       <button type="button" onClick={() => save({ analytics: true, advertising: true })}>
-        Accept all
+        {t('acceptAll')}
       </button>
       <button type="button" onClick={() => save({ analytics: false, advertising: false })}>
-        Reject non-essential
+        {t('rejectNonEssential')}
       </button>
       <button type="button" onClick={() => save({ analytics, advertising })}>
-        Save preferences
+        {t('savePreferences')}
       </button>
     </div>
   );

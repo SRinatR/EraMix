@@ -9,5 +9,16 @@
     "articles": "Maqolalar",
     "faq": "Savol-javob",
     "account": "Shaxsiy kabinet"
+  },
+  "Consent": {
+    "bannerLabel": "Cookie va maxfiylik sozlamalari",
+    "bannerText": "Biz saytning asosiy ishlashi uchun, shuningdek faqat sizning roziligingiz bilan analitika va reklama o'lchovlari uchun cookie-fayllardan foydalanamiz. Bu tanlovni istalgan vaqtda o'zgartirishingiz mumkin.",
+    "preferencesLegend": "Sozlamalar",
+    "analyticsLabel": "Analitika (qaysi sahifalar va mahsulotlar foydali ekanini tushunishga yordam beradi)",
+    "advertisingLabel": "Reklama o'lchovlari",
+    "acceptAll": "Barchasini qabul qilish",
+    "rejectNonEssential": "Ixtiyoriylarni rad etish",
+    "savePreferences": "Sozlamalarni saqlash",
+    "manageLink": "Cookie sozlamalari"
   }
 }
