@@ -2683,6 +2683,159 @@ number[]` fields (dead — `toProblemDetails` only ever read `status[0]`)
   Details translation (API body only — public pages are already properly
   localized) remains explicitly out of scope, not a gap in this slice.
 
+## Phase C — P0 technical SEO correctness
+
+Product Owner instruction, 2026-08-03: close the remaining P0 SEO
+correctness and measurement foundations before any advertising
+integrations. Delivered in five commits, each pushed individually and
+watched to a green (or, for one, a diagnosed-and-fixed) CI run before the
+next commit began — no batch push, no unverified commit left behind.
+
+1. **HTTP semantics completion** (closes Phase B slice 7's own named "not
+   yet done" list): `apps/web/src/app/health/ready/route.ts` previously
+   bypassed the shared `problemResponse()`/`ERROR_CATALOGUE` pipeline
+   entirely — a hand-built 503 body with a hardcoded **Russian** title
+   (`'Критическая зависимость временно недоступна'`), contradicting the
+   runbook's own "Done" claim for "English-only Problem Details" at the
+   time. New `DependencyUnavailableError` (`packages/domain/src/errors.ts`,
+   table-driven test) lets this route throw through the exact same
+   `withApiHandler`/`problemResponse` pipeline every other route uses. The
+   405+`Allow` rollout (`defineRouteHandlers`) was completed across all
+   remaining 57 previously-unmigrated route files (including `health/ready`
+   itself) (a Node codemod script
+   handled the mechanical rename/re-export; every file was verified by
+   `next build` registering the identical route table before/after, plus
+   the pre-existing generic `handler.test.ts` suite that already covers
+   every method-count shape) — **61/61** `apps/web/src/app/{api,health}`
+   route files now use `defineRouteHandlers`; zero return Next's bare
+   default 405. The previously-deferred OpenAPI `MalformedRequest`/
+   `MethodNotAllowed` shared `components/responses` entries were added and
+   wired into all 68 operations (`405`) and the 42 that declare a
+   `requestBody` (`400`) via a second Node script operating on the YAML
+   text directly (chosen over a full YAML-library round-trip, which would
+   have reformatted/lost comments across this 2800+ line hand-authored
+   file) — `redocly lint` passes with zero unused-component warnings.
+   Commit `9d0a711` ([CI](https://github.com/SRinatR/EraMix/actions/runs/30786360914),
+   green).
+2. **Parameterized-collection SEO policy**: `docs/runbooks/search-visibility.md`
+   ("robots.txt and query parameters") distinguishes a content-filtering
+   `search` query (`noindex,follow`, canonicalized to the unparameterized
+   collection) from cursor/limit pagination with no search ("a paginated
+   series with a substantively different product list" — crawlable and
+   **self**-canonical, never folded into page 1). A conflict was found
+   between this and the initial task instruction (which asked to treat
+   pagination the same as filter/sort/search) — flagged to the Product
+   Owner before implementing; **the runbook's documented policy was
+   confirmed as authoritative**, so no runbook edit was needed, only the
+   implementation. `apps/web/src/server/seo.ts`'s `categoryAlternates` now
+   accepts an optional `CollectionQueryVariant`; `catalog/[slug]/page.tsx`'s
+   `generateMetadata` reads `searchParams` and passes it through. 6 new
+   unit tests in `seo.test.ts` cover: non-empty search (noindex,follow,
+   canonical unchanged), empty search string (treated as none), pure
+   pagination (self-canonical including the cursor, `index:true`), search +
+   pagination combined (search dominates), and bare page 1 (unaffected).
+   `sitemap.ts` already only ever emits parameter-free canonical routes
+   (`buildSitemapEntries` has no query-string concept at all) — confirmed,
+   not changed. Commit `a02784e`
+   ([CI](https://github.com/SRinatR/EraMix/actions/runs/30786658773), green).
+3. **Technical SEO test evidence**:
+   - `apps/web/src/app/robots.ts`/`sitemap.ts` had zero dedicated route-level
+     tests before this phase (only the underlying `buildSitemapEntries` was
+     tested). New `robots.test.ts` (3 cases: allow/disallow rules,
+     emergency `crawlerGlobalNoindex` kill switch, canonical-origin-derived
+     sitemap URL) and `sitemap.test.ts` (2 cases: origin prefixing,
+     `crawlerGlobalNoindex` empties the sitemap without ever touching the
+     repositories). Commit `a02784e` (same as above).
+   - JSON-LD: only `Organization` (`buildOrganizationJsonLd`) had an
+     extracted, unit-tested producer function; `Product`, `CollectionPage`,
+     `Article`, `WebPage`, and `FAQPage` were all inline object literals in
+     their page components with zero tests. New
+     `packages/application/src/json-ld.ts` (5 pure builders, 10 unit tests)
+     mirrors `buildOrganizationJsonLd`'s pattern; all four page components
+     rewired to use them. Tests explicitly assert `buildProductJsonLd` never
+     emits an `offers`/price block (ADR-0005) and `buildFaqPageJsonLd`
+     returns `undefined` — never an empty `mainEntity: []` — for zero
+     visible FAQ entries (CLAUDE.md: "FAQPage is emitted only for visible
+     maintained FAQs"). Commit `cc3c3e6`
+     ([CI](https://github.com/SRinatR/EraMix/actions/runs/30786957069), green).
+   - PostgreSQL integration coverage for `PlatformSettings`/
+     `PlatformSettingsHistory`: `postgres.integration.test.ts` never
+     referenced either repository — zero real-database coverage, only
+     in-memory-fake coverage in `packages/application/src/settings.test.ts`.
+     Added 6 cases: singleton get/update, OCC conflict on a stale
+     `expectedVersion`, the JSONB `previousSnapshot` round-trip (asserts
+     `Date` fields survive as real `Date` instances, not strings — the
+     exact concern already documented inline in
+     `platform-settings-repository.ts`), history record/list, audit+outbox
+     atomicity alongside the history row on a successful update, fail-closed
+     atomicity (nothing is written when `validateEffectivePlatformSettings`
+     rejects `merchantCenterEnabled: true` mid-transaction), and rollback
+     (applies a past snapshot as a new audited update, never a destructive
+     rewrite of history). **First CI attempt failed**: all 6 cases threw
+     `ResourceNotFoundError` because CI's migration-gate job applies
+     migrations but never runs `prisma/seed.ts` (a separate Pi/local-only
+     step), so the `PlatformSettings` singleton row never existed. Diagnosed
+     from the CI log, fixed with an idempotent `prisma.platformSettings.upsert`
+     in this test file's own `beforeAll` — deliberately not adding
+     `db:seed` to the CI workflow itself, since `seed.ts` also upserts all 6
+     `AdvertisingProviderConfig` rows and would have collided with the
+     pre-existing `advertising_provider_requires_identifier_when_enabled`
+     test's own raw `prisma.advertisingProviderConfig.create({provider:
+'TIKTOK'})` call. Commits `b37d1fe`
+     ([CI](https://github.com/SRinatR/EraMix/actions/runs/30787258295),
+     **failed** — real-Postgres job only, all other jobs green) and
+     `c97b8ac`
+     ([CI](https://github.com/SRinatR/EraMix/actions/runs/30787438791),
+     green, fix verified) — both watched to completion, the failure
+     diagnosed from the real CI log (not guessed), not force-pushed over or
+     hidden.
+
+- **Verified locally, cumulative** (`pnpm run format`/`lint` incl.
+  `redocly lint`/`typecheck`/`test`/`build`, all exit 0 after every commit):
+  **532 unit tests** across 7 workspace projects (168 domain + 1 ui + 210
+  application + 5 contracts + 46 infrastructure + 85 web + 17 worker), up
+  from 508 before this phase. `next build` registers the same 95 route
+  entries before and after the 405 rollout (no route added, removed, or
+  renamed by the mechanical transform). The 6 new PlatformSettings
+  real-Postgres cases are CI-verified only (`db-integration` job), per this
+  repository's standing convention for every `*.integration.test.ts` file —
+  no local PostgreSQL on this laptop.
+- **Remaining gaps, explicitly not closed by this phase**:
+  - No `sort` query parameter exists anywhere in the catalog UI today, so
+    the parameterized-collection policy above only implements the `search`/
+    `cursor`/`limit` cases the codebase actually has; a future sort feature
+    needs its own noindex+canonical-to-base wiring when it is built, not
+    invented speculatively here.
+  - No browser/Pi-driven confirmation that a real crawler receives the
+    `noindex,follow` robots meta tag or the self-canonical pagination URL —
+    same standing "Postgres/browser-backed page, CI/Pi-verified only" gap
+    every prior public-page phase in this document has carried.
+  - The traceability matrix named in the task instruction still does not
+    exist as a separate document — consistent with Phase B slices 6/7's own
+    precedent (Phase 8's own precondition for it remains unmet, see that
+    phase's status above); this phase's requirement-to-evidence mapping is
+    the five commits and CI run URLs listed above, the same pattern already
+    established.
+  - Phase B slice 5's already-named gap (no cookie-consent-banner UI, so no
+    real end-user analytics consent has ever been exercised) is unchanged
+    by this phase and remains the blocker before Phase D's GA4/Yandex
+    Metrica dispatch can carry real traffic.
+- **Proposed Phase D start point**: Phase D's own item 4 ("consent primitive
+  and unified event registry") largely already exists from Phase B slice 5
+  (`packages/domain/src/analytics.ts`'s closed discriminated union,
+  `packages/application/src/analytics.ts`'s consent-gating dispatcher,
+  `POST /api/analytics/events`, GA4/Yandex Metrica sinks) — the concrete,
+  still-open next slice is the **cookie-consent-banner UI** (real consent
+  state instead of the hardcoded `{analytics: false, advertising: false}`
+  Phase B slice 5 documented as its one deliberate gap), since every other
+  Phase D item that depends on real consent (GA4/Yandex Metrica actually
+  dispatching to a live account) is blocked on it. A fresh audit of exactly
+  which of Phase D's named P0 event names (`page_view`, `view_item`,
+  `view_item_list`, `search`, `filter_used`, `generate_lead`,
+  `lead_submitted`, `contact_click`, `file_download`, `locale_changed`) are
+  and are not already covered by Phase B slice 5's event union should be
+  the first step of that slice, not assumed from this status block.
+
 ## Required task format for the CLI agent
 
 For every task, report:
