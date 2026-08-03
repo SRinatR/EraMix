@@ -68,9 +68,18 @@ describe('PostgreSQL integration', () => {
     };
   }
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const env = loadEnv();
     prisma = createPrismaClient(env.DATABASE_URL);
+    // CI's migration-gate job applies migrations but does not run
+    // prisma/seed.ts (that is a separate, Pi/local-only step) — the
+    // PlatformSettings tests below need the singleton row to exist first.
+    // Idempotent and side-effect-free if a real seed already ran (Pi/local).
+    await prisma.platformSettings.upsert({
+      where: { id: 'singleton' },
+      create: { id: 'singleton', canonicalHost: 'eramix.example' },
+      update: {},
+    });
   });
 
   afterAll(async () => {
