@@ -1,4 +1,9 @@
-import { AccessDeniedError, ResourceNotFoundError, ValidationFailedError } from '@eramix/domain';
+import {
+  AccessDeniedError,
+  ResourceNotFoundError,
+  UnsupportedMediaTypeError,
+  ValidationFailedError,
+} from '@eramix/domain';
 import type { ProductAsset } from '@eramix/domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -223,7 +228,7 @@ describe('uploadProductAsset', () => {
           actorRole: 'ADMIN',
         },
       ),
-    ).rejects.toThrow(ValidationFailedError);
+    ).rejects.toThrow(UnsupportedMediaTypeError);
     expect(scannerCalled).toBe(false);
     expect(storage.puts).toHaveLength(0);
   });

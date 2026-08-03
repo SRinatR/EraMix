@@ -11,7 +11,11 @@ describe('toProblemDetails', () => {
     const problem = toProblemDetails(error, 'trace-123');
 
     expect(problem.code).toBe('LOCALE_NOT_SUPPORTED');
-    expect(problem.status).toBe(404);
+    // 422, not 404: parseLocale() (the only real thrower) is only ever
+    // called on a body/form field (docs/runbooks/http-error-contract.md,
+    // ADR-0020) — URL locale segments use isSupportedLocale()/notFound()
+    // directly and never construct this error.
+    expect(problem.status).toBe(422);
     expect(problem.type).toBe('https://eramix.dev/problems/locale-not-supported');
     expect(problem.traceId).toBe('trace-123');
     expect(problem.detail).toBe('Locale "fr" is not supported.');

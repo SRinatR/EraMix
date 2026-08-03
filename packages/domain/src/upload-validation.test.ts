@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_UPLOAD_SIZE_BYTES, validateUpload } from './upload-validation.js';
-import { ValidationFailedError } from './errors.js';
+import {
+  PayloadTooLargeError,
+  UnsupportedMediaTypeError,
+  ValidationFailedError,
+} from './errors.js';
 
 const PNG_HEADER = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 const JPEG_HEADER = new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -53,7 +57,7 @@ describe('validateUpload', () => {
     ).toBe('image/webp');
   });
 
-  it('rejects a content type outside the allowlist', () => {
+  it('rejects a content type outside the allowlist (415, docs/runbooks/http-error-contract.md)', () => {
     expect(() =>
       validateUpload({
         filename: 'script.exe',
@@ -61,7 +65,7 @@ describe('validateUpload', () => {
         sizeBytes: 1024,
         headerBytes: new Uint8Array(16),
       }),
-    ).toThrow(ValidationFailedError);
+    ).toThrow(UnsupportedMediaTypeError);
   });
 
   it('rejects a mismatched extension for an otherwise-allowed content type', () => {
@@ -87,7 +91,7 @@ describe('validateUpload', () => {
     ).toThrow(ValidationFailedError);
   });
 
-  it('rejects a zero-byte file', () => {
+  it('rejects a zero-byte file (413, docs/runbooks/http-error-contract.md)', () => {
     expect(() =>
       validateUpload({
         filename: 'empty.png',
@@ -95,10 +99,10 @@ describe('validateUpload', () => {
         sizeBytes: 0,
         headerBytes: PNG_HEADER,
       }),
-    ).toThrow(ValidationFailedError);
+    ).toThrow(PayloadTooLargeError);
   });
 
-  it('rejects a file exceeding the maximum size', () => {
+  it('rejects a file exceeding the maximum size (413, docs/runbooks/http-error-contract.md)', () => {
     expect(() =>
       validateUpload({
         filename: 'huge.png',
@@ -106,6 +110,6 @@ describe('validateUpload', () => {
         sizeBytes: MAX_UPLOAD_SIZE_BYTES + 1,
         headerBytes: PNG_HEADER,
       }),
-    ).toThrow(ValidationFailedError);
+    ).toThrow(PayloadTooLargeError);
   });
 });

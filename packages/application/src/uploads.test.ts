@@ -1,4 +1,4 @@
-import { ValidationFailedError } from '@eramix/domain';
+import { UnsupportedMediaTypeError, ValidationFailedError } from '@eramix/domain';
 import { describe, expect, it } from 'vitest';
 import type { MalwareScanner, StorageProvider } from './ports.js';
 import { uploadMedia } from './uploads.js';
@@ -73,7 +73,7 @@ describe('uploadMedia', () => {
         { storage, scanner, idGen: fakeIdGen() },
         { filename: 'script.exe', contentType: 'application/x-msdownload', content: PNG_CONTENT },
       ),
-    ).rejects.toThrow(ValidationFailedError);
+    ).rejects.toThrow(UnsupportedMediaTypeError);
     expect(scannerCalled).toBe(false);
     expect(storage.puts).toHaveLength(0);
   });

@@ -11,7 +11,9 @@ export type DomainErrorCode =
   | 'AUTH_REQUIRED'
   | 'AUTH_CALLBACK_FAILED'
   | 'COMPANY_REQUIRED'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'UNSUPPORTED_MEDIA_TYPE';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;
@@ -27,6 +29,16 @@ export abstract class DomainError extends Error {
 
 export class ValidationFailedError extends DomainError {
   readonly code = 'VALIDATION_FAILED' as const;
+}
+
+/** Thrown by validateUpload() when a file's size is outside the allowed range (docs/runbooks/http-error-contract.md — 413). */
+export class PayloadTooLargeError extends DomainError {
+  readonly code = 'PAYLOAD_TOO_LARGE' as const;
+}
+
+/** Thrown by validateUpload() when a file's declared content type is not in the allowlist (docs/runbooks/http-error-contract.md — 415). A declared-vs-actual content mismatch (extension/signature) stays ValidationFailedError/422 — the type itself is supported, the payload just does not match its own claim. */
+export class UnsupportedMediaTypeError extends DomainError {
+  readonly code = 'UNSUPPORTED_MEDIA_TYPE' as const;
 }
 
 /** Thrown when a protected use case is invoked without a valid session. */
@@ -48,7 +60,7 @@ export class CompanyRequiredError extends DomainError {
  * Thrown by a rate limiter guard on a protected endpoint (auth, search,
  * order submission, uploads, admin — CLAUDE.md security policy). Carries
  * `retryAfterSeconds` in `details` so the delivery layer can set a
- * `Retry-After` header ("Retry-After при возможности").
+ * `Retry-After` header.
  */
 export class RateLimitedError extends DomainError {
   readonly code = 'RATE_LIMITED' as const;

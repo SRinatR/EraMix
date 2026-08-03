@@ -131,8 +131,11 @@ paths:
       tags: [Auth]
       security: []
       responses:
-        '302':
+        '307':
           description: Redirect to the identity provider's authorization endpoint.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
   /api/auth/callback:
     get:
       operationId: getAuthCallback
@@ -149,8 +152,11 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '302':
+        '307':
           description: Session cookie set; redirect to the post-login destination.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
         '401':
           description: State/nonce/PKCE/signature/issuer/audience/expiry validation failed.
           content:
@@ -306,8 +312,11 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '302':
-          description: Redirect to a time-limited signed download URL.
+        '307':
+          description: Redirect to a time-limited signed download URL. Never cached as permanent — the URL expires.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
         '404':
           description: Unknown product, unknown asset, or (unauthenticated/unauthorized) an unpublished asset.
           content:
@@ -1390,10 +1399,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           description: >-
-            Rejected by validation (disallowed content type, extension
-            mismatch, signature mismatch, size limit) or malware scanning.
+            Rejected by validation (extension mismatch, signature mismatch)
+            or malware scanning.
           content:
             application/problem+json:
               schema:
@@ -2494,10 +2507,14 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/AccessDenied'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           description: >-
-            Rejected by validation (disallowed content type, extension
-            mismatch, signature mismatch, size limit) or malware scanning.
+            Rejected by validation (extension mismatch, signature mismatch)
+            or malware scanning.
           content:
             application/problem+json:
               schema:
@@ -2578,6 +2595,18 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     ValidationFailed:
       description: Request failed input validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PayloadTooLarge:
+      description: Uploaded file exceeds the allowed size.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnsupportedMediaType:
+      description: Uploaded file's declared content type is not in the allowlist.
       content:
         application/problem+json:
           schema:
@@ -2972,6 +3001,10 @@ components:
             - SLUG_CONFLICT
             - LOCALE_NOT_SUPPORTED
             - CANONICAL_ROUTE_MISSING
+            - MALFORMED_REQUEST
+            - PAYLOAD_TOO_LARGE
+            - UNSUPPORTED_MEDIA_TYPE
+            - METHOD_NOT_ALLOWED
         traceId:
           type: string
         errors:

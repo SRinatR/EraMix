@@ -8,7 +8,9 @@ rules:
   # misrepresent the contract.
   operation-4xx-response: off
   # /auth/login and /auth/callback are pure browser-redirect steps of the
-  # OIDC Authorization Code flow (302 to the IdP, then 302 to the app after
-  # the session cookie is set) — there is no 2xx JSON response to document,
-  # and inventing one would misrepresent the contract.
+  # OIDC Authorization Code flow (307 to the IdP, then 307 to the app after
+  # the session cookie is set — NextResponse.redirect()'s default, verified
+  # against the installed next@16.2.12 package source,
+  # docs/runbooks/http-error-contract.md) — there is no 2xx JSON response
+  # to document, and inventing one would misrepresent the contract.
   operation-2xx-response: off

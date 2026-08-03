@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { updateOffer, type OfferPatch } from '@eramix/application';
@@ -65,7 +65,7 @@ function toResponseBody(offer: Offer) {
   };
 }
 
-export const PATCH = withApiHandler<{ offerId: string }>(
+const updateOfferHandler = withApiHandler<{ offerId: string }>(
   'admin.offers.update',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -98,3 +98,9 @@ export const PATCH = withApiHandler<{ offerId: string }>(
     return NextResponse.json(toResponseBody(updated));
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  offerId: string;
+}>({
+  PATCH: updateOfferHandler,
+});

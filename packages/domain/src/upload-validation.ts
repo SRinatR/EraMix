@@ -1,4 +1,8 @@
-import { ValidationFailedError } from './errors.js';
+import {
+  PayloadTooLargeError,
+  UnsupportedMediaTypeError,
+  ValidationFailedError,
+} from './errors.js';
 
 export interface AllowedFileType {
   readonly mimeType: string;
@@ -75,7 +79,7 @@ const WEBP_MARKER = [0x57, 0x45, 0x42, 0x50]; // "WEBP" at offset 8 of a RIFF co
  */
 export function validateUpload(candidate: UploadCandidate): AllowedFileType {
   if (candidate.sizeBytes <= 0 || candidate.sizeBytes > MAX_UPLOAD_SIZE_BYTES) {
-    throw new ValidationFailedError(
+    throw new PayloadTooLargeError(
       `File size ${candidate.sizeBytes} bytes is outside the allowed range (1..${MAX_UPLOAD_SIZE_BYTES}).`,
       { sizeBytes: candidate.sizeBytes },
     );
@@ -83,7 +87,7 @@ export function validateUpload(candidate: UploadCandidate): AllowedFileType {
 
   const allowed = ALLOWED_UPLOAD_TYPES.find((type) => type.mimeType === candidate.contentType);
   if (!allowed) {
-    throw new ValidationFailedError(
+    throw new UnsupportedMediaTypeError(
       `Content type "${candidate.contentType}" is not in the upload allowlist.`,
       { contentType: candidate.contentType },
     );

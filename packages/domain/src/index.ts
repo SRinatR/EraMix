@@ -13,6 +13,8 @@ export {
   AuthCallbackFailedError,
   CompanyRequiredError,
   RateLimitedError,
+  PayloadTooLargeError,
+  UnsupportedMediaTypeError,
 } from './errors.js';
 export type { DomainErrorCode } from './errors.js';
 export { SUPPORTED_LOCALES, DEFAULT_LOCALE, isSupportedLocale, parseLocale } from './locale.js';

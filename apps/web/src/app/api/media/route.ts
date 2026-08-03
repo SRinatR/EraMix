@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission, uploadMedia } from '@eramix/application';
@@ -7,7 +7,7 @@ import { ValidationFailedError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
 /** Media upload for catalog/content assets — TZ §3.1 "Публичный контент CRUD" (Content-editor/Admin only). */
-export const POST = withApiHandler('media.upload', async (request, traceId) => {
+const uploadMediaHandler = withApiHandler('media.upload', async (request, traceId) => {
   enforceRateLimit('upload', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'content.write');
@@ -37,4 +37,8 @@ export const POST = withApiHandler('media.upload', async (request, traceId) => {
 
   const downloadUrl = await container.storage.createSignedDownloadUrl(descriptor.key, 3600);
   return NextResponse.json({ ...descriptor, downloadUrl }, { status: 201 });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  POST: uploadMediaHandler,
 });

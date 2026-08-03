@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { createOffer, listOffers } from '@eramix/application';
@@ -50,7 +50,7 @@ function toResponseBody(offer: Offer) {
   };
 }
 
-export const GET = withApiHandler('admin.offers.list', async (request) => {
+const listOffersHandler = withApiHandler('admin.offers.list', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const container = getContainer();
@@ -101,7 +101,7 @@ const createOfferSchema = z.object({
  * separate, audited second step via PATCH). settings.manage is enforced
  * inside createOffer.
  */
-export const POST = withApiHandler('admin.offers.create', async (request, traceId) => {
+const createOfferHandler = withApiHandler('admin.offers.create', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const body = createOfferSchema.parse(await request.json());
@@ -125,4 +125,9 @@ export const POST = withApiHandler('admin.offers.create', async (request, traceI
   );
 
   return NextResponse.json(toResponseBody(created), { status: 201 });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: listOffersHandler,
+  POST: createOfferHandler,
 });
