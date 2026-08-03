@@ -3564,20 +3564,20 @@ is Pi/VPS-gated, as already stated per-row in the phase status blocks above.
 
 #### Security, RBAC, privacy, OpenAPI
 
-| Requirement                                                                  | Files                                                                                                  | Tests                                                                                                             | Status                                                                                                                                                                                                           |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OIDC Authorization Code + PKCE, issuer/audience/signature/expiry/nonce/JWKS  | `packages/infrastructure/src/oidc/`                                                                    | `oidc-identity-provider.test.ts` (7 cases: state/nonce/forged-signature rejection)                                | **V** (generic flow); **N/I** real ODS tenant (Q-01, Product Owner/credential blocker)                                                                                                                           |
-| HttpOnly/SameSite session cookie, no client-JS token access                  | `apps/web/src/app/api/auth/{login,callback}/route.ts`, `session-codec.ts`                              | `session.test.ts` (5 cases), live cookie-flag verification recorded in Phase 4 status block                       | **V**                                                                                                                                                                                                            |
-| Server-side permission enforcement (IAM-008), hidden UI is not authorization | `packages/application/src/authorization.ts`, every route's `requirePermission`                         | `authorization.test.ts` (15 cases incl. ORD-008 boundary), live 401 verification recorded in Phase 4 status block | **V**                                                                                                                                                                                                            |
-| Rate limits: auth/search/order-submission/uploads/admin/analytics            | `apps/web/src/server/rate-limit.ts`                                                                    | live 429+`Retry-After` verification recorded in Phase 7 status block                                              | **V** (single-instance in-memory — documented, needs a shared store once >1 instance)                                                                                                                            |
-| CSRF (Origin/Referer same-host check)                                        | `apps/web/src/server/csrf.ts`                                                                          | `csrf.test.ts` (6 cases), live cross-origin 403 verification recorded                                             | **V**                                                                                                                                                                                                            |
-| CSP/security headers                                                         | `apps/web/next.config.ts`'s `headers()`                                                                | live `curl -D -` header verification recorded in the CSRF/CSP status block                                        | **V**                                                                                                                                                                                                            |
-| Upload allowlist/signature/malware-scan/signed-download                      | `packages/domain/src/upload-validation.ts`, `packages/application/src/uploads.ts`, `product-assets.ts` | 20+ tests across domain/application/infrastructure (Phase 6 status block)                                         | **V** (dev-stub scanner/storage — ADR-0006 blocked, honestly labeled, never claims production-grade)                                                                                                             |
-| No secrets/PII in logs; `.env*` never committed                              | `packages/infrastructure/src/env.ts`, `docs/runbooks/security.md`, CI `security` job                   | `env-example.test.ts`; CI `dotenvx precommit`/`prebuild` + `gitleaks` (green every run, including this pass's)    | **V**                                                                                                                                                                                                            |
-| STRIDE threat model (SEC-009)                                                | —                                                                                                      | —                                                                                                                 | **Partial, by design** — CSP/CSRF (SEC-002/003) closed with a working implementation; the full cross-surface STRIDE write-up is a separate, broader pre-production deliverable, documented as such since Phase 7 |
-| OpenAPI 3.2 contract, `redocly lint` clean                                   | `packages/contracts/openapi/openapi.yaml`                                                              | `redocly lint` reproduced clean this session (zero errors/warnings/unused-component findings)                     | **V**                                                                                                                                                                                                            |
-| No `id-slug` combined column; immutable `publicId`/`orderNumber`             | `packages/infrastructure/prisma/schema.prisma`                                                         | confirmed by direct schema read this session                                                                      | **V**                                                                                                                                                                                                            |
-| UUIDv7 internal-ID policy                                                    | —                                                                                                      | —                                                                                                                 | **N/A** — grepped this session (`uuidv7`/`uuid_v7`/`uuid7`): no such initiative exists in this codebase; Prisma's default `cuid`/`uuid` generation is unchanged, so there is nothing to test                     |
+| Requirement                                                                  | Files                                                                                                                                                                                 | Tests                                                                                                                              | Status                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OIDC Authorization Code + PKCE, issuer/audience/signature/expiry/nonce/JWKS  | `packages/infrastructure/src/oidc/`                                                                                                                                                   | `oidc-identity-provider.test.ts` (7 cases: state/nonce/forged-signature rejection)                                                 | **V** (generic flow); **N/I** real ODS tenant (Q-01, Product Owner/credential blocker)                                                                                                                           |
+| HttpOnly/SameSite session cookie, no client-JS token access                  | `apps/web/src/app/api/auth/{login,callback}/route.ts`, `session-codec.ts`                                                                                                             | `session.test.ts` (5 cases), live cookie-flag verification recorded in Phase 4 status block                                        | **V**                                                                                                                                                                                                            |
+| Server-side permission enforcement (IAM-008), hidden UI is not authorization | `packages/application/src/authorization.ts`, every route's `requirePermission`                                                                                                        | `authorization.test.ts` (15 cases incl. ORD-008 boundary), live 401 verification recorded in Phase 4 status block                  | **V**                                                                                                                                                                                                            |
+| Rate limits: auth/search/order-submission/uploads/admin/analytics            | `apps/web/src/server/rate-limit.ts`                                                                                                                                                   | live 429+`Retry-After` verification recorded in Phase 7 status block                                                               | **V** (single-instance in-memory — documented, needs a shared store once >1 instance)                                                                                                                            |
+| CSRF (Origin/Referer same-host check)                                        | `apps/web/src/server/csrf.ts`                                                                                                                                                         | `csrf.test.ts` (6 cases), live cross-origin 403 verification recorded                                                              | **V**                                                                                                                                                                                                            |
+| CSP/security headers                                                         | `apps/web/next.config.ts`'s `headers()`                                                                                                                                               | live `curl -D -` header verification recorded in the CSRF/CSP status block                                                         | **V**                                                                                                                                                                                                            |
+| Upload allowlist/signature/malware-scan/signed-download                      | `packages/domain/src/upload-validation.ts`, `packages/application/src/uploads.ts`, `product-assets.ts`                                                                                | 20+ tests across domain/application/infrastructure (Phase 6 status block)                                                          | **V** (dev-stub scanner/storage — ADR-0006 blocked, honestly labeled, never claims production-grade)                                                                                                             |
+| No secrets/PII in logs; `.env*` never committed                              | `packages/infrastructure/src/env.ts`, `docs/runbooks/security.md`, CI `security` job                                                                                                  | `env-example.test.ts`; CI `dotenvx precommit`/`prebuild` + `gitleaks` (green every run, including this pass's)                     | **V**                                                                                                                                                                                                            |
+| STRIDE threat model (SEC-009)                                                | —                                                                                                                                                                                     | —                                                                                                                                  | **Partial, by design** — CSP/CSRF (SEC-002/003) closed with a working implementation; the full cross-surface STRIDE write-up is a separate, broader pre-production deliverable, documented as such since Phase 7 |
+| OpenAPI 3.2 contract, `redocly lint` clean                                   | `packages/contracts/openapi/openapi.yaml`                                                                                                                                             | `redocly lint` reproduced clean this session (zero errors/warnings/unused-component findings)                                      | **V**                                                                                                                                                                                                            |
+| No `id-slug` combined column; immutable `publicId`/`orderNumber`             | `packages/infrastructure/prisma/schema.prisma`                                                                                                                                        | confirmed by direct schema read this session                                                                                       | **V**                                                                                                                                                                                                            |
+| UUIDv7 internal-ID policy                                                    | `packages/infrastructure/prisma/schema.prisma` (all 21 `id` columns `@default(dbgenerated("uuidv7()"))`), `packages/infrastructure/src/id-generator.ts`'s `PostgresUuidV7IdGenerator` | `postgres.integration.test.ts` (`uuid_extract_version(id) = 7` across both generation paths, FK/legacy-UUIDv4-compatibility cases) | **V** — implemented 2026-08-04 (ADR-0021), see its own roadmap entry below                                                                                                                                       |
 
 ### Summary
 
@@ -3670,6 +3670,118 @@ laptop's standing no-Pi/Docker/Postgres/browser constraint:
 | Deployment rollback                               | Not yet built — no staging/production deployment pipeline exists (VPS/hosting-decision-pending, Q-06)                                          |
 | Smoke tests                                       | `scripts/pi/04-production-build-and-demo.sh` (written, Pi-pending)                                                                             |
 | No production promotion without terminal evidence | Standing policy (CLAUDE.md's fail-closed delivery policy); Phase 8's own UAT precondition remains correctly unmet until the above run for real |
+
+## Identifier-policy initiative, 2026-08-04 (ADR-0021)
+
+Product Owner instruction: implement the complete EraMix identifier policy
+as a dedicated, forward-only, tested initiative — UUIDv7 for internal
+PostgreSQL entity ids and analytics event ids where ordering helps; opaque
+cryptographically random ids where users/URLs/external APIs/security-
+sensitive ephemeral flows require them. Full rationale, the exact audited
+generation paths, and the verification/rollback strategy are in
+[ADR-0021](adr/0021-identifier-policy.md); this entry is the delivery
+evidence trail.
+
+Delivered in four independently tested and pushed commits, plus one same-day
+fix commit after CI caught a real defect (see slice 4's own entry below) —
+every commit's terminal CI result is green:
+
+1. **`999bfff`** — `IdGenerator.nextId()` becomes `Promise<string>`;
+   `CryptoIdGenerator` (node:crypto UUIDv4) is deleted and replaced by
+   `PostgresUuidV7IdGenerator` (`SELECT uuidv7()` through the same ambient-
+   transaction-client resolution every repository adapter uses). All 18
+   call sites (`packages/application`'s authoring/order-lifecycle/order-
+   comments/product-assets/uploads, 4 `apps/web` route handlers) and every
+   test double implementing the port were updated in the same commit — no
+   partial migration left behind. New `packages/domain/src/uuidv7.ts`
+   (`generateUuidV7`/`isValidUuidV7`, RFC 9562, Web-Crypto-only) exists for
+   the client-side analytics event id (decision 2), not internal entity ids.
+   [CI 30847412551](https://github.com/SRinatR/EraMix/actions/runs/30847412551) —
+   green, including the real-Postgres migration-gate job, which is the live
+   proof `uuidv7()`/`uuid_extract_version()` are genuinely available on the
+   pinned `postgres:19beta2-alpine` image (this was the one real open
+   question before this initiative started; CI settled it for real, not by
+   assumption).
+2. **`ee3b3d8`** — migration `20260804120000_add_uuidv7_defaults`: all 21
+   UUID `id` columns get `DEFAULT uuidv7()`. For the 8 models whose
+   repository never supplies `id` explicitly (`CategoryRoute`,
+   `ContentRoute`, `OrderLine`, `OrderStatusHistory`, `AuditEvent`,
+   `OutboxMessage`, `PlatformSettingsHistory`, `AdvertisingProviderConfig`)
+   this is the entire fix — no application code change. New Postgres
+   integration tests prove a real database-generated UUIDv7 for these,
+   correct FK linkage to both a UUIDv7 and a legacy-UUIDv4 parent, and that
+   a raw pre-existing UUIDv4 row remains fully readable/joinable.
+   [CI 30847930947](https://github.com/SRinatR/EraMix/actions/runs/30847930947) —
+   green.
+3. **`8e327a1`** — analytics event `eventId` becomes a real client-generated
+   UUIDv7 (`generateUuidV7()`, replacing `crypto.randomUUID()`); both
+   `validateAnalyticsEvent` (domain) and the zod delivery-boundary schema
+   now require `isValidUuidV7`, rejecting a malformed string and a
+   syntactically-valid-but-wrong-version UUID (UUIDv4), not merely an empty
+   one. Every test fixture using a placeholder `'evt-N'` string was updated
+   to a real UUIDv7 (these would otherwise now fail the tightened
+   validation) and new accept/reject cases were added at both layers.
+   [CI 30848666835](https://github.com/SRinatR/EraMix/actions/runs/30848666835) —
+   green.
+4. **`97daeef`** — `generatePublicId()` produces a 16-character Crockford
+   Base32 id (up from 8); every product created before this change keeps
+   its original 8-character id forever (`isValidPublicId`/
+   `splitCatalogSlug` accept exactly these two lengths, longest-first, in a
+   provably unambiguous order — the `-` separator is never a Crockford-
+   alphabet character). No migration needed (`Product.publicId` was already
+   `VARCHAR(32)`). New `PublicIdConflictError` (409 `PUBLIC_ID_CONFLICT`)
+   lets `PrismaProductRepository.create()` disambiguate a real publicId
+   collision (via the new shared `conflictTargetIncludes` helper) from a
+   sku/translation-locale conflict, which still maps to the pre-existing
+   `SlugConflictError`; `createProduct` retries the entire transaction with
+   a fresh publicId up to 5 times, recording a `product.public_id_collision`
+   audit event before each retry — exhausting every attempt propagates a
+   real 409, never a silent overwrite or a wrong-product resolution. A real-
+   Postgres integration test forces an actual publicId collision (and a
+   sibling sku collision) to prove each maps to the correct distinct error.
+   **[CI 30849314978](https://github.com/SRinatR/EraMix/actions/runs/30849314978)
+   failed** — a genuine, real defect, not a flake: `conflictTargetIncludes`
+   only checked the classic `meta.target` shape, but this project's actual
+   Prisma 7 + `@prisma/adapter-pg` stack nests the underlying Postgres error
+   under `meta.driverAdapterError.cause.constraint.fields`/`.originalMessage`
+   instead, so the real-Postgres integration test's forced publicId
+   collision fell through to `SlugConflictError` instead of the expected
+   `PublicIdConflictError` — caught by the CI job precisely because it runs
+   against real PostgreSQL, exactly the class of defect a fake/mocked
+   Prisma client could not have caught. Diagnosed from the real CI log (not
+   guessed) and fixed in the very next commit, **`5e20cd3`**: `conflictTargetIncludes`
+   now checks both shapes, and a new regression test reproduces the exact
+   `meta` object from the failing run so this defect class cannot recur
+   undetected. **[CI 30849606045](https://github.com/SRinatR/EraMix/actions/runs/30849606045)
+   is green** (all 7 jobs, including the real-Postgres migration-gate job
+   with the fix verified against a live database) — this is the terminal,
+   authoritative result for this slice.
+
+**Verified locally, cumulative** (per-package `format`/`lint`/`typecheck`/
+`test` — the monorepo-wide `-r` batch command intermittently crashed with
+this laptop's already-documented chronic low-disk-space signature during
+this session; running each of the 7 workspace projects' checks individually
+resolved it every time, with identical green results, confirming the
+batched-run failures were a laptop resource artifact, not a code defect):
+**682 unit tests** total across all 7 workspace projects (up from 657
+before this initiative — includes the 2 regression tests added in the
+`5e20cd3` fix commit), `pnpm --filter @eramix/web run build` green.
+
+**Not changed, deliberately** (ADR-0021 decision 3): idempotency keys, trace/
+correlation ids, browser anonymous session ids, fake OIDC authorization
+codes, and test-fixture-only ids all remain random UUIDv4/opaque tokens —
+migrating these to UUIDv7 would leak their approximate creation time for no
+ordering benefit, which the ADR documents as the shared rationale rather
+than repeating it per value.
+
+**Not yet verified beyond CI's ephemeral Postgres service**: a real,
+long-lived production database's write/index-locality behavior under
+sustained UUIDv7 inserts (Pi/VPS/production-monitoring territory, not
+something a fresh CI database per run can demonstrate) — the correctness
+properties (valid UUID, version 7, FK integrity, legacy-row compatibility)
+are fully verified; the operational write-amplification benefit UUIDv7 is
+chosen for is a production-monitoring outcome to observe post-launch, not a
+gate this initiative can pass or fail on its own.
 
 ## Required task format for the CLI agent
 
