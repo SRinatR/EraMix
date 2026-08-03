@@ -4,7 +4,7 @@ import { JsonLd } from '@/components/json-ld';
 import { PaginationControls } from '@/components/pagination-controls';
 import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
-import { parsePaginationParams } from '@/server/pagination';
+import { parsePaginationParams, parseStringParam } from '@/server/pagination';
 import { productAlternates, categoryAlternates } from '@/server/seo';
 import {
   listCatalogCategories,
@@ -43,8 +43,10 @@ async function resolve(locale: LocaleCode, slug: string) {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<PageParams>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
   if (!isSupportedLocale(locale)) {
@@ -54,9 +56,13 @@ export async function generateMetadata({
   if (resolved.resolution.kind !== 'canonical') {
     return {};
   }
-  return resolved.kind === 'product'
-    ? productAlternates(locale, resolved.resolution.product)
-    : categoryAlternates(locale, resolved.resolution.category);
+  if (resolved.kind === 'product') {
+    return productAlternates(locale, resolved.resolution.product);
+  }
+  const resolvedSearchParams = await searchParams;
+  const search = parseStringParam(resolvedSearchParams, 'search');
+  const pagination = parsePaginationParams(resolvedSearchParams);
+  return categoryAlternates(locale, resolved.resolution.category, { search, pagination });
 }
 
 export default async function CatalogEntryPage({

@@ -184,6 +184,98 @@ describe('categoryAlternates', () => {
     const metadata = categoryAlternates('en', makeCategory([en, uzWithoutRoute]));
     expect(metadata.alternates?.languages).not.toHaveProperty('uz');
   });
+
+  it('a non-empty search variant is noindex,follow and stays canonicalized to the unparameterized collection (docs/runbooks/search-visibility.md)', () => {
+    const translation: CategoryTranslation & { routes: readonly CategoryRoute[] } = {
+      id: 'translation-1',
+      categoryId: 'category-1',
+      locale: 'en',
+      name: 'Widgets',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      routes: [makeCategoryRoute()],
+    };
+    const metadata = categoryAlternates('en', makeCategory([translation]), { search: 'blue' });
+
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.alternates?.canonical).toBe('/en/catalog/widgets');
+    expect(metadata.openGraph).toMatchObject({ url: '/en/catalog/widgets' });
+  });
+
+  it('an empty search string is treated as no search (page 1, unaffected)', () => {
+    const translation: CategoryTranslation & { routes: readonly CategoryRoute[] } = {
+      id: 'translation-1',
+      categoryId: 'category-1',
+      locale: 'en',
+      name: 'Widgets',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      routes: [makeCategoryRoute()],
+    };
+    const metadata = categoryAlternates('en', makeCategory([translation]), { search: '' });
+
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.alternates?.canonical).toBe('/en/catalog/widgets');
+  });
+
+  it('a pure cursor-pagination variant (no search) is crawlable and self-canonical, including the cursor, per the runbook — never folded into page 1', () => {
+    const translation: CategoryTranslation & { routes: readonly CategoryRoute[] } = {
+      id: 'translation-1',
+      categoryId: 'category-1',
+      locale: 'en',
+      name: 'Widgets',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      routes: [makeCategoryRoute()],
+    };
+    const metadata = categoryAlternates('en', makeCategory([translation]), {
+      pagination: { cursor: 'opaque-token-2' },
+    });
+
+    expect(metadata.robots).toEqual({ index: true, follow: true });
+    expect(metadata.alternates?.canonical).toBe('/en/catalog/widgets?cursor=opaque-token-2');
+    expect(metadata.openGraph).toMatchObject({ url: '/en/catalog/widgets?cursor=opaque-token-2' });
+  });
+
+  it('search combined with pagination is still noindex,follow and canonicalized to the base collection (search dominates)', () => {
+    const translation: CategoryTranslation & { routes: readonly CategoryRoute[] } = {
+      id: 'translation-1',
+      categoryId: 'category-1',
+      locale: 'en',
+      name: 'Widgets',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      routes: [makeCategoryRoute()],
+    };
+    const metadata = categoryAlternates('en', makeCategory([translation]), {
+      search: 'blue',
+      pagination: { cursor: 'opaque-token-2' },
+    });
+
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+    expect(metadata.alternates?.canonical).toBe('/en/catalog/widgets');
+  });
+
+  it('bare page 1 (no search, no pagination) is unaffected: no robots override, self-canonical without a query string', () => {
+    const translation: CategoryTranslation & { routes: readonly CategoryRoute[] } = {
+      id: 'translation-1',
+      categoryId: 'category-1',
+      locale: 'en',
+      name: 'Widgets',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      routes: [makeCategoryRoute()],
+    };
+    const metadata = categoryAlternates('en', makeCategory([translation]), {});
+
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.alternates?.canonical).toBe('/en/catalog/widgets');
+  });
 });
 
 describe('productAlternates', () => {
