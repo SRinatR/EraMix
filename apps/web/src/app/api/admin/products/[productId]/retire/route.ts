@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { retireProduct } from '@eramix/application';
@@ -11,7 +11,7 @@ const retireSchema = z.object({
   expectedVersion: z.number().int().min(0),
 });
 
-export const PATCH = withApiHandler<{ productId: string }>(
+const patchHandler = withApiHandler<{ productId: string }>(
   'admin.products.retire',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -46,3 +46,9 @@ export const PATCH = withApiHandler<{ productId: string }>(
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+}>({
+  PATCH: patchHandler,
+});

@@ -1,3 +1,4 @@
+import { defineRouteHandlers } from '@/server/handler';
 import { getContainer } from '@/server/container';
 import { NextResponse } from 'next/server';
 
@@ -13,13 +14,19 @@ export const dynamic = 'force-dynamic';
  * placeholder) when INDEXNOW_KEY is unconfigured — fail closed, matching
  * every other secret-gated feature in this codebase.
  */
-export async function GET(): Promise<NextResponse> {
+function getHandler(): Promise<NextResponse> {
   const { env } = getContainer();
   if (env.INDEXNOW_KEY === undefined) {
-    return new NextResponse('Not found', { status: 404 });
+    return Promise.resolve(new NextResponse('Not found', { status: 404 }));
   }
-  return new NextResponse(env.INDEXNOW_KEY, {
-    status: 200,
-    headers: { 'content-type': 'text/plain; charset=utf-8' },
-  });
+  return Promise.resolve(
+    new NextResponse(env.INDEXNOW_KEY, {
+      status: 200,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    }),
+  );
 }
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
+});

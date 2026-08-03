@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { reorderProductAssets } from '@eramix/application';
@@ -11,7 +11,7 @@ const reorderSchema = z.object({
 });
 
 /** Body must list every current asset id for this product, in the new display order (packages/application/src/product-assets.ts validates the set matches exactly). */
-export const PATCH = withApiHandler<{ productId: string }>(
+const patchHandler = withApiHandler<{ productId: string }>(
   'admin.productAssets.reorder',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -45,3 +45,9 @@ export const PATCH = withApiHandler<{ productId: string }>(
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+}>({
+  PATCH: patchHandler,
+});

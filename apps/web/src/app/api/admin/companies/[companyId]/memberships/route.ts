@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission, type MembershipListFilter } from '@eramix/application';
@@ -22,7 +22,7 @@ function parseSort(value: string | null): MembershipSort | undefined {
     : undefined;
 }
 
-export const GET = withApiHandler<{ companyId: string }>(
+const getHandler = withApiHandler<{ companyId: string }>(
   'admin.companies.memberships.list',
   async (request, _traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -45,7 +45,7 @@ export const GET = withApiHandler<{ companyId: string }>(
   },
 );
 
-export const POST = withApiHandler<{ companyId: string }>(
+const postHandler = withApiHandler<{ companyId: string }>(
   'admin.companies.memberships.create',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -85,3 +85,10 @@ export const POST = withApiHandler<{ companyId: string }>(
     return NextResponse.json(membership, { status: 201 });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  companyId: string;
+}>({
+  GET: getHandler,
+  POST: postHandler,
+});

@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import {
@@ -61,7 +61,7 @@ function mergePatch(current: PlatformSettings, patch: PlatformSettingsPatch): Pl
  * GET previews the currently-saved settings; POST previews a hypothetical
  * patch *before* it is ever persisted — neither ever writes.
  */
-export const GET = withApiHandler('admin.settings.preview.current', async (request) => {
+const getHandler = withApiHandler('admin.settings.preview.current', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'settings.manage');
@@ -71,7 +71,7 @@ export const GET = withApiHandler('admin.settings.preview.current', async (reque
   return NextResponse.json(buildPlatformSettingsPreview(settings));
 });
 
-export const POST = withApiHandler('admin.settings.preview.hypothetical', async (request) => {
+const postHandler = withApiHandler('admin.settings.preview.hypothetical', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'settings.manage');
@@ -82,4 +82,9 @@ export const POST = withApiHandler('admin.settings.preview.hypothetical', async 
   const effective = mergePatch(current, patch);
   validateEffectivePlatformSettings(effective);
   return NextResponse.json(buildPlatformSettingsPreview(effective));
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
+  POST: postHandler,
 });

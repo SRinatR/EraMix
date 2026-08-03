@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission, type CompanyListFilter } from '@eramix/application';
@@ -32,7 +32,7 @@ function parseSort(value: string | null): CompanySort | undefined {
     : undefined;
 }
 
-export const GET = withApiHandler('admin.companies.list', async (request) => {
+const getHandler = withApiHandler('admin.companies.list', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'users.manage');
@@ -62,7 +62,7 @@ export const GET = withApiHandler('admin.companies.list', async (request) => {
   });
 });
 
-export const POST = withApiHandler('admin.companies.create', async (request, traceId) => {
+const postHandler = withApiHandler('admin.companies.create', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'users.manage');
@@ -96,4 +96,9 @@ export const POST = withApiHandler('admin.companies.create', async (request, tra
     },
     { status: 201 },
   );
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
+  POST: postHandler,
 });

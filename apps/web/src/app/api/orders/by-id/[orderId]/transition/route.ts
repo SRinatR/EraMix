@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { transitionOrderStatus } from '@eramix/application';
 import { NextResponse } from 'next/server';
@@ -25,7 +25,7 @@ const transitionSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export const POST = withApiHandler<{ orderId: string }>(
+const postHandler = withApiHandler<{ orderId: string }>(
   'orders.transition',
   async (request, traceId, { params }) => {
     const actor = await requireActor(request);
@@ -55,3 +55,7 @@ export const POST = withApiHandler<{ orderId: string }>(
     return NextResponse.json(orderToDto(order));
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ orderId: string }>({
+  POST: postHandler,
+});

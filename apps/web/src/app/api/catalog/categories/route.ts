@@ -1,11 +1,11 @@
 import { getContainer } from '@/server/container';
 import { categoryToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { listCatalogCategories } from '@eramix/application';
 import { ValidationFailedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler('catalog.categories.list', async (request) => {
+const getHandler = withApiHandler('catalog.categories.list', async (request) => {
   const url = new URL(request.url);
   const locale = url.searchParams.get('locale');
   if (!locale || !isSupportedLocale(locale)) {
@@ -25,4 +25,8 @@ export const GET = withApiHandler('catalog.categories.list', async (request) => 
     .filter((item): item is NonNullable<typeof item> => item !== undefined);
 
   return NextResponse.json({ items });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

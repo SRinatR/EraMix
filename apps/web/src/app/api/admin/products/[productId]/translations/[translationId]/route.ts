@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { updateProductTranslation } from '@eramix/application';
@@ -30,7 +30,7 @@ const updateTranslationSchema = z.object({
  * price were write-once at create/addTranslation time. Never accepts `slug`
  * (that stays a separate command, matching the category/content siblings).
  */
-export const PATCH = withApiHandler<{ productId: string; translationId: string }>(
+const patchHandler = withApiHandler<{ productId: string; translationId: string }>(
   'admin.products.updateTranslation',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -68,3 +68,10 @@ export const PATCH = withApiHandler<{ productId: string; translationId: string }
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+  translationId: string;
+}>({
+  PATCH: patchHandler,
+});

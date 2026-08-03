@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { createCategory } from '@eramix/application';
@@ -27,7 +27,7 @@ const createCategorySchema = z.object({
  * slug. catalog.write is enforced inside createCategory (application layer),
  * not duplicated here — same convention as the status-transition routes.
  */
-export const POST = withApiHandler('admin.categories.create', async (request, traceId) => {
+const postHandler = withApiHandler('admin.categories.create', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const body = createCategorySchema.parse(await request.json());
@@ -48,4 +48,8 @@ export const POST = withApiHandler('admin.categories.create', async (request, tr
     { id: created.id, status: created.status, version: created.version },
     { status: 201 },
   );
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  POST: postHandler,
 });

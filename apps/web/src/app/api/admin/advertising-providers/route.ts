@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { listAdvertisingProviderConfigs } from '@eramix/application';
@@ -25,7 +25,7 @@ function toResponseBody(config: AdvertisingProviderConfig) {
   };
 }
 
-export const GET = withApiHandler('admin.advertisingProviders.list', async (request) => {
+const getHandler = withApiHandler('admin.advertisingProviders.list', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const container = getContainer();
@@ -35,4 +35,8 @@ export const GET = withApiHandler('admin.advertisingProviders.list', async (requ
     actor.platformRole,
   );
   return NextResponse.json({ data: configs.map(toResponseBody) });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

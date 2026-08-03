@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission, uploadProductAsset } from '@eramix/application';
@@ -49,7 +49,7 @@ function serializeAsset(asset: {
 }
 
 /** Admin listing — every status, ordered by sortOrder (mirrors the other admin catalog listAll()-style endpoints). */
-export const GET = withApiHandler<{ productId: string }>(
+const getHandler = withApiHandler<{ productId: string }>(
   'admin.productAssets.list',
   async (request, _traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -68,7 +68,7 @@ export const GET = withApiHandler<{ productId: string }>(
  * file (required), displayName/locale/altText/caption (optional editorial
  * metadata) — never a client-supplied assetType or storage path (CLAUDE.md).
  */
-export const POST = withApiHandler<{ productId: string }>(
+const postHandler = withApiHandler<{ productId: string }>(
   'admin.productAssets.upload',
   async (request, traceId, { params }) => {
     enforceRateLimit('upload', request);
@@ -119,3 +119,10 @@ export const POST = withApiHandler<{ productId: string }>(
     return NextResponse.json(serializeAsset(created), { status: 201 });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+}>({
+  GET: getHandler,
+  POST: postHandler,
+});

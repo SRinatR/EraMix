@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { getOfferEligibility } from '@eramix/application';
@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
  * operational view — read-only, always includes MERCHANT_CENTER_DISABLED
  * while PlatformSettings.merchantCenterEnabled stays hard-false (ADR-0019).
  */
-export const GET = withApiHandler<{ offerId: string }>(
+const getHandler = withApiHandler<{ offerId: string }>(
   'admin.offers.eligibility',
   async (request, _traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -35,3 +35,7 @@ export const GET = withApiHandler<{ offerId: string }>(
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ offerId: string }>({
+  GET: getHandler,
+});

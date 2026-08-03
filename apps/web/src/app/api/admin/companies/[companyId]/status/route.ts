@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { requirePermission } from '@eramix/application';
@@ -11,7 +11,7 @@ const updateStatusSchema = z.object({
   expectedVersion: z.number().int().min(0),
 });
 
-export const PATCH = withApiHandler<{ companyId: string }>(
+const patchHandler = withApiHandler<{ companyId: string }>(
   'admin.companies.updateStatus',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -46,3 +46,9 @@ export const PATCH = withApiHandler<{ companyId: string }>(
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  companyId: string;
+}>({
+  PATCH: patchHandler,
+});

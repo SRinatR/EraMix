@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { updateCategoryTranslation } from '@eramix/application';
@@ -20,7 +20,7 @@ const updateTranslationSchema = z.object({
  * changeCategorySlug's explicit command, matching the
  * `translations/{translationId}/slug` sibling route).
  */
-export const PATCH = withApiHandler<{ categoryId: string; translationId: string }>(
+const patchHandler = withApiHandler<{ categoryId: string; translationId: string }>(
   'admin.categories.updateTranslation',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -56,3 +56,10 @@ export const PATCH = withApiHandler<{ categoryId: string; translationId: string 
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  categoryId: string;
+  translationId: string;
+}>({
+  PATCH: patchHandler,
+});

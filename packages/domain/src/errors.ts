@@ -13,7 +13,8 @@ export type DomainErrorCode =
   | 'COMPANY_REQUIRED'
   | 'RATE_LIMITED'
   | 'PAYLOAD_TOO_LARGE'
-  | 'UNSUPPORTED_MEDIA_TYPE';
+  | 'UNSUPPORTED_MEDIA_TYPE'
+  | 'DEPENDENCY_UNAVAILABLE';
 
 export abstract class DomainError extends Error {
   abstract readonly code: DomainErrorCode;
@@ -108,4 +109,9 @@ export class SlugConflictError extends DomainError {
 //internal invariant violation (DB-007/DB-008), never a user input error.
 export class CanonicalRouteMissingError extends DomainError {
   readonly code = 'CANONICAL_ROUTE_MISSING' as const;
+}
+
+/** Thrown when a required infrastructure dependency (e.g. PostgreSQL) is unreachable — docs/runbooks/http-error-contract.md, 503. Never a fabricated Retry-After: the outage duration is not known for an ad-hoc unreachable condition. */
+export class DependencyUnavailableError extends DomainError {
+  readonly code = 'DEPENDENCY_UNAVAILABLE' as const;
 }

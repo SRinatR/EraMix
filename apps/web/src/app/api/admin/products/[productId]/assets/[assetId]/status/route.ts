@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { transitionProductAssetStatus } from '@eramix/application';
@@ -12,7 +12,7 @@ const transitionSchema = z.object({
 });
 
 /** Publishing an IMAGE with no altText is rejected by transitionProductAssetStatus (accessibility gate). */
-export const PATCH = withApiHandler<{ productId: string; assetId: string }>(
+const patchHandler = withApiHandler<{ productId: string; assetId: string }>(
   'admin.productAssets.transitionStatus',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -41,3 +41,10 @@ export const PATCH = withApiHandler<{ productId: string; assetId: string }>(
     return NextResponse.json({ id: updated.id, status: updated.status, version: updated.version });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+  assetId: string;
+}>({
+  PATCH: patchHandler,
+});

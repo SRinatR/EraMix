@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { removeOrderLine } from '@eramix/application';
 import { NextResponse } from 'next/server';
@@ -16,7 +16,7 @@ const removeLineSchema = z.object({
  * (packages/application/src/order-lifecycle.ts) existed since Phase 5 but
  * had no route handler until now.
  */
-export const DELETE = withApiHandler<{ orderId: string; lineId: string }>(
+const deleteHandler = withApiHandler<{ orderId: string; lineId: string }>(
   'orders.lines.remove',
   async (request, traceId, { params }) => {
     const actor = await requireActor(request);
@@ -42,3 +42,10 @@ export const DELETE = withApiHandler<{ orderId: string; lineId: string }>(
     return NextResponse.json(orderToDto(order));
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  orderId: string;
+  lineId: string;
+}>({
+  DELETE: deleteHandler,
+});

@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { rollbackPlatformSettings } from '@eramix/application';
@@ -10,7 +10,7 @@ const rollbackSchema = z.object({
   expectedVersion: z.number().int().min(0),
 });
 
-export const POST = withApiHandler<{ historyEntryId: string }>(
+const postHandler = withApiHandler<{ historyEntryId: string }>(
   'admin.settings.history.rollback',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -39,3 +39,9 @@ export const POST = withApiHandler<{ historyEntryId: string }>(
     return NextResponse.json({ canonicalHost: updated.canonicalHost, version: updated.version });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  historyEntryId: string;
+}>({
+  POST: postHandler,
+});

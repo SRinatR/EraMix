@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { hasPermission, requirePermission, type AuditEventListFilter } from '@eramix/application';
@@ -24,7 +24,7 @@ function parseSort(value: string | null): AuditSort | undefined {
  * place, per CLAUDE.md's observability policy), so both scopes see the
  * same rows for now.
  */
-export const GET = withApiHandler('admin.audit.search', async (request) => {
+const getHandler = withApiHandler('admin.audit.search', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   if (!hasPermission(actor.platformRole, 'audit.read.full')) {
@@ -72,4 +72,8 @@ export const GET = withApiHandler('admin.audit.search', async (request) => {
     })),
     page,
   });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

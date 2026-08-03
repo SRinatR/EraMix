@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { removeProductAsset, updateProductAssetMetadata } from '@eramix/application';
@@ -15,7 +15,7 @@ const updateMetadataSchema = z.object({
   locale: z.enum(SUPPORTED_LOCALES).nullable().optional(),
 });
 
-export const PATCH = withApiHandler<{ productId: string; assetId: string }>(
+const patchHandler = withApiHandler<{ productId: string; assetId: string }>(
   'admin.productAssets.updateMetadata',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -59,7 +59,7 @@ export const PATCH = withApiHandler<{ productId: string; assetId: string }>(
 const removeSchema = z.object({ confirm: z.literal(true) });
 
 /** Irreversible — the client must send {"confirm": true} (packages/application/src/product-assets.ts's own anti-footgun gate). */
-export const DELETE = withApiHandler<{ productId: string; assetId: string }>(
+const deleteHandler = withApiHandler<{ productId: string; assetId: string }>(
   'admin.productAssets.remove',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -88,3 +88,11 @@ export const DELETE = withApiHandler<{ productId: string; assetId: string }>(
     return new NextResponse(null, { status: 204 });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+  assetId: string;
+}>({
+  PATCH: patchHandler,
+  DELETE: deleteHandler,
+});

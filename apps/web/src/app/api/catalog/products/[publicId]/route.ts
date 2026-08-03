@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { productToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import {
   ResourceNotFoundError,
   ValidationFailedError,
@@ -9,7 +9,7 @@ import {
 } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler<{ publicId: string }>(
+const getHandler = withApiHandler<{ publicId: string }>(
   'catalog.products.get',
   async (request, _traceId, { params }) => {
     const { publicId } = await params;
@@ -37,5 +37,11 @@ export const GET = withApiHandler<{ publicId: string }>(
       );
     }
     return NextResponse.json(dto);
+  },
+);
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ publicId: string }>(
+  {
+    GET: getHandler,
   },
 );

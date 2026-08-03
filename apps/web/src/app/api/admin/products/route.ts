@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { createProduct } from '@eramix/application';
@@ -34,7 +34,7 @@ const createProductSchema = z.object({
  * publicId (CLAUDE.md — never an internal UUID as a public URL) and its
  * first translation(s). catalog.write is enforced inside createProduct.
  */
-export const POST = withApiHandler('admin.products.create', async (request, traceId) => {
+const postHandler = withApiHandler('admin.products.create', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const body = createProductSchema.parse(await request.json());
@@ -61,4 +61,8 @@ export const POST = withApiHandler('admin.products.create', async (request, trac
     },
     { status: 201 },
   );
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  POST: postHandler,
 });

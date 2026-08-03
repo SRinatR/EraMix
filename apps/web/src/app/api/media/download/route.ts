@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { AccessDeniedError, ValidationFailedError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
@@ -20,7 +20,7 @@ function sanitizeContentDispositionFilename(rawFilename: string): string {
   return rawFilename.replaceAll(/["\\\x00-\x1F\x7F]/g, '');
 }
 
-export const GET = withApiHandler('media.download', async (request) => {
+const getHandler = withApiHandler('media.download', async (request) => {
   const url = new URL(request.url);
   const key = url.searchParams.get('key');
   const expiresParam = url.searchParams.get('expires');
@@ -45,4 +45,8 @@ export const GET = withApiHandler('media.download', async (request) => {
   return new NextResponse(new Uint8Array(buffer), {
     headers: { 'content-disposition': `attachment; filename="${safeFilename}"` },
   });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

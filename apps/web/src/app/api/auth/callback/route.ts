@@ -1,12 +1,12 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { isSecureRequest } from '@/server/request-protocol';
 import { PENDING_AUTH_COOKIE_NAME, SESSION_COOKIE_NAME } from '@/server/session';
 import { AuthCallbackFailedError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler('auth.callback', async (request) => {
+const getHandler = withApiHandler('auth.callback', async (request) => {
   enforceRateLimit('auth', request);
 
   const container = getContainer();
@@ -76,4 +76,8 @@ export const GET = withApiHandler('auth.callback', async (request) => {
   });
   response.cookies.delete(PENDING_AUTH_COOKIE_NAME);
   return response;
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

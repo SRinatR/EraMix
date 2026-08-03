@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { submitOrder } from '@eramix/application';
@@ -12,7 +12,7 @@ const submitOrderSchema = z.object({
   expectedVersion: z.number().int().min(0),
 });
 
-export const POST = withApiHandler<{ orderId: string }>(
+const postHandler = withApiHandler<{ orderId: string }>(
   'orders.submit',
   async (request, traceId, { params }) => {
     enforceRateLimit('orderSubmit', request);
@@ -50,3 +50,7 @@ export const POST = withApiHandler<{ orderId: string }>(
     return NextResponse.json(orderToDto(order));
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ orderId: string }>({
+  POST: postHandler,
+});

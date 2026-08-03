@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { setProductDirectSaleEnabled } from '@eramix/application';
@@ -17,7 +17,7 @@ const directSaleSchema = z.object({
  * product's offers can ever publish. Flipping this alone never syndicates
  * anything — PlatformSettings.merchantCenterEnabled is still hard-false.
  */
-export const PATCH = withApiHandler<{ productId: string }>(
+const patchHandler = withApiHandler<{ productId: string }>(
   'admin.products.setDirectSaleEnabled',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -51,3 +51,9 @@ export const PATCH = withApiHandler<{ productId: string }>(
     });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  productId: string;
+}>({
+  PATCH: patchHandler,
+});

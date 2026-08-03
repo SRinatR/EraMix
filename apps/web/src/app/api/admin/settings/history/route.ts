@@ -1,11 +1,11 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { listPlatformSettingsHistory, requirePermission } from '@eramix/application';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler('admin.settings.history.list', async (request) => {
+const getHandler = withApiHandler('admin.settings.history.list', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'settings.manage');
@@ -33,4 +33,8 @@ export const GET = withApiHandler('admin.settings.history.list', async (request)
     })),
     page,
   });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

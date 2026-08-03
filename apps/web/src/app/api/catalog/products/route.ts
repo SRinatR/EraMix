@@ -1,12 +1,12 @@
 import { getContainer } from '@/server/container';
 import { productToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { listCatalogProducts } from '@eramix/application';
 import { ValidationFailedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler('catalog.products.search', async (request) => {
+const getHandler = withApiHandler('catalog.products.search', async (request) => {
   enforceRateLimit('search', request);
 
   const url = new URL(request.url);
@@ -37,4 +37,8 @@ export const GET = withApiHandler('catalog.products.search', async (request) => 
     .filter((item): item is NonNullable<typeof item> => item !== undefined);
 
   return NextResponse.json({ data, page: result.page });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

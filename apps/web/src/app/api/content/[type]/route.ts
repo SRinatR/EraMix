@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { contentToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { listContentByType } from '@eramix/application';
 import { ValidationFailedError, isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { NextResponse } from 'next/server';
@@ -11,7 +11,7 @@ const TYPE_BY_SEGMENT = {
   faq: 'FAQ_ITEM',
 } as const;
 
-export const GET = withApiHandler<{ type: string }>(
+const getHandler = withApiHandler<{ type: string }>(
   'content.list',
   async (request, _traceId, { params }) => {
     const { type } = await params;
@@ -44,3 +44,7 @@ export const GET = withApiHandler<{ type: string }>(
     return NextResponse.json({ items });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ type: string }>({
+  GET: getHandler,
+});

@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { orderToDto } from '@/server/dto';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { createDraftOrder, listOrdersForActor, type OrderListFilter } from '@eramix/application';
 import { NextResponse } from 'next/server';
@@ -62,7 +62,7 @@ function parseOrderListQuery(url: URL): {
   };
 }
 
-export const GET = withApiHandler('orders.list', async (request) => {
+const getHandler = withApiHandler('orders.list', async (request) => {
   const actor = await requireActor(request);
   const container = getContainer();
   const url = new URL(request.url);
@@ -78,7 +78,7 @@ export const GET = withApiHandler('orders.list', async (request) => {
   return NextResponse.json({ data: data.map(orderToDto), page });
 });
 
-export const POST = withApiHandler('orders.create', async (request, traceId) => {
+const postHandler = withApiHandler('orders.create', async (request, traceId) => {
   const actor = await requireActor(request);
   const body = createOrderSchema.parse(await request.json());
   const container = getContainer();
@@ -109,4 +109,9 @@ export const POST = withApiHandler('orders.create', async (request, traceId) => 
   );
 
   return NextResponse.json(orderToDto(order), { status: 201 });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
+  POST: postHandler,
 });

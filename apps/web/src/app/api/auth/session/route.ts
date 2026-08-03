@@ -1,10 +1,10 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { AuthRequiredError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
-export const GET = withApiHandler('auth.session', async (request) => {
+const getHandler = withApiHandler('auth.session', async (request) => {
   const actor = await requireActor(request);
   const container = getContainer();
   const user = await container.users.findById(actor.userId);
@@ -18,4 +18,8 @@ export const GET = withApiHandler('auth.session', async (request) => {
     platformRole: user.platformRole,
     companyIds: actor.companyIds,
   });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

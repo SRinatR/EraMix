@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { getActor } from '@/server/session';
 import { hasPermission } from '@eramix/application';
@@ -23,7 +23,7 @@ function extensionFor(contentType: string): string {
  * (see apps/web/src/app/api/media/download/route.ts's downloadFilename
  * handling).
  */
-export const GET = withApiHandler<{ publicId: string; assetId: string }>(
+const getHandler = withApiHandler<{ publicId: string; assetId: string }>(
   'catalog.products.assets.download',
   async (request, _traceId, { params }) => {
     enforceRateLimit('search', request);
@@ -67,3 +67,10 @@ export const GET = withApiHandler<{ publicId: string; assetId: string }>(
     return NextResponse.redirect(signedUrl);
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  publicId: string;
+  assetId: string;
+}>({
+  GET: getHandler,
+});

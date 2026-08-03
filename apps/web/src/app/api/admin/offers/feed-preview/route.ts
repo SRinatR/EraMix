@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { buildMerchantFeedPreview, formatMerchantFeedTsv } from '@eramix/application';
@@ -14,7 +14,7 @@ import { NextResponse } from 'next/server';
  * database, which is the honest "last generation result" for an
  * on-demand-only, no-scheduled-job dormant feature.
  */
-export const GET = withApiHandler('admin.offers.feedPreview', async (request) => {
+const getHandler = withApiHandler('admin.offers.feedPreview', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const container = getContainer();
@@ -35,4 +35,8 @@ export const GET = withApiHandler('admin.offers.feedPreview', async (request) =>
     diagnostics: preview.diagnostics,
     tsvPreview: formatMerchantFeedTsv(preview.items),
   });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
 });

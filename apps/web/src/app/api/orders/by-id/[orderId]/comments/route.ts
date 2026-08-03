@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { requireActor } from '@/server/session';
 import { addOrderComment, listOrderCommentsForActor } from '@eramix/application';
 import { NextResponse } from 'next/server';
@@ -10,7 +10,7 @@ const addCommentSchema = z.object({
   visibility: z.enum(['PUBLIC', 'INTERNAL']),
 });
 
-export const GET = withApiHandler<{ orderId: string }>(
+const getHandler = withApiHandler<{ orderId: string }>(
   'orders.comments.list',
   async (request, _traceId, { params }) => {
     const actor = await requireActor(request);
@@ -26,7 +26,7 @@ export const GET = withApiHandler<{ orderId: string }>(
   },
 );
 
-export const POST = withApiHandler<{ orderId: string }>(
+const postHandler = withApiHandler<{ orderId: string }>(
   'orders.comments.add',
   async (request, traceId, { params }) => {
     const actor = await requireActor(request);
@@ -55,3 +55,8 @@ export const POST = withApiHandler<{ orderId: string }>(
     return NextResponse.json(comment, { status: 201 });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{ orderId: string }>({
+  GET: getHandler,
+  POST: postHandler,
+});

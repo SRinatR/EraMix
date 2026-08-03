@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { createContent } from '@eramix/application';
@@ -37,7 +37,7 @@ const createContentSchema = z.object({
  * canonical route in the matching namespace; FAQ_ITEM has none (TZ Appendix
  * F.3). content.write is enforced inside createContent.
  */
-export const POST = withApiHandler('admin.content.create', async (request, traceId) => {
+const postHandler = withApiHandler('admin.content.create', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   const body = createContentSchema.parse(await request.json());
@@ -58,4 +58,8 @@ export const POST = withApiHandler('admin.content.create', async (request, trace
     { id: created.id, type: created.type, status: created.status, version: created.version },
     { status: 201 },
   );
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  POST: postHandler,
 });

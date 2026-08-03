@@ -1,6 +1,6 @@
 import { getContainer } from '@/server/container';
 import { analyticsEventsRequestSchema } from '@/server/analytics-event-schema';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { recordAnalyticsEvents } from '@eramix/application';
 import { NextResponse } from 'next/server';
@@ -15,7 +15,7 @@ import { NextResponse } from 'next/server';
  * endpoint (CLAUDE.md: "Apply rate limits to... search" — the same
  * "public, abuse-prone surface" reasoning applies here).
  */
-export const POST = withApiHandler('analytics.events.record', async (request) => {
+const postHandler = withApiHandler('analytics.events.record', async (request) => {
   enforceRateLimit('analytics', request);
   const body = analyticsEventsRequestSchema.parse(await request.json());
   const container = getContainer();
@@ -26,4 +26,8 @@ export const POST = withApiHandler('analytics.events.record', async (request) =>
   );
 
   return new NextResponse(null, { status: 202 });
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  POST: postHandler,
 });

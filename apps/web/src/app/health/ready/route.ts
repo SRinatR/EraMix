@@ -1,4 +1,6 @@
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { getContainer } from '@/server/container';
+import { DependencyUnavailableError } from '@eramix/domain';
 import { NextResponse } from 'next/server';
 
 const DB_CHECK_TIMEOUT_MS = 2000;
@@ -18,19 +20,22 @@ async function isDatabaseReachable(): Promise<boolean> {
   }
 }
 
-/** Readiness fails (503) when the required PostgreSQL dependency is unreachable — never reports ready without checking it. */
-export async function GET(): Promise<NextResponse> {
+/**
+ * Readiness fails (503) when the required PostgreSQL dependency is
+ * unreachable — never reports ready without checking it. Throws through the
+ * shared `withApiHandler`/`problemResponse` pipeline (docs/runbooks/
+ * http-error-contract.md: "a route handler must never construct its own
+ * status/body for a caught error") instead of hand-building a response, so
+ * this route gets the same English-only Problem Details shape, trace-id
+ * correlation, and structured logging as every other route.
+ */
+const readyHandler = withApiHandler('health.ready', async () => {
   if (!(await isDatabaseReachable())) {
-    return NextResponse.json(
-      {
-        type: 'https://eramix.dev/problems/dependency-unavailable',
-        title: 'Критическая зависимость временно недоступна',
-        status: 503,
-        code: 'DEPENDENCY_UNAVAILABLE',
-        detail: 'PostgreSQL is unreachable.',
-      },
-      { status: 503, headers: { 'content-type': 'application/problem+json' } },
-    );
+    throw new DependencyUnavailableError('PostgreSQL is unreachable.');
   }
   return NextResponse.json({ status: 'ok' });
-}
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: readyHandler,
+});

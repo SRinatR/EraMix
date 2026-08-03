@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import {
@@ -85,7 +85,7 @@ function toResponseBody(settings: PlatformSettings) {
   };
 }
 
-export const GET = withApiHandler('admin.settings.get', async (request) => {
+const getHandler = withApiHandler('admin.settings.get', async (request) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   requirePermission(actor.platformRole, 'settings.manage');
@@ -95,7 +95,7 @@ export const GET = withApiHandler('admin.settings.get', async (request) => {
   return NextResponse.json(toResponseBody(settings));
 });
 
-export const PATCH = withApiHandler('admin.settings.update', async (request, traceId) => {
+const patchHandler = withApiHandler('admin.settings.update', async (request, traceId) => {
   enforceRateLimit('admin', request);
   const actor = await requireActor(request);
   // updatePlatformSettings enforces settings.manage internally — no
@@ -125,4 +125,9 @@ export const PATCH = withApiHandler('admin.settings.update', async (request, tra
   );
 
   return NextResponse.json(toResponseBody(updated));
+});
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers({
+  GET: getHandler,
+  PATCH: patchHandler,
 });

@@ -1,5 +1,5 @@
 import { getContainer } from '@/server/container';
-import { withApiHandler } from '@/server/handler';
+import { defineRouteHandlers, withApiHandler } from '@/server/handler';
 import { enforceRateLimit } from '@/server/rate-limit';
 import { requireActor } from '@/server/session';
 import { changeContentSlug } from '@eramix/application';
@@ -15,7 +15,7 @@ const changeSlugSchema = z.object({
 });
 
 /** Phase 6's named "explicit slug operation" — see the category route's sibling for full rationale. */
-export const PATCH = withApiHandler<{ contentId: string; translationId: string }>(
+const patchHandler = withApiHandler<{ contentId: string; translationId: string }>(
   'admin.content.changeSlug',
   async (request, traceId, { params }) => {
     enforceRateLimit('admin', request);
@@ -47,3 +47,10 @@ export const PATCH = withApiHandler<{ contentId: string; translationId: string }
     return NextResponse.json({ slug: route.slug, isCanonical: route.isCanonical });
   },
 );
+
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = defineRouteHandlers<{
+  contentId: string;
+  translationId: string;
+}>({
+  PATCH: patchHandler,
+});

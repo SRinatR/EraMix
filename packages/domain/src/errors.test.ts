@@ -6,6 +6,7 @@ import {
   CanonicalRouteMissingError,
   CompanyRequiredError,
   ConcurrencyConflictError,
+  DependencyUnavailableError,
   IdempotencyConflictError,
   OrderStateConflictError,
   PayloadTooLargeError,
@@ -27,6 +28,7 @@ describe('typed domain errors', () => {
     [CompanyRequiredError, 'COMPANY_REQUIRED'],
     [PayloadTooLargeError, 'PAYLOAD_TOO_LARGE'],
     [UnsupportedMediaTypeError, 'UNSUPPORTED_MEDIA_TYPE'],
+    [DependencyUnavailableError, 'DEPENDENCY_UNAVAILABLE'],
   ] as const)('%s carries code %s and is an Error/DomainError instance', (ErrorClass, code) => {
     const error = new ErrorClass('boom', { entityId: 'abc' });
     expect(error).toBeInstanceOf(Error);
