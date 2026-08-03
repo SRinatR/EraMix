@@ -3283,6 +3283,70 @@ real integration authorization exists yet for any of the six providers.
   configuration rows, the same call the earlier slice recorded and this
   review did not reopen.
 
+### Phase D slice 7: governed cross-platform metric comparison layer (new build)
+
+CLAUDE.md item 7: "Build a governed comparison layer for Rust analytics,
+GA4, Yandex Metrica, advertising platforms, Search Console and Yandex
+Webmaster. It defines metric meaning, attribution window, timezone,
+currency, consent/sampling coverage, freshness and reconciliation rules...
+never silently merge incompatible counts into one 'truth' number." A new
+build — no prior slice touched this. There is no live cross-source data
+ingestion in this codebase yet (no GA4 Reporting API, Search Console API,
+Yandex Webmaster API, Rust analytics, or ad-platform reporting credential
+exists or is invented here), so this slice is the governance contract a
+future integration calls through, verified with fixture-driven tests only —
+never a dashboard displaying fabricated live numbers.
+
+- **Domain** (`packages/domain/src/metric-comparison.ts`, 11 unit tests):
+  `METRIC_DICTIONARY_VERSION`, a closed `METRIC_SOURCES` allowlist (Rust
+  analytics/GA4/Yandex Metrica/Google Search Console/Yandex Webmaster/all 6
+  advertising providers) and closed `METRIC_IDS` allowlist (sessions,
+  page_views, conversions, clicks, impressions, cost, search_queries) — both
+  exported as runtime arrays, the single source of truth the delivery
+  layer's zod schemas validate against, never a duplicated literal list.
+  `METRIC_DICTIONARY` defines, per metric: meaning, unit, applicable
+  sources, attribution window, timezone, currency, required consent
+  category, sampling note, freshness SLA, and a reconciliation note
+  explaining why sources are expected to diverge. `compareSourceMeasurements`
+  is pure and structurally incapable of merging: its result type has no
+  field anywhere that could hold a single blended "truth" value — every
+  source's own value is preserved in `entries`, and a measurement is only
+  ever diffed against another in `discrepancies` once both are marked
+  `comparable: true` (same applicable-source allowlist, same reporting
+  period, same attribution window/currency where the metric defines them).
+  A mismatch on any of those is reported as a visible `incomparableReason`,
+  never silently dropped, averaged, or currency-converted.
+- **Application** (`packages/application/src/metric-comparison.ts`, 5 unit
+  tests): `getMetricDictionary`/`compareMetricSources` (`settings.manage` —
+  ADMIN only) are thin, stateless RBAC wrappers around the pure domain
+  functions — no persistence, no provider call.
+- **Delivery**: `GET /api/admin/metrics/dictionary` (the governance
+  definitions) and `POST /api/admin/metrics/compare` (a caller supplies
+  source-native measurements it already holds; this route never fetches or
+  invents data itself) — zod-validated against the same `METRIC_SOURCES`/
+  `METRIC_IDS` allowlists, rate-limited, CSRF-checked. New `/admin/metrics`
+  page (linked from the admin nav as "Metric dictionary") renders the
+  dictionary definitions only — deliberately no numbers, since there is no
+  real data behind them yet. New `Metrics` OpenAPI tag; `MetricSource`/
+  `MetricId`/`MetricDefinition`/`SourceMeasurement`/
+  `CompareMetricSourcesRequest`/`MetricComparisonEntry`/`MetricDiscrepancy`/
+  `MetricComparisonResult` schemas; `redocly lint` passes.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects. Per-package
+  `pnpm vitest run --no-file-parallelism` (the disk/memory-exhaustion
+  workaround from prior slices) — domain 199 (+11), application 251 (+5),
+  infrastructure 46, worker 22, web 127 (+6), contracts 5 — **650 unit
+  tests total**, up from 628. `pnpm --filter @eramix/web run build`
+  succeeded locally, and all three new routes
+  (`/[locale]/admin/metrics`, `/api/admin/metrics/dictionary`,
+  `/api/admin/metrics/compare`) are present in the route output.
+- **Deliberately not built**: any real GA4 Reporting/Search Console/Yandex
+  Webmaster/Rust-analytics/ad-platform reporting integration, any
+  persistence of submitted measurements, and any dashboard rendering a
+  number claiming to be real traffic/spend/conversion data — all three
+  require an external credential or integration authorization this session
+  does not have and must not invent.
+
 ## Required task format for the CLI agent
 
 For every task, report:

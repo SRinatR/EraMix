@@ -69,6 +69,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <Link href="/admin/indexnow">IndexNow diagnostics</Link>
           </li>
           <li>
+            <Link href="/admin/metrics">Metric dictionary</Link>
+          </li>
+          <li>
             <Link href="/admin/offers">Offers</Link>
           </li>
         </ul>

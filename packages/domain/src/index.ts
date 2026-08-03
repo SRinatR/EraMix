@@ -56,6 +56,23 @@ export type { OfferValidationContext, OfferIneligibilityReason } from './offer.j
 export { validateAnalyticsEvent, ANALYTICS_SCHEMA_VERSION } from './analytics.js';
 export { CONSENT_POLICY_VERSION, isConsentCurrent } from './consent.js';
 export type { ConsentChoice, StoredConsent } from './consent.js';
+export {
+  METRIC_DICTIONARY,
+  METRIC_DICTIONARY_VERSION,
+  METRIC_IDS,
+  METRIC_SOURCES,
+  compareSourceMeasurements,
+  getMetricDefinition,
+} from './metric-comparison.js';
+export type {
+  MetricComparisonEntry,
+  MetricComparisonResult,
+  MetricDefinition,
+  MetricDiscrepancy,
+  MetricId,
+  MetricSource,
+  SourceMeasurement,
+} from './metric-comparison.js';
 export type {
   AnalyticsEvent,
   AnalyticsEventName,

@@ -91,6 +91,16 @@ tags:
       never a database column or API response field; the verification-key
       file endpoint serves it as plain text specifically because IndexNow's
       own protocol requires that, not as an admin-facing surface.
+  - name: Metrics
+    description: >-
+      The governed cross-platform metric comparison layer (CLAUDE.md:
+      "never silently merge incompatible counts into one 'truth' number").
+      A versioned metric dictionary (meaning/unit/applicable sources/
+      attribution window/timezone/currency/consent/sampling/freshness/
+      reconciliation rule) plus a stateless normalization endpoint a caller
+      supplies its own already-collected source-native measurements to —
+      there is no live GA4 Reporting/Search Console/Yandex Webmaster/Rust-
+      analytics/ad-platform reporting integration behind this yet.
 security:
   - sessionCookie: []
 paths:
@@ -2814,6 +2824,71 @@ paths:
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
 
+  /api/admin/metrics/dictionary:
+    get:
+      operationId: getMetricDictionary
+      summary: >-
+        The versioned cross-platform metric dictionary (settings.manage —
+        ADMIN only): meaning/unit/applicable sources/attribution window/
+        timezone/currency/consent category/sampling coverage/freshness SLA/
+        reconciliation rule for every metric the comparison layer knows
+        about. Governance metadata only — no traffic/spend/conversion
+        number is ever returned by this endpoint.
+      tags: [Metrics]
+      responses:
+        '200':
+          description: The full metric dictionary.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MetricDefinition'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+  /api/admin/metrics/compare:
+    post:
+      operationId: compareMetricSources
+      summary: >-
+        Normalizes source-native measurements the caller already holds for
+        governed side-by-side comparison (settings.manage — ADMIN only).
+        Stateless — no measurement is persisted and no provider is called.
+        A measurement whose source is not on the metric's applicable-source
+        allowlist, or whose reporting period/attribution window/currency
+        does not match the others, is marked `comparable: false` with a
+        reason rather than silently merged or converted; discrepancies are
+        only ever computed between pairs both marked comparable. There is
+        structurally no field on the response capable of holding a single
+        blended "truth" value across sources.
+      tags: [Metrics]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareMetricSourcesRequest'
+      responses:
+        '200':
+          description: The normalized, source-native comparison.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricComparisonResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '400':
+          $ref: '#/components/responses/MalformedRequest'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -3922,6 +3997,123 @@ components:
         credentialConfigured:
           type: boolean
           description: Whether a credentialSecretRef is set — never the reference value itself.
+    MetricSource:
+      type: string
+      description: The comparison layer's closed source allowlist — never an open string.
+      enum:
+        - rust_analytics
+        - ga4
+        - yandex_metrica
+        - google_search_console
+        - yandex_webmaster
+        - google_ads
+        - yandex_direct
+        - microsoft_ads
+        - meta
+        - linkedin
+        - tiktok
+    MetricId:
+      type: string
+      description: The comparison layer's closed metric-id allowlist — never an open string.
+      enum: [sessions, page_views, conversions, clicks, impressions, search_queries, cost]
+    MetricDefinition:
+      type: object
+      required:
+        - metricId
+        - displayName
+        - meaning
+        - unit
+        - applicableSources
+        - timezone
+        - samplingNote
+        - freshnessSlaHours
+        - reconciliationNote
+      properties:
+        metricId:
+          $ref: '#/components/schemas/MetricId'
+        displayName: { type: string }
+        meaning: { type: string }
+        unit: { type: string, enum: [count, currency] }
+        applicableSources:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricSource'
+        attributionWindowDays: { type: integer }
+        timezone: { type: string }
+        currency: { type: string }
+        consentCategoryRequired: { type: string, enum: [ANALYTICS, ADVERTISING] }
+        samplingNote: { type: string }
+        freshnessSlaHours: { type: integer }
+        reconciliationNote: { type: string }
+    SourceMeasurement:
+      type: object
+      required: [source, metricId, value, periodStart, periodEnd]
+      description: >-
+        A single source's own reported number for one metric over one
+        reporting period — never adjusted, scaled, or merged before being
+        submitted here.
+      properties:
+        source:
+          $ref: '#/components/schemas/MetricSource'
+        metricId:
+          $ref: '#/components/schemas/MetricId'
+        value: { type: number }
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        attributionWindowDaysUsed: { type: integer }
+        currency: { type: string }
+    CompareMetricSourcesRequest:
+      type: object
+      required: [metricId, measurements]
+      properties:
+        metricId:
+          $ref: '#/components/schemas/MetricId'
+        measurements:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SourceMeasurement'
+    MetricComparisonEntry:
+      type: object
+      required: [source, value, comparable]
+      properties:
+        source:
+          $ref: '#/components/schemas/MetricSource'
+        value: { type: number }
+        comparable:
+          type: boolean
+          description: >-
+            False when this source is structurally not comparable to the
+            others in this call — the value is still reported source-native,
+            just never merged or diffed against a mismatched source.
+        incomparableReason: { type: string }
+    MetricDiscrepancy:
+      type: object
+      required: [sourceA, sourceB, absoluteDifference, percentDifference]
+      properties:
+        sourceA:
+          $ref: '#/components/schemas/MetricSource'
+        sourceB:
+          $ref: '#/components/schemas/MetricSource'
+        absoluteDifference: { type: number }
+        percentDifference: { type: number }
+    MetricComparisonResult:
+      type: object
+      required: [metricId, dictionaryVersion, periodStart, periodEnd, entries, discrepancies]
+      properties:
+        metricId:
+          $ref: '#/components/schemas/MetricId'
+        dictionaryVersion: { type: integer }
+        periodStart: { type: string }
+        periodEnd: { type: string }
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricComparisonEntry'
+        discrepancies:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricDiscrepancy'
     UpdateAdvertisingProviderConfigRequest:
       type: object
       required: [expectedVersion]

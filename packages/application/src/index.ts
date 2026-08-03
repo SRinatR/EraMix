@@ -211,6 +211,7 @@ export { getIndexNowDiagnostics } from './indexnow-diagnostics.js';
 export type { IndexNowDiagnostics } from './indexnow-diagnostics.js';
 export { getAdvertisingDiagnostics } from './advertising-diagnostics.js';
 export type { AdvertisingProviderDiagnostic } from './advertising-diagnostics.js';
+export { compareMetricSources, getMetricDictionary } from './metric-comparison.js';
 export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';
 export {
   createOffer,
