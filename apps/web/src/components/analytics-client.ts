@@ -2,21 +2,24 @@
 
 import type { AnalyticsConsentState, AnalyticsEventName, LocaleCode } from '@eramix/domain';
 import { ANALYTICS_SCHEMA_VERSION } from '@eramix/domain';
+import { getStoredConsent } from './consent-store';
 
 /**
  * Client-side emission helper (CLAUDE.md: "Instrument a privacy-safe
- * product-interest event model from the first public release"). Consent is
- * hardcoded to withheld for every category — this repository has no
- * cookie-consent-banner UI yet, so there is no real user choice to read.
- * Events are still captured/validated/enqueued end to end (proving the
- * whole pipeline genuinely works), but apps/worker's dispatchAnalyticsEvent
- * will never forward any of them to GA4/Yandex Metrica while consent is
- * withheld — the safe, privacy-by-default posture until a real consent
- * mechanism exists. See IMPLEMENTATION_ROADMAP.md's "not yet built" note
- * for this slice.
+ * product-interest event model from the first public release"). Reads the
+ * real visitor choice recorded by consent-banner.tsx/consent-store.ts —
+ * withheld for every category until a choice has actually been made (no
+ * consent record on file, or one from a superseded policy version, both
+ * read as withheld). Events are still captured/validated/enqueued end to
+ * end even while withheld, but apps/worker's dispatchAnalyticsEvent will
+ * never forward any of them to GA4/Yandex Metrica without a granted
+ * category — the safe, privacy-by-default posture.
  */
 function currentConsent(): AnalyticsConsentState {
-  return { analytics: false, advertising: false };
+  const stored = getStoredConsent();
+  return stored
+    ? { analytics: stored.analytics, advertising: stored.advertising }
+    : { analytics: false, advertising: false };
 }
 
 const SESSION_STORAGE_KEY = 'eramix_analytics_session_id';

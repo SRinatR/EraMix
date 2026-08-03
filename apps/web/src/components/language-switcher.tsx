@@ -4,6 +4,7 @@ import { usePathname, useRouter } from '@/i18n/navigation';
 import { SUPPORTED_LOCALES, type LocaleCode } from '@eramix/domain';
 import { useParams } from 'next/navigation';
 import { useTransition } from 'react';
+import { sendAnalyticsEvent } from './analytics-client';
 
 const LOCALE_LABELS: Record<LocaleCode, string> = {
   en: 'English',
@@ -24,6 +25,13 @@ export function LanguageSwitcher() {
   const [isPending, startTransition] = useTransition();
 
   function handleChange(nextLocale: LocaleCode): void {
+    sendAnalyticsEvent(currentLocale, {
+      eventName: 'locale_changed',
+      pageType: 'other',
+      canonicalPath: pathname,
+      fromLocale: currentLocale,
+      toLocale: nextLocale,
+    });
     startTransition(() => {
       router.replace(pathname, { locale: nextLocale });
     });

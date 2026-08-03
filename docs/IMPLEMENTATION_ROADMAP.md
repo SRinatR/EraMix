@@ -3020,6 +3020,84 @@ event` runtime guard). OpenAPI's `AnalyticsEventBase`/`AnalyticsEvent`
   record for this slice's `next build`, the same precedent slice 3
   established.
 
+### Phase D slices 3b-3d: real consent primitive, banner UI, and consent/PII/routing tests
+
+CLAUDE.md: "Implement a real consent UI/state and enforce it before every
+non-essential analytics provider loads or receives an event." Closes Phase
+B slice 5's own named gap ("no cookie-consent-banner UI yet... consent is
+hardcoded to `{analytics: false, advertising: false}`").
+
+- **Correction to slice 3a's own status block**: it claimed "no
+  language-switcher component exists anywhere in the app today" as the
+  reason `locale_changed` had no wired trigger. This was wrong — `apps/web/
+src/components/language-switcher.tsx` already existed (built well before
+  this phase). Found while implementing this slice; `locale_changed` is now
+  wired there for real (see below), so the net effect is corrected, not
+  just noted.
+- **Domain primitive** (`packages/domain/src/consent.ts`, 4 unit tests):
+  `CONSENT_POLICY_VERSION`, `ConsentChoice`/`StoredConsent`, and
+  `isConsentCurrent` — a stored record only counts if its version matches
+  the currently-active policy, so bumping the version (a real policy
+  change, never a routine code change) forces every visitor to re-consent
+  rather than silently keeping stale consent. Framework-free, mirroring
+  every other domain module's pure-validation convention.
+- **Storage** (`apps/web/src/components/consent-store.ts`, 6 unit tests): a
+  plain (non-HttpOnly — a visitor preference, not a session credential),
+  `SameSite=Lax`, one-year cookie. `getStoredConsent()` returns `undefined`
+  for both "never chosen" and "chosen under a superseded policy version" —
+  both correctly re-prompt. `clearStoredConsent()` (withdrawal) deletes the
+  cookie outright rather than writing an all-`false` record, so a later
+  read reports "no choice on file," not "explicitly rejected forever."
+  Tested with a minimal hand-written cookie-jar stub (`Object.defineProperty(globalThis,
+'document', ...)`) rather than adding a new jsdom/happy-dom devDependency —
+  this repository has never needed a DOM test environment before and the
+  stub is sufficient for the one cookie this module manages.
+- **UI** (`apps/web/src/components/consent-banner.tsx`,
+  `manage-consent-link.tsx`): a real banner (analytics/advertising
+  checkboxes, Accept all / Reject non-essential / Save preferences),
+  rendered once per locale in `[locale]/layout.tsx`. A `ManageConsentLink`
+  in a new page footer lets a visitor who already chose reopen the banner
+  and change their mind later (withdrawal handling) via a `window`
+  `CustomEvent` — no new global state/context provider needed for a single
+  boolean. `apps/web/src/components/analytics-client.ts`'s `currentConsent()`
+  now reads this real store instead of the hardcoded `{analytics: false,
+advertising: false}`; 3 new unit tests (`analytics-client.test.ts`) prove
+  withheld-by-default, real-consent-reflected-once-granted, and
+  never-throws-on-fetch-rejection. The `.tsx` components themselves
+  (banner/link/language-switcher) are not render-tested — no prior `.tsx`
+  component in this repository has ever had one either (no React Testing
+  Library/jsdom setup exists); their logic dependencies
+  (`consent-store.ts`, `analytics-client.ts`) are the tested layer.
+- **A second real trigger wired** (beyond `file_download` from slice 3a):
+  `language-switcher.tsx` now fires `locale_changed` (`fromLocale`/
+  `toLocale`, the current pathname as `canonicalPath`) before swapping the
+  URL's locale segment — a real, already-existing UI moment, not an
+  invented one.
+- **Item 3d (consent/PII/routing tests) was substantially already
+  satisfied** by slice 3a's PII-rejection `it.each` block
+  (name/email/phone/password/authorization/ipAddress/sessionToken, plus the
+  filter_used PII-shaped-value case) and by Phase B slice 5's existing
+  `dispatchAnalyticsEvent` suite (`packages/application/src/analytics.test.ts`:
+  consent-withholds-a-sink, admin-has-not-enabled-a-sink,
+  both-must-agree, per-sink-independent-gating, one-sink-failure-never-
+  affects-another, empty-sink-list) — verified present, not re-built. This
+  slice's own new tests (consent grant/withdrawal in `consent-store.test.ts`/
+  `analytics-client.test.ts`) close the one genuinely missing piece.
+- **Verified locally**: `pnpm run format`/`lint`/`typecheck` all exit 0
+  across all 7 workspace projects; `pnpm run test` — **595 unit tests** (up
+  from 582). `next build` crashed again with the same disk-space-exhaustion
+  signature as the previous slice (`Get-PSDrive C` showed ~300 MB free) —
+  not forced past, CI is the verification of record, same standing
+  precedent.
+- **Not yet built**: consent is stored client-side only (a cookie read by
+  client JS); no server-side rendering decision reads it yet (there is
+  nothing to gate server-side today — no vendor script/tag is ever injected
+  anywhere on the public site, config-only advertising control plane). A
+  future real GA4/Yandex Metrica/advertising script load (if this project
+  ever adds a client-side tag beyond the Measurement-Protocol/watch-pixel
+  server-to-server sinks that already exist) would need to read this same
+  store before injecting anything.
+
 ## Required task format for the CLI agent
 
 For every task, report:

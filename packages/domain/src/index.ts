@@ -51,6 +51,8 @@ export { validateEffectiveAdvertisingProviderConfig } from './advertising.js';
 export { validateEffectiveOffer, offerIneligibilityReasons } from './offer.js';
 export type { OfferValidationContext, OfferIneligibilityReason } from './offer.js';
 export { validateAnalyticsEvent, ANALYTICS_SCHEMA_VERSION } from './analytics.js';
+export { CONSENT_POLICY_VERSION, isConsentCurrent } from './consent.js';
+export type { ConsentChoice, StoredConsent } from './consent.js';
 export type {
   AnalyticsEvent,
   AnalyticsEventName,

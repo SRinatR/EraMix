@@ -1,3 +1,5 @@
+import { ConsentBanner } from '@/components/consent-banner';
+import { ManageConsentLink } from '@/components/manage-consent-link';
 import { SiteHeader } from '@/components/site-header';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { NextIntlClientProvider } from 'next-intl';
@@ -43,6 +45,10 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <SiteHeader />
           {children}
+          <footer>
+            <ManageConsentLink />
+          </footer>
+          <ConsentBanner />
         </NextIntlClientProvider>
       </body>
     </html>
