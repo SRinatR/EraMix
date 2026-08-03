@@ -2,6 +2,7 @@ import { AnalyticsEventTracker } from '@/components/analytics-event-tracker';
 import { formatIndicativePrice } from '@/components/indicative-price';
 import { JsonLd } from '@/components/json-ld';
 import { PaginationControls } from '@/components/pagination-controls';
+import { TrackedDownloadLink } from '@/components/tracked-download-link';
 import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
 import { parsePaginationParams, parseStringParam } from '@/server/pagination';
@@ -14,7 +15,13 @@ import {
   resolveCategoryRoute,
   resolveProductRoute,
 } from '@eramix/application';
-import { isSupportedLocale, splitCatalogSlug, type LocaleCode } from '@eramix/domain';
+import {
+  categoryUrl,
+  isSupportedLocale,
+  productUrl,
+  splitCatalogSlug,
+  type LocaleCode,
+} from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, permanentRedirect } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -103,12 +110,22 @@ export default async function CatalogEntryPage({
     const documents = assets.filter((asset) => asset.assetType === 'DOCUMENT');
     const downloadUrl = (assetId: string) =>
       `/api/catalog/products/${product.publicId}/assets/${assetId}/download`;
+    const productCanonicalPath = productUrl({
+      locale,
+      publicId: product.publicId,
+      slug: translation.slug,
+    });
 
     return (
       <main>
         <AnalyticsEventTracker
           locale={locale}
-          fields={{ eventName: 'view_item', productPublicId: product.publicId }}
+          fields={{
+            eventName: 'view_item',
+            pageType: 'product',
+            canonicalPath: productCanonicalPath,
+            productPublicId: product.publicId,
+          }}
         />
         <JsonLd data={{ ...buildProductJsonLd(product, translation) }} />
         <h1>{translation.name}</h1>
@@ -129,7 +146,16 @@ export default async function CatalogEntryPage({
             <ul>
               {documents.map((document) => (
                 <li key={document.id}>
-                  <a href={downloadUrl(document.id)}>{document.displayName}</a>
+                  <TrackedDownloadLink
+                    href={downloadUrl(document.id)}
+                    assetId={document.id}
+                    productPublicId={product.publicId}
+                    locale={locale}
+                    pageType="product"
+                    canonicalPath={productCanonicalPath}
+                  >
+                    {document.displayName}
+                  </TrackedDownloadLink>
                   {document.caption && <p>{document.caption}</p>}
                 </li>
               ))}
@@ -156,15 +182,33 @@ export default async function CatalogEntryPage({
     }),
   ]);
 
+  const categoryOwnTranslation = category.translations.find((t) => t.id === translation.id);
+  const categoryCanonicalRoute = categoryOwnTranslation?.routes.find((route) => route.isCanonical);
+  const categoryCanonicalPath = categoryCanonicalRoute
+    ? categoryUrl({ locale: categoryCanonicalRoute.locale, slug: categoryCanonicalRoute.slug })
+    : `/${locale}/catalog/${slug}`;
+
   return (
     <main>
       <AnalyticsEventTracker
         locale={locale}
-        fields={{
-          eventName: 'view_item_list',
-          categoryId: category.id,
-          resultCount: productPage.data.length,
-        }}
+        fields={
+          searchParam !== undefined
+            ? {
+                eventName: 'search',
+                pageType: 'catalog',
+                canonicalPath: categoryCanonicalPath,
+                categoryId: category.id,
+                resultCount: productPage.data.length,
+              }
+            : {
+                eventName: 'view_item_list',
+                pageType: 'catalog',
+                canonicalPath: categoryCanonicalPath,
+                categoryId: category.id,
+                resultCount: productPage.data.length,
+              }
+        }
       />
       <JsonLd data={{ ...buildCollectionPageJsonLd(translation) }} />
       <h1>{translation.name}</h1>

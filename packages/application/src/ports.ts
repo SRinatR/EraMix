@@ -209,5 +209,8 @@ export interface AnalyticsEventLike {
   readonly occurredAt: string;
   readonly sessionId: string;
   readonly locale: string;
+  /** Every event carries the page context it fired from (schema v2) — no longer page_view-only. */
+  readonly pageType: string;
+  readonly canonicalPath: string;
   readonly consent: { readonly analytics: boolean; readonly advertising: boolean };
 }

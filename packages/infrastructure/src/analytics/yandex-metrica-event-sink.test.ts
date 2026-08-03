@@ -4,25 +4,27 @@ import { YandexMetricaEventSink } from './yandex-metrica-event-sink.js';
 
 const CONTEXT = { canonicalOrigin: 'https://eramix.example', yandexMetricaCounterId: '12345678' };
 
-const PAGE_VIEW: AnalyticsEventLike & { canonicalPath: string; pageType: string } = {
+const PAGE_VIEW: AnalyticsEventLike = {
   eventId: 'evt-1',
-  schemaVersion: 1,
+  schemaVersion: 2,
   eventName: 'page_view',
   occurredAt: '2026-08-03T12:00:00Z',
   sessionId: 'session-1',
   locale: 'en',
-  consent: { analytics: true, advertising: false },
-  canonicalPath: '/en/catalog/chairs',
   pageType: 'category',
+  canonicalPath: '/en/catalog/chairs',
+  consent: { analytics: true, advertising: false },
 };
 
-const RFQ_SUBMIT: AnalyticsEventLike & { orderNumber: string } = {
+const LEAD_SUBMITTED: AnalyticsEventLike & { orderNumber: string } = {
   eventId: 'evt-2',
-  schemaVersion: 1,
-  eventName: 'rfq_submit',
+  schemaVersion: 2,
+  eventName: 'lead_submitted',
   occurredAt: '2026-08-03T12:00:00Z',
   sessionId: 'session-1',
   locale: 'en',
+  pageType: 'other',
+  canonicalPath: '/en/account/orders/ORD-ABC123',
   consent: { analytics: true, advertising: false },
   orderNumber: 'ORD-ABC123',
 };
@@ -73,7 +75,7 @@ describe('YandexMetricaEventSink', () => {
     const fetchImpl = vi.fn();
     const sink = new YandexMetricaEventSink({ fetchImpl });
 
-    const result = await sink.dispatch(RFQ_SUBMIT, CONTEXT);
+    const result = await sink.dispatch(LEAD_SUBMITTED, CONTEXT);
 
     expect(result.succeeded).toBe(false);
     expect(result.error).toContain('not yet supported');

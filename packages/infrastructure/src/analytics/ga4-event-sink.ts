@@ -108,10 +108,8 @@ function eventParams(
   const params: Record<string, string | number> = {
     event_id: event.eventId,
     locale: event.locale,
+    page_location: `${context.canonicalOrigin}${event.canonicalPath}`,
   };
-  if ('canonicalPath' in event && typeof event['canonicalPath'] === 'string') {
-    params['page_location'] = `${context.canonicalOrigin}${event['canonicalPath']}`;
-  }
   for (const [key, value] of Object.entries(event)) {
     if (
       key === 'eventId' ||
@@ -120,6 +118,7 @@ function eventParams(
       key === 'occurredAt' ||
       key === 'sessionId' ||
       key === 'locale' ||
+      key === 'canonicalPath' ||
       key === 'consent'
     ) {
       continue;

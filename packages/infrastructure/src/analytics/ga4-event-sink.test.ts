@@ -4,16 +4,16 @@ import { Ga4EventSink } from './ga4-event-sink.js';
 
 const CONTEXT = { canonicalOrigin: 'https://eramix.example', ga4MeasurementId: 'G-TEST123' };
 
-const PAGE_VIEW: AnalyticsEventLike & { canonicalPath: string; pageType: string } = {
+const PAGE_VIEW: AnalyticsEventLike = {
   eventId: 'evt-1',
-  schemaVersion: 1,
+  schemaVersion: 2,
   eventName: 'page_view',
   occurredAt: '2026-08-03T12:00:00Z',
   sessionId: 'session-1',
   locale: 'en',
-  consent: { analytics: true, advertising: false },
-  canonicalPath: '/en/catalog/chairs',
   pageType: 'category',
+  canonicalPath: '/en/catalog/chairs',
+  consent: { analytics: true, advertising: false },
 };
 
 function jsonResponse(status: number): Response {
@@ -42,6 +42,7 @@ describe('Ga4EventSink', () => {
       'https://eramix.example/en/catalog/chairs',
     );
     expect(body.events[0]?.params['locale']).toBe('en');
+    expect(body.events[0]?.params['pageType']).toBe('category');
   });
 
   it('declines to dispatch when ga4MeasurementId is not configured (live-checked, never a placeholder)', async () => {

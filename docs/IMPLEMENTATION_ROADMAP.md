@@ -2949,6 +2949,77 @@ and records the verification of what was already true by construction.
   `pnpm run test` — **555 unit tests** (up from 552). `pnpm run build` exit
   0, route table unchanged.
 
+### Phase D slice 3a: versioned event registry v2 — target event semantics
+
+Product Owner instruction, 2026-08-03: "Create a versioned, shared, typed
+event system" naming 10 required events (`page_view`, `view_item`,
+`view_item_list`, `search`, `filter_used`, `generate_lead`,
+`lead_submitted`, `contact_click`, `file_download`, `locale_changed`).
+Phase B slice 5 had already built 6 events under different names
+(`rfq_start`, `rfq_submit`, `phone_click` plus the 3 exact matches). This
+slice renames/generalizes/extends to the exact target set — a genuine
+breaking shape change, judged safe because consent has always been
+hardcoded to withheld (`{analytics: false, advertising: false}`), so no
+event has ever actually reached a live provider yet.
+
+- **Schema v2** (`packages/domain/src/analytics.ts`, `ANALYTICS_SCHEMA_VERSION`
+  bumped `1`→`2`): moves `pageType`/`canonicalPath` onto the shared base —
+  every event, not only `page_view`, now carries the page context it fired
+  from, per the instruction's own "Every event has... page type, canonical
+  URL/path" wording. `rfq_start`→`generate_lead`, `rfq_submit`→
+  `lead_submitted`, `phone_click`→`contact_click` (generalized with a new
+  `channel: 'phone'|'email'|'messenger'`), plus 3 genuinely new variants:
+  `search` (deliberately never carries the raw query string — only
+  `resultCount`, matching search-visibility.md's "query class, not raw
+  sensitive input"), `filter_used` (`filterKey`/`filterValue`, both bounded
+  and PII-pattern-checked — schema/pipeline ready, no filter-facet UI exists
+  in the app yet to trigger it from), and `locale_changed` (`fromLocale`/
+  `toLocale` — same "ready, no UI trigger yet" state, since no
+  language-switcher component exists anywhere in the app today).
+- **A real, latent bug found and fixed while making this change**: the
+  canonicalPath regex was lowercase-only (`/^\/[a-z0-9\-/]*$/`). Product/
+  order URLs embed an uppercase Crockford-base32 `publicId`/`orderNumber`
+  segment (`productUrl()`/`orderUrl()`), so this would have rejected every
+  real product/order page's canonicalPath — invisible under schema v1
+  because canonicalPath was only ever required on `page_view`, which was
+  never wired to a product or order page. Moving canonicalPath onto the
+  base (required on every event) surfaced it immediately via a failing
+  test. Fixed to `/^\/[A-Za-z0-9\-/]*$/`.
+- **Every consuming layer updated in lockstep**: `packages/application/src/
+ports.ts`'s `AnalyticsEventLike` structural type (gained `pageType`/
+  `canonicalPath`); `apps/web/src/server/analytics-event-schema.ts` (zod,
+  all 10 variants, `.strict()`); `apps/web/src/components/analytics-client.ts`
+  (`AnalyticsEventFieldsBase` + the 10-variant union); every real call site
+  (home/articles/pages pages unaffected — already had both fields; catalog/
+  [slug]'s `view_item`/`view_item_list` gained real `productUrl()`/
+  `categoryUrl()`-built canonical paths; the category branch now emits
+  `search` instead of `view_item_list` when a search query is present, a
+  real behavioural distinction, not just a rename; `SubmitOrderButton`
+  renamed `rfq_submit`→`lead_submitted` with a real `orderUrl()` path).
+  `packages/infrastructure/src/analytics/ga4-event-sink.ts`/
+  `yandex-metrica-event-sink.ts` simplified now that `canonicalPath` is
+  unconditionally present (removed a now-redundant `'canonicalPath' in
+event` runtime guard). OpenAPI's `AnalyticsEventBase`/`AnalyticsEvent`
+  schemas rewritten to match; `redocly lint` passes.
+- **A new real trigger wired, not just schema support**: `file_download` had
+  a genuinely existing UI moment to attach to (the product page's document
+  download links) that `locale_changed`/`filter_used` do not. New
+  `apps/web/src/components/tracked-download-link.tsx` (a small client
+  component firing `sendAnalyticsEvent` on click, never blocking the actual
+  download navigation) replaces the plain `<a>` for product documents.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **582 unit tests** (up from 555 before this slice). `next build`'s own
+  bundler + TypeScript passes both succeeded ("Compiled successfully",
+  "Finished TypeScript"), but the subsequent "Collecting page data" worker
+  step crashed with a native access violation — `Get-PSDrive C` showed only
+  ~240 MB free, the same chronic low-disk-space condition Phase B slice 3's
+  status block already documented causing an identical class of crash. Per
+  CLAUDE.md's fail-closed policy this was not forced past; `.next` was
+  cleaned up, and CI's own `Production build` job is the verification of
+  record for this slice's `next build`, the same precedent slice 3
+  established.
+
 ## Required task format for the CLI agent
 
 For every task, report:

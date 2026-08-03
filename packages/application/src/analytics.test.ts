@@ -11,7 +11,7 @@ const CONSENT_GRANTED = { analytics: true, advertising: false };
 function pageView(overrides: Partial<AnalyticsEvent> = {}): AnalyticsEvent {
   return {
     eventId: 'evt-1',
-    schemaVersion: 1,
+    schemaVersion: 2,
     occurredAt: NOW.toISOString(),
     sessionId: 'session-1',
     locale: 'en',

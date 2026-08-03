@@ -56,7 +56,8 @@ export type {
   AnalyticsEventName,
   AnalyticsConsentState,
   PageType,
-  PhoneClickContext,
+  ContactClickContext,
+  ContactChannel,
 } from './analytics.js';
 export { validateRetirementReason } from './retirement.js';
 export { validateIndexNowSubmission } from './indexnow.js';

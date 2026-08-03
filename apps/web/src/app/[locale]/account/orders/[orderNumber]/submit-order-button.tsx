@@ -2,7 +2,7 @@
 
 import { sendAnalyticsEvent } from '@/components/analytics-client';
 import { useRouter } from '@/i18n/navigation';
-import type { LocaleCode } from '@eramix/domain';
+import { orderUrl, type LocaleCode } from '@eramix/domain';
 import { useState, type FormEvent } from 'react';
 
 /**
@@ -54,8 +54,13 @@ export function SubmitOrderButton({
         return;
       }
       // The primary organic conversion (docs/runbooks/search-visibility.md:
-      // "Measure rfq_submit as the primary organic conversion").
-      sendAnalyticsEvent(locale, { eventName: 'rfq_submit', orderNumber });
+      // "the primary organic conversion") — renamed from rfq_submit (schema v1).
+      sendAnalyticsEvent(locale, {
+        eventName: 'lead_submitted',
+        pageType: 'other',
+        canonicalPath: orderUrl({ locale, orderNumber }),
+        orderNumber,
+      });
       router.refresh();
     } finally {
       setPending(false);

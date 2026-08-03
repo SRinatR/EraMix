@@ -42,17 +42,42 @@ function getSessionId(): string {
   }
 }
 
-type AnalyticsEventFields =
-  | { readonly eventName: 'page_view'; readonly pageType: string; readonly canonicalPath: string }
-  | { readonly eventName: 'view_item'; readonly productPublicId: string }
-  | {
-      readonly eventName: 'view_item_list';
-      readonly categoryId?: string;
-      readonly resultCount: number;
-    }
-  | { readonly eventName: 'rfq_start'; readonly productPublicId?: string }
-  | { readonly eventName: 'rfq_submit'; readonly orderNumber: string }
-  | { readonly eventName: 'phone_click'; readonly context: string };
+interface AnalyticsEventFieldsBase {
+  /** Every event carries the page context it fired from (schema v2) — pageType/canonicalPath are no longer page_view-only. */
+  readonly pageType: string;
+  readonly canonicalPath: string;
+}
+
+type AnalyticsEventFields = AnalyticsEventFieldsBase &
+  (
+    | { readonly eventName: 'page_view' }
+    | { readonly eventName: 'view_item'; readonly productPublicId: string }
+    | {
+        readonly eventName: 'view_item_list';
+        readonly categoryId?: string;
+        readonly resultCount: number;
+      }
+    | { readonly eventName: 'search'; readonly categoryId?: string; readonly resultCount: number }
+    | {
+        readonly eventName: 'filter_used';
+        readonly filterKey: string;
+        readonly filterValue: string;
+        readonly resultCount: number;
+      }
+    | { readonly eventName: 'generate_lead'; readonly productPublicId?: string }
+    | { readonly eventName: 'lead_submitted'; readonly orderNumber: string }
+    | { readonly eventName: 'contact_click'; readonly channel: string; readonly context: string }
+    | {
+        readonly eventName: 'file_download';
+        readonly assetId: string;
+        readonly productPublicId?: string;
+      }
+    | {
+        readonly eventName: 'locale_changed';
+        readonly fromLocale: string;
+        readonly toLocale: string;
+      }
+  );
 
 /**
  * Fire-and-forget: never throws, never blocks the caller's own UI flow

@@ -4,11 +4,13 @@ import { RustAnalyticsEventSink } from './rust-analytics-event-sink.js';
 
 const EVENT: AnalyticsEventLike = {
   eventId: 'evt-1',
-  schemaVersion: 1,
+  schemaVersion: 2,
   eventName: 'page_view',
   occurredAt: '2026-08-03T12:00:00Z',
   sessionId: 'session-1',
   locale: 'en',
+  pageType: 'home',
+  canonicalPath: '/en',
   consent: { analytics: true, advertising: false },
 };
 

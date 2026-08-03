@@ -345,7 +345,7 @@ describe('processOutboxBatch — IndexNow (P1 adapter)', () => {
 describe('processOutboxBatch — analytics.event_captured dispatch', () => {
   const VALID_EVENT = {
     eventId: 'evt-1',
-    schemaVersion: 1,
+    schemaVersion: 2,
     occurredAt: new Date().toISOString(),
     sessionId: 'session-1',
     locale: 'en',

@@ -11,33 +11,34 @@ import { z } from 'zod';
  */
 const consentSchema = z.object({ analytics: z.boolean(), advertising: z.boolean() }).strict();
 
+const pageTypeSchema = z.enum([
+  'home',
+  'category',
+  'product',
+  'article',
+  'page',
+  'faq',
+  'catalog',
+  'other',
+]);
+
+/**
+ * Schema v2: pageType/canonicalPath moved onto the shared base — every
+ * event, not only page_view, now carries the page context it fired from.
+ */
 const baseFields = {
   eventId: z.string().min(1).max(128),
   schemaVersion: z.literal(ANALYTICS_SCHEMA_VERSION),
   occurredAt: z.string().min(1),
   sessionId: z.string().min(1).max(128),
   locale: z.enum(SUPPORTED_LOCALES),
+  pageType: pageTypeSchema,
+  canonicalPath: z.string().min(1).max(2048),
   consent: consentSchema,
 };
 
 export const analyticsEventSchema = z.discriminatedUnion('eventName', [
-  z
-    .object({
-      ...baseFields,
-      eventName: z.literal('page_view'),
-      pageType: z.enum([
-        'home',
-        'category',
-        'product',
-        'article',
-        'page',
-        'faq',
-        'catalog',
-        'other',
-      ]),
-      canonicalPath: z.string().min(1).max(2048),
-    })
-    .strict(),
+  z.object({ ...baseFields, eventName: z.literal('page_view') }).strict(),
   z
     .object({
       ...baseFields,
@@ -56,22 +57,56 @@ export const analyticsEventSchema = z.discriminatedUnion('eventName', [
   z
     .object({
       ...baseFields,
-      eventName: z.literal('rfq_start'),
+      eventName: z.literal('search'),
+      categoryId: z.string().min(1).max(64).optional(),
+      resultCount: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseFields,
+      eventName: z.literal('filter_used'),
+      filterKey: z.string().min(1).max(100),
+      filterValue: z.string().min(1).max(100),
+      resultCount: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseFields,
+      eventName: z.literal('generate_lead'),
       productPublicId: z.string().min(1).max(64).optional(),
     })
     .strict(),
   z
     .object({
       ...baseFields,
-      eventName: z.literal('rfq_submit'),
+      eventName: z.literal('lead_submitted'),
       orderNumber: z.string().min(1).max(64),
     })
     .strict(),
   z
     .object({
       ...baseFields,
-      eventName: z.literal('phone_click'),
+      eventName: z.literal('contact_click'),
+      channel: z.enum(['phone', 'email', 'messenger']),
       context: z.enum(['header', 'footer', 'contact_page', 'product']),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseFields,
+      eventName: z.literal('file_download'),
+      assetId: z.string().min(1).max(64),
+      productPublicId: z.string().min(1).max(64).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...baseFields,
+      eventName: z.literal('locale_changed'),
+      fromLocale: z.enum(SUPPORTED_LOCALES),
+      toLocale: z.enum(SUPPORTED_LOCALES),
     })
     .strict(),
 ]);

@@ -56,14 +56,14 @@ export class YandexMetricaEventSink implements AnalyticsEventSink {
         error: 'PlatformSettings.yandexMetricaCounterId is not configured',
       };
     }
-    if (event.eventName !== 'page_view' || !('canonicalPath' in event)) {
+    if (event.eventName !== 'page_view') {
       return {
         sink: this.name,
         succeeded: false,
         error: `event "${event.eventName}" is not yet supported by the Yandex Metrica sink (page_view only — see this file's own doc comment)`,
       };
     }
-    const pageUrl = `${context.canonicalOrigin}${String(event['canonicalPath'])}`;
+    const pageUrl = `${context.canonicalOrigin}${event.canonicalPath}`;
     const url = `${ENDPOINT_BASE}/${encodeURIComponent(context.yandexMetricaCounterId)}?page-url=${encodeURIComponent(pageUrl)}&browser-info=en`;
 
     let lastError: string | undefined;

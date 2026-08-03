@@ -3897,11 +3897,25 @@ components:
         analytics: { type: boolean }
         advertising: { type: boolean }
     AnalyticsEventBase:
+      description: >-
+        Schema v2: pageType/canonicalPath are on the shared base — every
+        event, not only page_view, carries the page context it fired from.
       type: object
-      required: [eventId, schemaVersion, occurredAt, sessionId, locale, consent, eventName]
+      required:
+        [
+          eventId,
+          schemaVersion,
+          occurredAt,
+          sessionId,
+          locale,
+          pageType,
+          canonicalPath,
+          consent,
+          eventName,
+        ]
       properties:
         eventId: { type: string, minLength: 1, maxLength: 128 }
-        schemaVersion: { type: integer, enum: [1] }
+        schemaVersion: { type: integer, enum: [2] }
         occurredAt: { type: string, format: date-time }
         sessionId:
           type: string
@@ -3909,6 +3923,10 @@ components:
           maxLength: 128
           description: Anonymous, stable per browser-tab session — never a user identity.
         locale: { type: string, enum: [en, ru, uz] }
+        pageType:
+          type: string
+          enum: [home, category, product, article, page, faq, catalog, other]
+        canonicalPath: { type: string, minLength: 1, maxLength: 2048 }
         consent:
           $ref: '#/components/schemas/AnalyticsConsentState'
     AnalyticsEvent:
@@ -3919,14 +3937,10 @@ components:
         - allOf:
             - $ref: '#/components/schemas/AnalyticsEventBase'
             - type: object
-              required: [eventName, pageType, canonicalPath]
+              required: [eventName]
               additionalProperties: false
               properties:
                 eventName: { const: page_view }
-                pageType:
-                  type: string
-                  enum: [home, category, product, article, page, faq, catalog, other]
-                canonicalPath: { type: string, minLength: 1, maxLength: 2048 }
         - allOf:
             - $ref: '#/components/schemas/AnalyticsEventBase'
             - type: object
@@ -3947,10 +3961,33 @@ components:
         - allOf:
             - $ref: '#/components/schemas/AnalyticsEventBase'
             - type: object
+              required: [eventName, resultCount]
+              additionalProperties: false
+              properties:
+                eventName: { const: search }
+                categoryId: { type: string, minLength: 1, maxLength: 64 }
+                resultCount: { type: integer, minimum: 0 }
+              description: >-
+                Never carries the raw search query — only the result count is
+                measurable (search-visibility.md: "query class, not raw
+                sensitive input").
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, filterKey, filterValue, resultCount]
+              additionalProperties: false
+              properties:
+                eventName: { const: filter_used }
+                filterKey: { type: string, minLength: 1, maxLength: 100 }
+                filterValue: { type: string, minLength: 1, maxLength: 100 }
+                resultCount: { type: integer, minimum: 0 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
               required: [eventName]
               additionalProperties: false
               properties:
-                eventName: { const: rfq_start }
+                eventName: { const: generate_lead }
                 productPublicId: { type: string, minLength: 1, maxLength: 64 }
         - allOf:
             - $ref: '#/components/schemas/AnalyticsEventBase'
@@ -3958,7 +3995,7 @@ components:
               required: [eventName, orderNumber]
               additionalProperties: false
               properties:
-                eventName: { const: rfq_submit }
+                eventName: { const: lead_submitted }
                 orderNumber:
                   type: string
                   minLength: 1
@@ -3967,11 +4004,30 @@ components:
         - allOf:
             - $ref: '#/components/schemas/AnalyticsEventBase'
             - type: object
-              required: [eventName, context]
+              required: [eventName, channel, context]
               additionalProperties: false
               properties:
-                eventName: { const: phone_click }
+                eventName: { const: contact_click }
+                channel: { type: string, enum: [phone, email, messenger] }
                 context: { type: string, enum: [header, footer, contact_page, product] }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, assetId]
+              additionalProperties: false
+              properties:
+                eventName: { const: file_download }
+                assetId: { type: string, minLength: 1, maxLength: 64 }
+                productPublicId: { type: string, minLength: 1, maxLength: 64 }
+        - allOf:
+            - $ref: '#/components/schemas/AnalyticsEventBase'
+            - type: object
+              required: [eventName, fromLocale, toLocale]
+              additionalProperties: false
+              properties:
+                eventName: { const: locale_changed }
+                fromLocale: { type: string, enum: [en, ru, uz] }
+                toLocale: { type: string, enum: [en, ru, uz] }
     RecordAnalyticsEventsRequest:
       type: object
       required: [events]
