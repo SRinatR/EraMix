@@ -209,6 +209,8 @@ export { getAnalyticsDiagnostics } from './analytics-diagnostics.js';
 export type { AnalyticsSinkName, AnalyticsSinkDiagnostic } from './analytics-diagnostics.js';
 export { getIndexNowDiagnostics } from './indexnow-diagnostics.js';
 export type { IndexNowDiagnostics } from './indexnow-diagnostics.js';
+export { getAdvertisingDiagnostics } from './advertising-diagnostics.js';
+export type { AdvertisingProviderDiagnostic } from './advertising-diagnostics.js';
 export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';
 export {
   createOffer,

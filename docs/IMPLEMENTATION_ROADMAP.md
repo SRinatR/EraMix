@@ -3223,6 +3223,66 @@ against this fuller requirement rather than rebuilt from scratch.
   (`db-integration` job), same standing convention as every other
   Postgres-backed test in this repository.
 
+### Phase D slice 6: advertising control-plane completeness — diagnostics and consent gating
+
+CLAUDE.md item 6: "typed adapters... diagnostic health and emergency
+disablement." Phase B slice 4 already delivered provider enum, validated
+config, enable/disable, RBAC, OCC, and a lighter audit trail (the generic
+`AuditEventRepository`, a deliberate choice recorded in that slice, not
+reopened here). This slice closes the two gaps a fresh review found:
+preview/diagnostics visibility, and a real, tested consent-gating
+precondition for the future dispatch adapter this control plane exists to
+support. Conversion mapping, attribution/UTM rules, and actual server-side
+conversion dispatch remain out of scope — the session's hard boundary
+forbids inventing a live provider API call, credential, or endpoint, and no
+real integration authorization exists yet for any of the six providers.
+
+- **Domain** (`packages/domain/src/advertising.ts`, +7 unit tests):
+  `isAdvertisingProviderDispatchAllowed(config, consent)` — pure, the gating
+  precondition a future dispatch adapter must check before sending anything
+  to a provider. A disabled provider is never dispatched to regardless of
+  consent; an enabled one is only dispatched to once the visitor has
+  granted the specific consent category (`ANALYTICS` or `ADVERTISING`) the
+  provider is configured under, reusing the same `ConsentChoice` primitive
+  ([[packages/domain/src/consent.ts]]) analytics events already gate on —
+  never a blanket "any consent" check. Tested independently of any real
+  adapter, which does not exist yet.
+- **Application** (`packages/application/src/advertising-diagnostics.ts`, 6
+  unit tests): `getAdvertisingDiagnostics` (`settings.manage`, ADMIN-only)
+  reports, per allowlisted provider: `enabled`, `consentCategory`,
+  `testMode`, `configValid` (re-runs `validateEffectiveAdvertisingProviderConfig`
+  against the stored row, catching rather than throwing — a defense-in-depth
+  check against a row that somehow bypassed the write-path validator), and
+  `credentialConfigured` (boolean only — the `credentialSecretRef` value
+  itself, a deployment-secret-store name, is never read into this response).
+  Unlike the GA4/Yandex Metrica/IndexNow diagnostics, this never reports a
+  "last delivery result": there is no live dispatch code path to have
+  attempted one.
+- **Delivery**: `GET /api/admin/advertising-providers/diagnostics` (new,
+  static route resolved ahead of the existing `[provider]` dynamic segment
+  per standard Next.js route precedence) and a "Diagnostics" column added to
+  the existing `/admin/advertising` page (config-valid/credential-configured/
+  test-mode per provider, alongside the pre-existing enablement form) — the
+  admin preview/diagnostics view the requirement names. New
+  `AdvertisingProviderDiagnostic` OpenAPI schema and path; `redocly lint`
+  passes.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects. Per-package
+  `pnpm vitest run --no-file-parallelism` (the disk/memory-exhaustion
+  workaround from prior slices, `C:` still at ~198 MB free) — domain 188
+  (+6), application 246 (+6), infrastructure 46, worker 22, web 121 (+2),
+  contracts 5 — **628 unit tests total**, up from 614. `pnpm --filter
+@eramix/web run build` succeeded locally, and the new
+  `/api/admin/advertising-providers/diagnostics` route is present in the
+  route output.
+- **Not rebuilt, verified sufficient**: the generic `AuditEventRepository`
+  trail Phase B slice 4 already records on every `updateAdvertisingProviderConfig`
+  call remains the "audited history" CLAUDE.md item 6 names — a dedicated
+  per-provider history/rollback mechanism (the `PlatformSettingsHistory`
+  pattern) was deliberately not replicated for 6 independent, low-stakes
+  configuration rows, the same call the earlier slice recorded and this
+  review did not reopen.
+
 ## Required task format for the CLI agent
 
 For every task, report:

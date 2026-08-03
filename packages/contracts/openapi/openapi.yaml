@@ -2478,6 +2478,34 @@ paths:
           $ref: '#/components/responses/MethodNotAllowed'
         '400':
           $ref: '#/components/responses/MalformedRequest'
+  /api/admin/advertising-providers/diagnostics:
+    get:
+      operationId: getAdvertisingDiagnostics
+      summary: >-
+        Admin preview/diagnostics for the advertising-integration control
+        plane (settings.manage — ADMIN only): per-provider enabled state,
+        consent category, test mode, config validity, and whether a
+        credential-store reference is configured. There is no live provider
+        dispatch in this codebase yet, so this never reports a delivery
+        result — only the configuration state itself. Never exposes the
+        credential-store reference value — only a boolean
+        `credentialConfigured` flag.
+      tags: [Advertising]
+      responses:
+        '200':
+          description: Advertising provider diagnostics, one entry per allowlisted provider.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdvertisingProviderDiagnostic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
 
   /api/admin/offers:
     get:
@@ -3876,6 +3904,24 @@ components:
         testMode: { type: boolean }
         updatedAt: { type: string, format: date-time }
         version: { type: integer }
+    AdvertisingProviderDiagnostic:
+      type: object
+      required: [provider, enabled, consentCategory, testMode, configValid, credentialConfigured]
+      properties:
+        provider:
+          $ref: '#/components/schemas/AdvertisingProvider'
+        enabled: { type: boolean }
+        consentCategory: { type: string, enum: [ANALYTICS, ADVERTISING] }
+        testMode: { type: boolean }
+        configValid:
+          type: boolean
+          description: >-
+            Whether the current row satisfies the fail-closed enablement
+            invariant (an enabled provider must carry a consent category and
+            at least one of accountId/containerId/pixelId).
+        credentialConfigured:
+          type: boolean
+          description: Whether a credentialSecretRef is set — never the reference value itself.
     UpdateAdvertisingProviderConfigRequest:
       type: object
       required: [expectedVersion]

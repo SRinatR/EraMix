@@ -1,5 +1,6 @@
 import { ValidationFailedError } from './errors.js';
 import type { AdvertisingProviderConfig } from './entities.js';
+import type { ConsentChoice } from './consent.js';
 
 /**
  * Pure, framework-free validation for the *effective* AdvertisingProviderConfig
@@ -37,4 +38,25 @@ export function validateEffectiveAdvertisingProviderConfig(
       { provider: effective.provider },
     );
   }
+}
+
+/**
+ * The gating precondition a future advertising-conversion dispatch adapter
+ * must check before sending anything to a provider (CLAUDE.md: "may never...
+ * send personal/form/payment data without the required consent"). Pure and
+ * framework-free so it can be unit-tested independently of any real adapter,
+ * which does not exist yet — this session's hard boundary forbids inventing
+ * a live provider API call or credential. A disabled provider is never
+ * dispatched to regardless of consent; an enabled one is only dispatched to
+ * once the visitor has granted the specific consent category the provider is
+ * configured under (ANALYTICS or ADVERTISING), never a blanket "any consent".
+ */
+export function isAdvertisingProviderDispatchAllowed(
+  config: Pick<AdvertisingProviderConfig, 'enabled' | 'consentCategory'>,
+  consent: ConsentChoice,
+): boolean {
+  if (!config.enabled) {
+    return false;
+  }
+  return config.consentCategory === 'ANALYTICS' ? consent.analytics : consent.advertising;
 }
