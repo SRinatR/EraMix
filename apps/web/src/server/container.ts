@@ -1,11 +1,11 @@
 import { SystemClock } from '@eramix/application';
 import {
-  CryptoIdGenerator,
   DevMalwareScanner,
   JsonLogger,
   LocalFilesystemStorageProvider,
   OidcIdentityProvider,
   PendingAuthCodec,
+  PostgresUuidV7IdGenerator,
   PrismaAdvertisingProviderConfigRepository,
   PrismaAnalyticsSinkStatusRepository,
   PrismaAuditEventRepository,
@@ -48,7 +48,7 @@ function buildContainer() {
     prisma,
     uow: new PrismaUnitOfWork(prisma),
     clock: new SystemClock(),
-    idGen: new CryptoIdGenerator(),
+    idGen: new PostgresUuidV7IdGenerator(prisma),
     scanner: new DevMalwareScanner(logger),
     /**
      * Honest scan-engine provenance recorded on every ProductAsset

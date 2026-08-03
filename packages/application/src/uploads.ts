@@ -45,6 +45,6 @@ export async function uploadMedia(
   }
 
   const sanitizedFilename = sanitizeFilenameForStorage(input.filename);
-  const key = `${deps.idGen.nextId()}-${sanitizedFilename}`;
+  const key = `${await deps.idGen.nextId()}-${sanitizedFilename}`;
   return deps.storage.put(key, input.content, input.contentType);
 }

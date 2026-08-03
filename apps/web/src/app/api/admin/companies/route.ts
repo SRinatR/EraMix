@@ -71,7 +71,7 @@ const postHandler = withApiHandler('admin.companies.create', async (request, tra
   const container = getContainer();
 
   const company = await container.companies.create({
-    id: container.idGen.nextId(),
+    id: await container.idGen.nextId(),
     legalName: body.legalName,
     status: 'ACTIVE',
     ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),

@@ -44,7 +44,7 @@ class FixedClock {
 
 class SequentialIdGenerator {
   private counter = 0;
-  nextId(): string {
+  async nextId(): Promise<string> {
     return `id-${++this.counter}`;
   }
 }

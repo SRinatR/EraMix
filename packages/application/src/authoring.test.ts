@@ -25,7 +25,7 @@ class InMemoryUnitOfWork {
 
 class SequentialIdGenerator {
   private counter = 0;
-  nextId(): string {
+  async nextId(): Promise<string> {
     this.counter += 1;
     return `id-${this.counter}`;
   }

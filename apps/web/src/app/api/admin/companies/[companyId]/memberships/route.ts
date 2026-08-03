@@ -66,7 +66,7 @@ const postHandler = withApiHandler<{ companyId: string }>(
     }
 
     const membership = await container.memberships.create({
-      id: container.idGen.nextId(),
+      id: await container.idGen.nextId(),
       userId: body.userId,
       companyId,
       role: body.role,

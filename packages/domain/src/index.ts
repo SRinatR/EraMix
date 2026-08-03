@@ -27,6 +27,7 @@ export {
   splitCatalogSlug,
 } from './public-id.js';
 export { generateOrderNumber, isValidOrderNumber, ORDER_NUMBER_PREFIX } from './order-number.js';
+export { generateUuidV7, isValidUuidV7 } from './uuidv7.js';
 export { parseQuantity } from './quantity.js';
 export { normalizeSlug, RESERVED_SLUGS } from './slug.js';
 export { articleUrl, pageUrl, categoryUrl, productUrl, orderUrl } from './url-builder.js';

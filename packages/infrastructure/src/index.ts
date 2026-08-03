@@ -22,7 +22,7 @@ export { PrismaAdvertisingProviderConfigRepository } from './repositories/advert
 export { PrismaAnalyticsSinkStatusRepository } from './repositories/analytics-sink-status-repository.js';
 export { PrismaIndexNowEngineStatusRepository } from './repositories/indexnow-engine-status-repository.js';
 export { PrismaOfferRepository } from './repositories/offer-repository.js';
-export { CryptoIdGenerator } from './id-generator.js';
+export { PostgresUuidV7IdGenerator } from './id-generator.js';
 export { JsonLogger } from './logger.js';
 export type { Logger, LogLevel, LogFields } from './logger.js';
 export { InMemoryRateLimiter } from './rate-limiter.js';

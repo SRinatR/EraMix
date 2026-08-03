@@ -5,10 +5,17 @@ import {
   rollbackPlatformSettings,
   updatePlatformSettings,
 } from '@eramix/application';
-import { ConcurrencyConflictError, SlugConflictError, ValidationFailedError } from '@eramix/domain';
+import {
+  ConcurrencyConflictError,
+  SlugConflictError,
+  ValidationFailedError,
+  isValidUuidV7,
+} from '@eramix/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadEnv } from '../env.js';
+import { PostgresUuidV7IdGenerator } from '../id-generator.js';
 import { createPrismaClient, type PrismaClient } from '../prisma-client.js';
+import { runWithTransactionClient } from '../transaction-context.js';
 import { PrismaUnitOfWork } from '../unit-of-work.js';
 import { PrismaAdvertisingProviderConfigRepository } from './advertising-provider-config-repository.js';
 import { PrismaAnalyticsSinkStatusRepository } from './analytics-sink-status-repository.js';
@@ -702,5 +709,32 @@ describe('PostgreSQL integration', () => {
       lastUrlCount: 1,
     });
     expect(matchingRows[0]?.lastAttemptAt.toISOString()).toBe(secondAttemptAt.toISOString());
+  });
+
+  describe('PostgresUuidV7IdGenerator (ADR-0021)', () => {
+    it("returns a real UUIDv7 sourced from PostgreSQL 19 Beta 2's native uuidv7() function", async () => {
+      const generator = new PostgresUuidV7IdGenerator(prisma);
+      const id = await generator.nextId();
+      expect(isValidUuidV7(id)).toBe(true);
+
+      const rows = await prisma.$queryRaw<{ version: number }[]>`
+        SELECT uuid_extract_version(${id}::uuid) AS version
+      `;
+      expect(rows[0]?.version).toBe(7);
+    });
+
+    it('generates distinct ids across repeated calls', async () => {
+      const generator = new PostgresUuidV7IdGenerator(prisma);
+      const ids = await Promise.all(Array.from({ length: 10 }, () => generator.nextId()));
+      expect(new Set(ids).size).toBe(10);
+    });
+
+    it('joins the ambient transaction client when called inside UnitOfWork.runInTransaction', async () => {
+      const generator = new PostgresUuidV7IdGenerator(prisma);
+      const id = await prisma.$transaction((tx) =>
+        runWithTransactionClient(tx, () => generator.nextId()),
+      );
+      expect(isValidUuidV7(id)).toBe(true);
+    });
   });
 });

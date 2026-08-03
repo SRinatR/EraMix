@@ -86,15 +86,17 @@ export async function createCategory(
   }
 
   return deps.uow.runInTransaction(async () => {
-    const categoryId = deps.idGen.nextId();
-    const translationRows = input.translations.map((translation) => ({
-      id: deps.idGen.nextId(),
-      categoryId,
-      locale: translation.locale,
-      name: translation.name,
-      seoTitle: translation.seoTitle,
-      seoDescription: translation.seoDescription,
-    }));
+    const categoryId = await deps.idGen.nextId();
+    const translationRows = await Promise.all(
+      input.translations.map(async (translation) => ({
+        id: await deps.idGen.nextId(),
+        categoryId,
+        locale: translation.locale,
+        name: translation.name,
+        seoTitle: translation.seoTitle,
+        seoDescription: translation.seoDescription,
+      })),
+    );
     const pendingRoutes = input.translations.map((translation, index) => ({
       translationId: translationRows[index]!.id,
       locale: translation.locale,
@@ -165,7 +167,7 @@ export async function addCategoryTranslation(
         id: input.categoryId,
       });
     }
-    const translationId = deps.idGen.nextId();
+    const translationId = await deps.idGen.nextId();
     let updated = await deps.categoryRepo.addTranslation(input.categoryId, {
       id: translationId,
       categoryId: input.categoryId,
@@ -248,19 +250,11 @@ export async function createProduct(
       });
     }
 
-    const productId = deps.idGen.nextId();
+    const productId = await deps.idGen.nextId();
     const publicId = generatePublicId();
-    const created = await deps.productRepo.create(
-      {
-        id: productId,
-        publicId,
-        sku: input.sku.trim(),
-        categoryId: input.categoryId,
-        status: 'DRAFT',
-        directSaleEnabled: false,
-      },
-      input.translations.map((translation) => ({
-        id: deps.idGen.nextId(),
+    const translationRows = await Promise.all(
+      input.translations.map(async (translation) => ({
+        id: await deps.idGen.nextId(),
         productId,
         locale: translation.locale,
         name: translation.name,
@@ -270,6 +264,17 @@ export async function createProduct(
         seoDescription: translation.seoDescription,
         indicativePrice: createIndicativePrice(translation.indicativePrice ?? {}),
       })),
+    );
+    const created = await deps.productRepo.create(
+      {
+        id: productId,
+        publicId,
+        sku: input.sku.trim(),
+        categoryId: input.categoryId,
+        status: 'DRAFT',
+        directSaleEnabled: false,
+      },
+      translationRows,
     );
 
     await deps.auditRepo.record({
@@ -317,7 +322,7 @@ export async function addProductTranslation(
       });
     }
     const updated = await deps.productRepo.addTranslation(input.productId, {
-      id: deps.idGen.nextId(),
+      id: await deps.idGen.nextId(),
       productId: input.productId,
       locale: input.locale,
       name: input.name,
@@ -387,17 +392,19 @@ export async function createContent(
   }
 
   return deps.uow.runInTransaction(async () => {
-    const contentId = deps.idGen.nextId();
-    const translationRows = input.translations.map((translation) => ({
-      id: deps.idGen.nextId(),
-      contentId,
-      locale: translation.locale,
-      title: translation.title,
-      summary: translation.summary,
-      content: translation.content,
-      seoTitle: translation.seoTitle,
-      seoDescription: translation.seoDescription,
-    }));
+    const contentId = await deps.idGen.nextId();
+    const translationRows = await Promise.all(
+      input.translations.map(async (translation) => ({
+        id: await deps.idGen.nextId(),
+        contentId,
+        locale: translation.locale,
+        title: translation.title,
+        summary: translation.summary,
+        content: translation.content,
+        seoTitle: translation.seoTitle,
+        seoDescription: translation.seoDescription,
+      })),
+    );
     const pendingRoutes = input.translations.map((translation, index) => ({
       translationId: translationRows[index]!.id,
       locale: translation.locale,
@@ -471,7 +478,7 @@ export async function addContentTranslation(
     if (input.slug !== undefined) {
       requireContentNamespace(existing.type);
     }
-    const translationId = deps.idGen.nextId();
+    const translationId = await deps.idGen.nextId();
     let updated = await deps.contentRepo.addTranslation(input.contentId, {
       id: translationId,
       contentId: input.contentId,

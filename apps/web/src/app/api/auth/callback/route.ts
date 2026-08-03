@@ -45,7 +45,7 @@ const getHandler = withApiHandler('auth.callback', async (request) => {
   let user = await container.users.findByIssuerAndSubject(claims.issuer, claims.subject);
   if (!user) {
     user = await container.users.create({
-      id: container.idGen.nextId(),
+      id: await container.idGen.nextId(),
       issuer: claims.issuer,
       subject: claims.subject,
       email: claims.email,

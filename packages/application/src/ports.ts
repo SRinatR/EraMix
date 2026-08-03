@@ -6,8 +6,14 @@ export interface UnitOfWork {
   runInTransaction<T>(work: () => Promise<T>): Promise<T>;
 }
 
+/**
+ * Generates a new internal entity id. ADR-0021: for every persistent
+ * PostgreSQL entity whose id an application use case must know before
+ * insert, PostgreSQL 19 Beta 2's native `uuidv7()` SQL function is the
+ * authoritative source — hence `Promise<string>`, not a synchronous value.
+ */
 export interface IdGenerator {
-  nextId(): string;
+  nextId(): Promise<string>;
 }
 
 /**

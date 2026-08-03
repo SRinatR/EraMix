@@ -89,11 +89,11 @@ export async function uploadProductAsset(
   }
 
   const sanitizedFilename = sanitizeFilenameForStorage(input.filename);
-  const storageKey = `product-assets/${deps.idGen.nextId()}-${sanitizedFilename}`;
+  const storageKey = `product-assets/${await deps.idGen.nextId()}-${sanitizedFilename}`;
   const stored = await deps.storage.put(storageKey, input.content, input.contentType);
 
   const displayName = sanitizeDisplayName(input.displayName ?? input.filename);
-  const assetId = deps.idGen.nextId();
+  const assetId = await deps.idGen.nextId();
 
   return deps.uow.runInTransaction(async () => {
     const created = await deps.productAssetRepo.create({

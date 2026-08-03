@@ -63,7 +63,7 @@ export async function addOrderComment(
   }
 
   const comment = await deps.commentRepo.create({
-    id: deps.idGen.nextId(),
+    id: await deps.idGen.nextId(),
     orderId: input.orderId,
     authorId: input.actorUserId,
     visibility: input.visibility,

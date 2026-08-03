@@ -22,7 +22,7 @@ import type {
 
 class SequentialIdGenerator {
   private counter = 0;
-  nextId(): string {
+  async nextId(): Promise<string> {
     return `comment-${++this.counter}`;
   }
 }

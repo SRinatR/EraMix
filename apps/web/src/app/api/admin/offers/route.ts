@@ -116,7 +116,7 @@ const createOfferHandler = withApiHandler('admin.offers.create', async (request,
       uow: container.uow,
     },
     {
-      id: container.idGen.nextId(),
+      id: await container.idGen.nextId(),
       ...body,
       actorUserId: actor.userId,
       actorRole: actor.platformRole,

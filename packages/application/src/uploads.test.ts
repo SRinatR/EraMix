@@ -6,7 +6,7 @@ import { uploadMedia } from './uploads.js';
 const PNG_CONTENT = new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...new Array(20).fill(0)]);
 
 function fakeIdGen(id = 'id-1') {
-  return { nextId: () => id };
+  return { nextId: () => Promise.resolve(id) };
 }
 
 function fakeStorage(): StorageProvider & { puts: unknown[] } {

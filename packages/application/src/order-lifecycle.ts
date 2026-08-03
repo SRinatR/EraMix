@@ -120,7 +120,7 @@ export async function createDraftOrder(
 
   const lines = await Promise.all(input.lines.map((line) => snapshotLine(deps.productRepo, line)));
 
-  const orderId = deps.idGen.nextId();
+  const orderId = await deps.idGen.nextId();
 
   return deps.uow.runInTransaction(async () => {
     const order = await deps.orderRepo.create(
