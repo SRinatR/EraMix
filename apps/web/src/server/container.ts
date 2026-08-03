@@ -7,6 +7,7 @@ import {
   OidcIdentityProvider,
   PendingAuthCodec,
   PrismaAdvertisingProviderConfigRepository,
+  PrismaAnalyticsSinkStatusRepository,
   PrismaAuditEventRepository,
   PrismaCategoryRepository,
   PrismaCompanyRepository,
@@ -70,6 +71,7 @@ function buildContainer() {
     settingsRepo: new PrismaPlatformSettingsRepository(prisma),
     settingsHistoryRepo: new PrismaPlatformSettingsHistoryRepository(prisma),
     advertisingProviders: new PrismaAdvertisingProviderConfigRepository(prisma),
+    analyticsSinkStatus: new PrismaAnalyticsSinkStatusRepository(prisma),
     offers: new PrismaOfferRepository(prisma),
     get identityProvider() {
       if (env.OIDC_ISSUER_URL === undefined || env.OIDC_CLIENT_ID === undefined) {

@@ -2357,6 +2357,39 @@ paths:
         '400':
           $ref: '#/components/responses/MalformedRequest'
 
+  /api/admin/analytics/diagnostics:
+    get:
+      operationId: getAnalyticsDiagnostics
+      summary: >-
+        Per-sink admin diagnostics for the GA4/Yandex Metrica/Rust analytics
+        sinks (settings.manage — ADMIN only): enabled state and
+        configuration validity are read live from PlatformSettings; the
+        last safe delivery result per sink is a diagnostic snapshot (not a
+        history log) recorded by apps/worker after each dispatch attempt.
+        Never exposes a secret (the GA4 API secret is a deployment-only
+        credential) or an event payload/PII — `lastError` is always the
+        sink's own already-safe error string.
+      tags: [Analytics]
+      responses:
+        '200':
+          description: Diagnostics for all 3 analytics sinks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnalyticsSinkDiagnostic'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
   /api/admin/advertising-providers:
     get:
       operationId: listAdvertisingProviderConfigs
@@ -3713,6 +3746,27 @@ components:
       type: string
       description: CLAUDE.md's closed, named provider allowlist — never an open string.
       enum: [GOOGLE_ADS, YANDEX_DIRECT, MICROSOFT_ADS, META, LINKEDIN, TIKTOK]
+    AnalyticsSinkDiagnostic:
+      type: object
+      required: [sink, enabled, configValid]
+      properties:
+        sink: { type: string, enum: [ga4, yandex_metrica, rust_analytics] }
+        enabled: { type: boolean }
+        configValid:
+          type: boolean
+          description: >-
+            Whether the non-secret identifier this sink needs (a
+            measurement ID/counter ID) is present in PlatformSettings.
+            `rust_analytics` takes no configuration today and is always
+            `true`.
+        lastAttemptAt: { type: string, format: date-time }
+        lastSucceeded: { type: boolean }
+        lastSkipped:
+          type: boolean
+          description: True when the sink was never even called — consent or admin enablement was absent, not a delivery failure.
+        lastError:
+          type: string
+          description: The sink's own already-safe error string — never an event payload, PII, or secret.
     AdvertisingProviderConfig:
       type: object
       required: [provider, enabled, consentCategory, testMode, updatedAt, version]

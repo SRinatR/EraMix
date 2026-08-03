@@ -586,3 +586,28 @@ export interface OfferRepository {
   /** Throws ConcurrencyConflictError on a stale expectedVersion. */
   update(id: string, expectedVersion: number, patch: OfferPatch): Promise<Offer>;
 }
+
+/**
+ * The last-observed outcome of one analytics sink's dispatch attempt
+ * (admin diagnostics — CLAUDE.md: "Provide admin diagnostics showing
+ * enabled state, configuration validity and last safe delivery result").
+ * `lastError` is always the sink's own already-safe error string (e.g.
+ * `HTTP 503`, `PlatformSettings.ga4MeasurementId is not configured`) —
+ * every `AnalyticsEventSink.dispatch()` implementation already never
+ * includes an event payload/PII in its error field, so no separate
+ * redaction step is needed here; this type just stores what the sink
+ * itself already reported.
+ */
+export interface AnalyticsSinkStatus {
+  readonly sink: string;
+  readonly lastAttemptAt: Date;
+  readonly lastSucceeded: boolean;
+  readonly lastSkipped: boolean;
+  readonly lastError?: string | undefined;
+}
+
+export interface AnalyticsSinkStatusRepository {
+  /** Upserts the one row for this sink — a diagnostic snapshot, not a history log. */
+  recordResult(status: AnalyticsSinkStatus): Promise<void>;
+  listAll(): Promise<readonly AnalyticsSinkStatus[]>;
+}

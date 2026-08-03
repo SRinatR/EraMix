@@ -5,6 +5,7 @@ import {
   Ga4EventSink,
   HttpIndexNowNotifier,
   JsonLogger,
+  PrismaAnalyticsSinkStatusRepository,
   PrismaOutboxMessageRepository,
   PrismaPlatformSettingsRepository,
   RustAnalyticsEventSink,
@@ -59,6 +60,7 @@ const deps = {
   settingsRepo: new PrismaPlatformSettingsRepository(prisma),
   ...(env.INDEXNOW_KEY !== undefined ? { indexNowKey: env.INDEXNOW_KEY } : {}),
   analyticsSinks,
+  analyticsSinkStatusRepo: new PrismaAnalyticsSinkStatusRepository(prisma),
 };
 
 let stopped = false;

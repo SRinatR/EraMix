@@ -11,6 +11,7 @@ import { loadEnv } from '../env.js';
 import { createPrismaClient, type PrismaClient } from '../prisma-client.js';
 import { PrismaUnitOfWork } from '../unit-of-work.js';
 import { PrismaAdvertisingProviderConfigRepository } from './advertising-provider-config-repository.js';
+import { PrismaAnalyticsSinkStatusRepository } from './analytics-sink-status-repository.js';
 import { PrismaAuditEventRepository } from './audit-event-repository.js';
 import { PrismaCategoryRepository } from './category-repository.js';
 import { PrismaOfferRepository } from './offer-repository.js';
@@ -38,6 +39,7 @@ describe('PostgreSQL integration', () => {
   const productRepo = () => new PrismaProductRepository(prisma);
   const auditRepo = () => new PrismaAuditEventRepository(prisma);
   const advertisingRepo = () => new PrismaAdvertisingProviderConfigRepository(prisma);
+  const analyticsSinkStatusRepo = () => new PrismaAnalyticsSinkStatusRepository(prisma);
   const offerRepo = () => new PrismaOfferRepository(prisma);
   const outboxRepo = () => new PrismaOutboxMessageRepository(prisma);
   const settingsRepo = () => new PrismaPlatformSettingsRepository(prisma);
@@ -614,5 +616,43 @@ describe('PostgreSQL integration', () => {
     expect(pageAfterRollback.data.some((entry) => entry.id === historyEntryToRollBack.id)).toBe(
       true,
     );
+  });
+
+  it('AnalyticsSinkStatus.recordResult upserts a real row and listAll reflects the latest snapshot per sink', async () => {
+    const sinkName = `test-sink-${randomUUID()}`;
+    const firstAttemptAt = new Date('2026-08-03T09:00:00.000Z');
+
+    await analyticsSinkStatusRepo().recordResult({
+      sink: sinkName,
+      lastAttemptAt: firstAttemptAt,
+      lastSucceeded: false,
+      lastSkipped: false,
+      lastError: 'HTTP 503',
+    });
+
+    const afterFirst = await analyticsSinkStatusRepo().listAll();
+    const firstRow = afterFirst.find((row) => row.sink === sinkName);
+    expect(firstRow).toMatchObject({
+      lastSucceeded: false,
+      lastSkipped: false,
+      lastError: 'HTTP 503',
+    });
+    expect(firstRow?.lastAttemptAt.toISOString()).toBe(firstAttemptAt.toISOString());
+
+    // A second recordResult() call for the same sink must upsert (overwrite),
+    // never insert a second row — this is a diagnostic snapshot, not a log.
+    const secondAttemptAt = new Date('2026-08-03T10:00:00.000Z');
+    await analyticsSinkStatusRepo().recordResult({
+      sink: sinkName,
+      lastAttemptAt: secondAttemptAt,
+      lastSucceeded: true,
+      lastSkipped: false,
+    });
+
+    const afterSecond = await analyticsSinkStatusRepo().listAll();
+    const matchingRows = afterSecond.filter((row) => row.sink === sinkName);
+    expect(matchingRows).toHaveLength(1);
+    expect(matchingRows[0]).toMatchObject({ lastSucceeded: true, lastError: undefined });
+    expect(matchingRows[0]?.lastAttemptAt.toISOString()).toBe(secondAttemptAt.toISOString());
   });
 });

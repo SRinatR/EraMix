@@ -1,5 +1,6 @@
 import type {
   AnalyticsEventSink,
+  AnalyticsSinkStatusRepository,
   Clock,
   EmailSender,
   IndexNowNotifier,
@@ -28,6 +29,8 @@ export interface OutboxWorkerDeps {
   readonly indexNowKey?: string;
   /** GA4/Yandex Metrica/Rust sinks (packages/application/src/analytics.ts's dispatchAnalyticsEvent does the consent/enablement gating per sink). Empty/omitted means analytics.event_captured messages are simply marked SENT with nothing dispatched. */
   readonly analyticsSinks?: readonly AnalyticsEventSink[];
+  /** Records the per-sink diagnostic snapshot admin sees (CLAUDE.md: "last safe delivery result"). Optional and best-effort — a write failure here must never affect the outbox message's own SENT/FAILED/DEAD_LETTER outcome. */
+  readonly analyticsSinkStatusRepo?: AnalyticsSinkStatusRepository;
 }
 
 export interface OutboxWorkerResult {
@@ -150,6 +153,46 @@ async function dispatchAnalyticsEventMessage(
     eventName: event.eventName,
     results,
   });
+  await recordSinkStatuses(deps, results);
+}
+
+/**
+ * Best-effort admin-diagnostic snapshot (CLAUDE.md: "last safe delivery
+ * result"). A skipped result (consent/enablement absent) is recorded too —
+ * "was never even attempted" is itself a meaningful diagnostic state, not
+ * something to omit. A write failure here is logged but never rethrown:
+ * this must never turn a successful analytics dispatch into a
+ * retried/dead-lettered outbox message.
+ */
+async function recordSinkStatuses(
+  deps: OutboxWorkerDeps,
+  results: readonly {
+    readonly sink: string;
+    readonly succeeded: boolean;
+    readonly skipped?: boolean;
+    readonly error?: string;
+  }[],
+): Promise<void> {
+  if (!deps.analyticsSinkStatusRepo) {
+    return;
+  }
+  const now = deps.clock.now();
+  for (const result of results) {
+    try {
+      await deps.analyticsSinkStatusRepo.recordResult({
+        sink: result.sink,
+        lastAttemptAt: now,
+        lastSucceeded: result.succeeded,
+        lastSkipped: result.skipped ?? false,
+        lastError: result.error,
+      });
+    } catch (error) {
+      deps.logger.log('warn', 'analytics_sink_status_record_failed', {
+        sink: result.sink,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }
 
 /**

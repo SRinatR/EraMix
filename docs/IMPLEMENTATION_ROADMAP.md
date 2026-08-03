@@ -3098,6 +3098,62 @@ advertising: false}`; 3 new unit tests (`analytics-client.test.ts`) prove
   server-to-server sinks that already exist) would need to read this same
   store before injecting anything.
 
+### Phase D slice 4: GA4/Yandex Metrica/Rust analytics admin diagnostics
+
+CLAUDE.md: "Provide admin diagnostics showing enabled state, configuration
+validity and last safe delivery result and redacted error state." Also
+closes item 8 (Rust analytics health/diagnostic contract) — both items name
+the same admin diagnostics surface, delivered together rather than twice.
+
+- **Schema** (migration `20260803200000_add_analytics_sink_status`): new
+  `AnalyticsSinkStatus` table — one row per sink name (`sink` is the
+  primary key), upserted, never a history log. `lastError` is always the
+  sink's own already-safe error string (every `AnalyticsEventSink.dispatch()`
+  implementation already never includes an event payload/PII in its error
+  field), so no separate redaction step was needed.
+- **Application** (`packages/application/src/analytics-diagnostics.ts`, 5
+  unit tests): `getAnalyticsDiagnostics` (`settings.manage`, ADMIN-only)
+  joins live `PlatformSettings` enablement/config-presence with the last
+  recorded status per sink. `configValid` only checks for the presence of
+  the non-secret identifier each sink needs (GA4 measurement ID / Yandex
+  counter ID) — the real secret (`GA4_API_SECRET`) is never read or
+  exposed here, an env-only deployment secret. `rust_analytics` is always
+  `configValid: true` (it takes no configuration at all today); its real
+  state is only ever visible through `lastError` if/when a real dispatch
+  attempt is ever recorded (which requires `rustAnalyticsEnabled: true`, a
+  setting CLAUDE.md requires to stay false in production).
+- **Recording** (`apps/worker/src/outbox-worker.ts`): after every
+  `dispatchAnalyticsEvent` call, `recordSinkStatuses` upserts one row per
+  result — including a skipped sink (consent/enablement absent is itself a
+  meaningful diagnostic state, not omitted). A status-write failure is
+  logged but never rethrown, so it can never turn a successful analytics
+  dispatch into a retried/dead-lettered outbox message — a real regression
+  this exact bug pattern (bleeding a side-effect's failure into an
+  unrelated outcome) was explicitly tested against.
+- **Delivery**: `GET /api/admin/analytics/diagnostics` and a new
+  `/admin/analytics` page (linked from the admin nav) rendering enabled/
+  config-valid/last-attempt/last-result per sink. New `AnalyticsSinkDiagnostic`
+  OpenAPI schema; `redocly lint` passes.
+- **A real bug found and fixed while writing this slice's own worker
+  test**: the new test used a hardcoded `occurredAt`-adjacent fixed clock
+  time instead of `new Date()` (matching every other test in the same
+  `describe` block), which silently tripped `validateAnalyticsEvent`'s
+  clock-skew rejection and caused the message to retry instead of dispatch
+  — the assertion failure ("0 calls") correctly caught this before it was
+  ever committed, not a defect in the shipped code.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **604 unit tests** (up from 595). `next build`'s own bundler/TypeScript
+  passes succeeded but the "Collecting page data" step crashed again with
+  the same disk-space-exhaustion signature (exit 134 this time, same root
+  cause, `Get-PSDrive C` ~330 MB free) — not forced past; CI is the
+  verification of record, same standing precedent as the two prior slices.
+- **Not yet verified**: the new migration/table against a real Postgres row
+  (CI's `db-integration` job only, per standing convention) — a new
+  integration test (`recordResult` upsert semantics: a second call for the
+  same sink overwrites, never inserts a second row) was added but is
+  CI-only, same as every other Postgres-backed test in this repository.
+
 ## Required task format for the CLI agent
 
 For every task, report:

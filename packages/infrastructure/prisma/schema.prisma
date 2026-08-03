@@ -800,6 +800,24 @@ model AdvertisingProviderConfig {
   @@map("advertising_provider_configs")
 }
 
+/// Diagnostic snapshot of the last dispatch attempt per analytics sink
+/// (admin diagnostics — CLAUDE.md: "enabled state, configuration validity
+/// and last safe delivery result"). One row per sink name, upserted by
+/// apps/worker after every outbox-driven dispatch attempt — never a
+/// history log, and `lastError` is always the sink's own already-safe
+/// error string (never an event payload or PII).
+model AnalyticsSinkStatus {
+  sink          String   @id
+  lastAttemptAt DateTime
+  lastSucceeded Boolean
+  lastSkipped   Boolean
+  lastError     String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("analytics_sink_status")
+}
+
 // ---------- Dormant Merchant Offer foundation (ADR-0019) ----------
 
 enum OfferState {

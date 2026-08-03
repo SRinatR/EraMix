@@ -63,6 +63,8 @@ export type {
   PlatformSettingsHistoryRepository,
   AdvertisingProviderConfigPatch,
   AdvertisingProviderConfigRepository,
+  AnalyticsSinkStatus,
+  AnalyticsSinkStatusRepository,
   OfferListFilter,
   OfferPatch,
   OfferRepository,
@@ -201,6 +203,8 @@ export type {
   UpdateAdvertisingProviderConfigInput,
 } from './advertising.js';
 export { recordAnalyticsEvents, dispatchAnalyticsEvent } from './analytics.js';
+export { getAnalyticsDiagnostics } from './analytics-diagnostics.js';
+export type { AnalyticsSinkName, AnalyticsSinkDiagnostic } from './analytics-diagnostics.js';
 export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';
 export {
   createOffer,
