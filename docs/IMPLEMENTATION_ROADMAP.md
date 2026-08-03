@@ -2584,6 +2584,105 @@ each green on CI including the real-Postgres integration-test job.
   a documented, deliberate simplification since no item can ever be
   eligible today.
 
+## Phase B slice 7: authoritative HTTP response and error-handling contract (ADR-0020)
+
+Product Owner instruction, 2026-08-03: "Add an authoritative HTTP response
+and error-handling contract to the existing English project documentation,
+then implement it incrementally... Define and test every status code that
+is applicable to EraMix's public pages, APIs, auth, uploads, redirects,
+rate limiting, background integrations and deployment boundaries" — not
+every code in the MDN/IANA registry. Delivered in two commits (`e600dd7`
+docs, `965f141` implementation Slice 1), both green on CI.
+
+- **Contract document**: `docs/runbooks/http-error-contract.md` (new,
+  governed by ADR-0020) is the authoritative, living HTTP contract —
+  central-mapping architecture, the full RFC 9457 Problem Details field
+  contract with an explicit tracked localization gap, the required
+  minimum status-code mapping (2xx/3xx/304/4xx/5xx plus infrastructure-
+  owned/not-applicable codes), a formalized anti-enumeration policy
+  (public pages: uniform 404; authenticated cross-tenant order access:
+  403, with documented rationale), public error-page caching/robots/
+  monitoring requirements, and a per-slice implementation-status table.
+  Auditing the pre-existing error-mapping pipeline against this contract
+  surfaced concrete, independently-verified defects (each cited with its
+  exact code location in ADR-0020) — this was not a paper exercise.
+- **Catalogue correctness**: `ERROR_CATALOGUE`'s `status: readonly
+number[]` fields (dead — `toProblemDetails` only ever read `status[0]`)
+  became a single canonical `status: number` per entry. `LOCALE_NOT_SUPPORTED`
+  corrected 404 -> 422 (its only real thrower, `parseLocale()`, is only
+  ever called on an admin form's body field, never URL routing — verified
+  by grepping every call site). All catalogue text and two hardcoded
+  `problemResponse()` title strings translated Russian -> English.
+- **New codes**: `MALFORMED_REQUEST` (400, a `SyntaxError` from
+  `request.json()` on an unparseable body — previously mis-mapped to 500);
+  `PAYLOAD_TOO_LARGE` (413) and `UNSUPPORTED_MEDIA_TYPE` (415), new
+  `DomainError` subclasses replacing two of `validateUpload()`'s generic
+  422s (extension/signature mismatches deliberately stay 422 — the
+  declared type is supported, the payload just doesn't match its claim);
+  `METHOD_NOT_ALLOWED` (405) via a new `defineRouteHandlers()`/
+  `methodNotAllowed()` helper (`apps/web/src/server/handler.ts`) — Next.js
+  16's own default 405 has no `Allow` header (verified against the
+  installed `next@16.2.12` package source), non-compliant with RFC 9110
+  §15.5.6. The helper also overrides `OPTIONS` with a correct `Allow`
+  header built from the _true_ implemented-method set (exporting a real
+  function for every method, even the 405 stubs, would otherwise make
+  Next's own OPTIONS auto-implementation report every method as allowed —
+  a real subtlety caught and fixed during implementation, not anticipated
+  in the initial design).
+- **405 rollout (representative batch)**: `health/live` (GET-only),
+  `api/media` (POST-only), `api/admin/offers` (GET+POST),
+  `api/admin/offers/{offerId}` (PATCH-only) — covering every route shape
+  in the codebase. Rollout to the remaining ~57 route files is tracked,
+  incremental follow-up (the runbook's implementation-status table), not
+  hidden as complete.
+- **Route-level tests (new pattern)**: no API route in this codebase had
+  ever had a dedicated test before this slice (route.ts files were
+  treated as thin, untested wrappers around already-tested application-
+  layer functions). Introduced `vi.mock('@/server/container')` +
+  a matching Vitest `"@"` path alias (`apps/web/vitest.config.ts`,
+  previously undeclared — Vitest does not read `tsconfig.json`'s `paths`
+  the way Next.js's own bundler does) as the pattern, then used it for the
+  three redirect-emitting routes named in the amendment (`auth/login`,
+  `auth/callback`, the signed-download redirect) — all three asserted a
+  real `307` (verified against the installed `next@16.2.12` package
+  source; the OpenAPI spec had incorrectly documented `302` for all three,
+  corrected in the same commit) and the `Location` header. Plus
+  `handler.test.ts` (defineRouteHandlers/405/OPTIONS),
+  `problem-response.test.ts` (every branch, including the 500 fallback's
+  "never leaks the original message" guarantee — verified directly by
+  asserting a planted sensitive string never appears in the JSON body),
+  and `error-catalogue.test.ts`.
+- **Public error pages**: `not-found.tsx` gained a static `robots:
+{index: false, follow: false}` metadata export (previously none),
+  matching the `/admin` layout's own established pattern.
+- **OpenAPI**: corrected all 3 redirect paths' documented status (302 -> 307) with `Location` headers; wired 413/415 into the 2 upload paths'
+  response contracts; added the 4 new codes to `ProblemDetails.code`'s
+  enum; new `PayloadTooLarge`/`UnsupportedMediaType` shared
+  `components/responses`. `MalformedRequest`/`MethodNotAllowed` shared
+  responses deliberately deferred until wired into a real path — redocly's
+  `no-unused-components` rule correctly flagged them as premature when
+  first added, caught before commit, not after.
+- **Traceability matrix**: does not exist yet (Phase 8's own precondition
+  is unmet, per Phase 8's status above) — no matrix fabricated. This
+  slice's requirement-to-evidence mapping: ADR-0020 (architecture), the
+  runbook (contract), commits `e600dd7`/`965f141` (diffs), their CI run
+  URLs (verification) — the same pattern established for ADR-0019.
+- **Verified**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects after both
+  commits; `pnpm run test` — **508 unit tests** (up from 480 before this
+  slice: +28 net — new route/handler/catalogue tests, minus 3 pre-existing
+  assertions updated in place for the corrected error types/status in
+  `packages/application/src/{uploads,product-assets}.test.ts`). Both
+  commits' CI runs watched to completion and confirmed fully green,
+  including the real-Postgres migration-gate job (no schema changes in
+  this slice, so this job's role here is confirming nothing broke).
+- **Not yet done, explicitly tracked** (per the runbook's implementation-
+  status table, not silently dropped): 405+`Allow` rollout to ~57 more
+  route files; `MalformedRequest`/`MethodNotAllowed` OpenAPI response
+  wiring once a real path exercises them; per-locale (`ru`/`uz`) Problem
+  Details translation (API body only — public pages are already properly
+  localized) remains explicitly out of scope, not a gap in this slice.
+
 ## Required task format for the CLI agent
 
 For every task, report:
