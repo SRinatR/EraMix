@@ -3376,6 +3376,301 @@ feature area needed a code change.
   off-by-default exactly as ADR-0019 requires, never implicitly enabled by
   an unrelated slice.
 
+## Acceptance-readiness pass, 2026-08-04: non-Pi traceability matrix and launch-readiness checklist
+
+Product Owner instruction: perform the final non-Pi implementation and
+acceptance-readiness pass — a strict read-only audit producing a
+traceability matrix, close any real consent-UI gap the audit finds, close
+tractable non-Pi test/evidence gaps, and add a launch-readiness checklist to
+this document. No Pi/Docker/VPS/staging/production access, no live external
+credentials, no Merchant Center enablement, no invented business/legal data.
+
+### Audit finding and fix: consent-banner localization gap
+
+The read-only audit (re-reading `consent-banner.tsx`/`manage-consent-link.tsx`
+against CLAUDE.md's explicit "accessible localized consent banner and
+preferences UI for `ru`, `en`, `uz`") found a real, confirmed gap: both
+components rendered hardcoded English strings with **zero** corresponding
+keys in `ru.json`/`uz.json` — a Russian- or Uzbek-locale visitor saw an
+English-only consent banner regardless of `[locale]`. Grepping
+`apps/web/messages/{en,ru,uz}.json` for `consent` before the fix confirmed no
+namespace existed at all; this was not a partial/stale translation, the
+banner was never localized in the first place.
+
+Fixed in commit `6e773b2`: added a `Consent` message namespace to all three
+locale files and wired `consent-banner.tsx`/`manage-consent-link.tsx` through
+`next-intl`'s `useTranslations('Consent')`, the same pattern
+`site-header.tsx` already established for `Nav`. Added
+`apps/web/src/i18n/messages.test.ts` (3 new tests) — a message-key-parity
+regression guard asserting every locale exposes the identical key set and no
+empty-string value, so this exact class of silent gap (a key added for one
+locale, silently absent for another — `next-intl` does not fail a build on a
+missing key, it falls back to rendering the raw key path) cannot recur
+undetected. `pnpm run format`/`lint` (incl. `redocly lint`)/`typecheck`/`test`
+all exit 0 across all 7 workspace projects — **657 unit tests** (up from 654:
++3 `messages.test.ts`). CI run
+[30843758011](https://github.com/SRinatR/EraMix/actions/runs/30843758011) is
+green (all 7 jobs, including the real-Postgres migration-gate job and the
+Docker image build).
+
+**Caveat, stated honestly**: the `ru`/`uz` consent strings above are a
+same-session translation by the implementing agent, not a native-reviewer
+pass. `docs/runbooks/search-visibility.md`'s "native-review and
+factual-evidence workflow for `ru`, `en`, and `uz`" is written for indexable
+content pages; a consent banner is UI chrome, not an indexable page, but it
+is still legally load-bearing copy. Treat these three strings as
+functionally correct (verified: real keys, real interpolation, parity-tested)
+but pending the same native-speaker/legal review before production traffic
+sees them — tracked as a launch-readiness item below, not silently assumed
+final.
+
+### Audit method
+
+Re-read `CLAUDE.md`, every ADR (`docs/adr/0001`-`0020`), this roadmap in
+full, `docs/runbooks/search-visibility.md`, `docs/runbooks/http-error-contract.md`,
+`docs/runbooks/security.md`, `docs/OPEN_QUESTIONS.md`, `packages/contracts/openapi/openapi.yaml`,
+and `packages/infrastructure/prisma/schema.prisma` against current `HEAD`
+(`54cc4c1` at audit start). Verified, not merely re-read, the load-bearing
+claims: `find ... -name route.ts | wc -l` vs. `grep -rL defineRouteHandlers`
+(405 rollout is genuinely 66/66, zero gaps); `grep -rn "gtag\|googletagmanager\|mc.yandex\|fbq("`
+across `apps/web/src` (zero client-side vendor script injection exists
+anywhere, confirming the "config-only control plane, no live tag load" claim
+is not stale); `gh run list`/`gh run view` against the real GitHub Actions
+history (HEAD's CI, and this pass's own new commit's CI, both independently
+confirmed green, not assumed from the roadmap's own prose); a full
+`pnpm run format`/`lint`/`typecheck`/`pnpm -r run test -- --no-file-parallelism`
+pass on this laptop reproducing the same green result CI reports. No
+requirement below is marked "verified" solely because a prior status block
+asserted it — each was cross-checked against either a live command run in
+this session or a direct file read in this session.
+
+### Traceability matrix
+
+Legend: **V** = verified this session (command/file evidence above, or in
+this table's own "Evidence" cell); **I-U** = implemented, tested, CI-green,
+but the real external dependency (live Postgres row in production, real
+browser, real credential) is Pi/VPS/credential-gated, never exercised beyond
+CI's ephemeral Postgres service; **Partial** = a genuine, named, deliberate
+sub-scope gap (never a hidden one); **N/I** = not implemented, with its exact
+blocker.
+
+#### Technical SEO (source: `docs/runbooks/search-visibility.md`'s own P0/P1 matrix)
+
+| Requirement                                                                            | Files                                                                                                                                           | Tests / CI evidence                                                                                                                          | Status                                                                                                                                         |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Locale-aware canonical URLs, one typed URL builder                                     | `packages/domain/src/url-builder.ts`, `packages/application/src/route-resolution.ts`                                                            | `route-resolution.test.ts` (current/redirect/collision/missing-locale/404/410/successor cases)                                               | **V** (unit-level); **I-U** for a real DB-backed row (Pi)                                                                                      |
+| Product Owner controls SEO automation via settings                                     | `packages/domain/src/platform-settings.ts`, `packages/application/src/settings.ts`, `apps/web/src/app/api/admin/settings/**`, `/admin/settings` | `platform-settings.test.ts`, `settings.test.ts`, `postgres.integration.test.ts` (OCC/JSONB/history/rollback/audit-outbox atomicity, CI-only) | **V** (RBAC/validation/preview/rollback/secret-redaction); **I-U** for the Postgres path                                                       |
+| `ru`/`en`/`uz` hreflang cluster, `en` = `x-default`                                    | `apps/web/src/server/seo.ts`                                                                                                                    | `seo.test.ts`                                                                                                                                | **V** (unit); **I-U** live crawler confirmation (Pi/browser)                                                                                   |
+| Server/static-rendered public templates, no orphaned indexable page                    | `apps/web/src/app/[locale]/{catalog,articles,pages,faq}/**`                                                                                     | `route-resolution.test.ts`; manual dev-server curl verification recorded in Phase 2/3 status blocks                                          | **I-U** (real rendering needs a live DB — Pi)                                                                                                  |
+| `robots.txt`/sitemap: published-canonical-only, emergency kill switch                  | `apps/web/src/app/robots.ts`, `sitemap.ts`                                                                                                      | `robots.test.ts`, `sitemap.test.ts` (incl. `crawlerGlobalNoindex` empties both)                                                              | **V**                                                                                                                                          |
+| Per-translation metadata: title/description/OG/JSON-LD                                 | `apps/web/src/server/seo.ts`, `apps/web/src/components/json-ld.tsx`, `packages/application/src/json-ld.ts`                                      | `json-ld.test.ts` (10 cases, incl. no-`offers` guarantee and FAQPage-only-when-visible-entries)                                              | **V**                                                                                                                                          |
+| Quote-only pricing never `Offer` markup                                                | `packages/application/src/json-ld.ts`'s `buildProductJsonLd`                                                                                    | `json-ld.test.ts` line 11 (asserted above)                                                                                                   | **V**                                                                                                                                          |
+| RFQ/product/category views and phone calls: consent-aware, no-PII events               | `packages/domain/src/analytics.ts`, `packages/application/src/analytics.ts`, `apps/web/src/components/analytics-client.ts`                      | `analytics.test.ts` (domain+application), `analytics-client.test.ts`, `analytics-event-schema.test.ts`                                       | **V** (pipeline+consent gating); **N/I** real GA4/Yandex traffic (no live credential — Product Owner/credential-gated)                         |
+| HTTPS/canonical host/HSTS/404/410 correctness                                          | `apps/web/next.config.ts` (HSTS header), `apps/web/src/proxy.ts`, `gone-response.ts`, `not-found.tsx`                                           | `csrf.test.ts` (headers), route-resolution retirement tests, live dev-server curl (Phase B slice 2 status block)                             | **V** (headers/logic); **I-U** real TLS/host (VPS)                                                                                             |
+| Parameterized-collection SEO policy (search=noindex,follow; pagination=self-canonical) | `apps/web/src/server/seo.ts`'s `categoryAlternates`                                                                                             | `seo.test.ts` (6 cases: search/pagination/combined/bare-page-1)                                                                              | **V**                                                                                                                                          |
+| IndexNow: canonical-only, post-publish-only                                            | `packages/domain/src/indexnow.ts`, `apps/worker/src/outbox-worker.ts`                                                                           | see IndexNow table below                                                                                                                     | **V**                                                                                                                                          |
+| Demand-led content backlog, native-review workflow, quarterly content review           | —                                                                                                                                               | —                                                                                                                                            | **N/I** — explicitly an external, outside-Git SEO/business-team artifact per the runbook's own "Required external working artifacts"; not code |
+| Image/video sitemap extensions                                                         | —                                                                                                                                               | —                                                                                                                                            | **N/I** — no real public media/offer exists yet to extend (correctly deferred; `MerchantFeedItem` has no `imageLink` field, documented)        |
+
+#### HTTP response and error-handling contract (source: `docs/runbooks/http-error-contract.md`)
+
+Its own "Implementation status" table is the authoritative record and was
+re-verified this session (405 rollout: **66/66** route files, confirmed live
+by `grep -rL defineRouteHandlers`, zero gaps — the runbook's own table
+already said "Done" for this; this session independently reproduced that
+count rather than trusting the prose). Every row in that table is **V**
+except the one it already names as deferred:
+
+| Requirement                                     | Status                                                                                                                                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Central mapping, catalogue, 4xx/5xx/3xx mapping | **V** — re-verified via `error-catalogue.test.ts`, `problem-response.test.ts`, `domain-error-mapper.test.ts`                                                                     |
+| 405+`Allow` rollout                             | **V** — 66/66 route files, reproduced this session, not merely cited                                                                                                             |
+| 307/308 redirect tests                          | **V** — `auth/login`, `auth/callback`, asset-download `route.test.ts`                                                                                                            |
+| OpenAPI 405/400/413/415 wiring                  | **V** — `redocly lint` reproduced clean this session                                                                                                                             |
+| Traceability matrix entry                       | **V as of this pass** — this section is that entry; the runbook's own table should be read as satisfied by this document going forward (see "remaining prerequisite" note below) |
+| Per-locale (`ru`/`uz`) API Problem Details body | **Partial, by design** — public pages are localized; the JSON `detail`/`title` API body stays English-only, an explicit documented scope boundary, not a gap                     |
+
+**Remaining prerequisite for full "verified" status on any row above**: none
+for the mapping/catalogue/tests themselves (fully laptop/CI-verifiable); a
+real browser/crawler receiving the correct status/header over production TLS
+is Pi/VPS-gated, as already stated per-row in the phase status blocks above.
+
+#### Consent and analytics (source: CLAUDE.md's analytics/consent mandate, this pass's own Part B scope)
+
+| Requirement                                                                                                    | Files                                                                                                                                                | Tests                                                                                                                                                                                                                                                         | Status                                                                                         |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Accessible localized consent banner, `ru`/`en`/`uz`                                                            | `apps/web/src/components/consent-banner.tsx`, `manage-consent-link.tsx`, `apps/web/messages/*.json`                                                  | `messages.test.ts` (parity)                                                                                                                                                                                                                                   | **V** — fixed this pass (see above); native-legal-review caveat tracked in the checklist below |
+| Default deny for non-essential analytics                                                                       | `consent-banner.tsx` (visible until explicit choice), `analytics-client.ts`'s `currentConsent()`                                                     | `analytics-client.test.ts` ("sends withheld consent... when no choice has ever been recorded")                                                                                                                                                                | **V**                                                                                          |
+| Explicit accept/reject/preference management                                                                   | `consent-banner.tsx` (Accept all / Reject non-essential / Save preferences)                                                                          | `consent-store.test.ts` (round-trip granted/rejected/changed choice)                                                                                                                                                                                          | **V**                                                                                          |
+| Consent version, timestamp, purpose/provider state, withdrawal                                                 | `packages/domain/src/consent.ts`, `consent-store.ts`                                                                                                 | `consent.test.ts` (version-mismatch re-prompt), `consent-store.test.ts` (withdrawal deletes the cookie, next read reports "no choice on file")                                                                                                                | **V**                                                                                          |
+| Immediate cessation of provider loading/events after withdrawal                                                | `analytics-client.ts` reads the live store per event; no provider script is ever loaded client-side to begin with                                    | `analytics-client.test.ts`; live grep confirms zero `gtag`/`mc.yandex`/`fbq` script references anywhere in `apps/web/src`                                                                                                                                     | **V**                                                                                          |
+| GA4/Yandex Metrica/advertising/Rust blocked until valid consent                                                | `packages/application/src/analytics.ts`'s `dispatchAnalyticsEvent`, `packages/domain/src/advertising.ts`'s `isAdvertisingProviderDispatchAllowed`    | `analytics.test.ts` (6 consent-gating cases), `advertising.test.ts` (10 cases incl. per-category, no-consent, disabled-overrides-consent)                                                                                                                     | **V**                                                                                          |
+| No PII/secret/raw-form/IP/token/cookie data in events or consent                                               | `packages/domain/src/analytics.ts`'s closed discriminated union + `it.each` PII-shape rejection; `StoredConsent` has only booleans+version+timestamp | `analytics.test.ts`'s PII `it.each` block (name/email/phone/password/authorization/ipAddress/sessionToken)                                                                                                                                                    | **V**                                                                                          |
+| Deterministic tests: first visit, accept, reject, reload, withdrawal, stale/invalid consent, disabled provider | `consent-store.test.ts`, `consent.test.ts`, `analytics.test.ts`                                                                                      | first-visit = "returns undefined when no consent has ever been recorded"; reload = round-trip tests; stale/invalid = version-mismatch + corrupted-cookie tests; disabled-provider = "never calls a sink the admin has not enabled, even with consent granted" | **V** — every named scenario has a dedicated test, confirmed by reading each file this session |
+| Route/client tests proving no provider loads/receives events w/o consent                                       | (no client vendor script exists anywhere — GA4/Yandex sinks are server-to-server only, `packages/infrastructure/src/analytics/`)                     | `analytics-client.test.ts`, `analytics.test.ts`'s consent-gating suite, live grep (above) confirming no script tag exists to test the absence of                                                                                                              | **V**                                                                                          |
+| Rust analytics adapter: disabled-by-default, typed boundary only                                               | `packages/infrastructure/src/analytics/rust-analytics-event-sink.ts`                                                                                 | `rust-analytics-event-sink.test.ts` ("never dispatches anything — always reports a clear not-yet-available result")                                                                                                                                           | **V** — correctly dormant; real contract not expected before October 2026 (CLAUDE.md)          |
+
+#### IndexNow (P1 adapter, Bing/Yandex only)
+
+| Requirement                                                        | Files                                                                                               | Tests                                                                                                                                        | Status                                                               |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Publish only canonical URLs after a successful public state change | `packages/application/src/publication.ts` (`canonicalUrls` computed only on `PUBLISHED` transition) | `publication.test.ts`, `indexnow.test.ts`                                                                                                    | **V**                                                                |
+| Deployment-secret key, verification-key endpoint                   | `packages/infrastructure/src/env.ts`'s `INDEXNOW_KEY`, `GET /api/seo/indexnow-key.txt`              | `env.test.ts`; 404s (not a placeholder) when unconfigured                                                                                    | **V** (code); real key is a **Product-Owner/credential blocker**     |
+| Bounded retry, error observability                                 | `packages/infrastructure/src/indexnow-notifier.ts`                                                  | `indexnow-notifier.test.ts` (6 cases, capped-exponential retry, never throws)                                                                | **V**                                                                |
+| Admin health/history view, emergency disable                       | `packages/application/src/indexnow-diagnostics.ts`, `/admin/indexnow`                               | `indexnow-diagnostics.test.ts` (5 cases incl. "never effectivelyActive while crawlerGlobalNoindex is on" and "never exposes the key itself") | **V**                                                                |
+| Secret redaction                                                   | `indexnow-diagnostics.ts` (boolean `keyConfigured` only)                                            | `indexnow-diagnostics.test.ts` line 143                                                                                                      | **V**                                                                |
+| Tests without external calls                                       | `indexnow-notifier.test.ts`, `outbox-worker.test.ts`                                                | fake `fetchImpl`/`sleepImpl`, no real network                                                                                                | **V**                                                                |
+| Real Bing/Yandex delivery against a live key                       | —                                                                                                   | —                                                                                                                                            | **N/I** — real deployment secret required (Product Owner/credential) |
+
+#### Advertising-integration control plane
+
+| Requirement                                                          | Files                                                                                                 | Tests                                                                                                            | Status                                                                                                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Typed adapters, closed provider allowlist                            | `packages/domain/src/advertising.ts` (`AdvertisingProvider` 6-value enum)                             | `advertising.test.ts` (domain, 16 cases total incl. dispatch-gating)                                             | **V**                                                                                                                                |
+| Admin enable/disable, consent category, non-secret identifiers       | `packages/application/src/advertising.ts`, `/admin/advertising`                                       | `advertising.test.ts` (application, 7 cases)                                                                     | **V**                                                                                                                                |
+| Credentials are secret-store references only                         | `AdvertisingProviderConfig.credentialSecretRef` (string name only, no field can carry a token/script) | type-level guarantee + `advertising-diagnostics.test.ts`'s `credentialConfigured` (boolean only)                 | **V**                                                                                                                                |
+| No arbitrary tag/script/iframe injection                             | (no such field exists in the config type; live grep confirms no script tag anywhere)                  | type-level guarantee                                                                                             | **V**                                                                                                                                |
+| Diagnostic health, emergency disablement                             | `packages/application/src/advertising-diagnostics.ts`, `/admin/advertising`'s Diagnostics column      | `advertising-diagnostics.test.ts` (6 cases)                                                                      | **V**                                                                                                                                |
+| Consent-gated dispatch precondition                                  | `packages/domain/src/advertising.ts`'s `isAdvertisingProviderDispatchAllowed`                         | `advertising.test.ts` (10 gating cases: disabled overrides consent, category-specific gating, no-consent-at-all) | **V** (precondition only — see next row)                                                                                             |
+| Conversion mapping, attribution/UTM, server-side conversion dispatch | —                                                                                                     | —                                                                                                                | **N/I** — deliberately deferred: no real provider credential/endpoint exists, and inventing one is forbidden by this session's scope |
+
+#### Cross-platform metric comparison
+
+| Requirement                                                                     | Files                                                                                   | Tests                                                                | Status                                                                                                      |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Versioned metric dictionary (meaning, window, tz, currency, consent, freshness) | `packages/domain/src/metric-comparison.ts`                                              | `metric-comparison.test.ts` (domain, 11 cases)                       | **V**                                                                                                       |
+| Structurally incapable of merging incompatible counts                           | `compareSourceMeasurements`'s result type (`entries`+`discrepancies`, no blended field) | `metric-comparison.test.ts` (comparability/incomparableReason cases) | **V**                                                                                                       |
+| RBAC-scoped dictionary/compare endpoints                                        | `GET /api/admin/metrics/dictionary`, `POST /api/admin/metrics/compare`                  | `metric-comparison.test.ts` (application, 5 cases)                   | **V**                                                                                                       |
+| Live ingestion from Rust/GA4/Search Console/Yandex Webmaster/ad platforms       | —                                                                                       | —                                                                    | **N/I** — no real reporting credential exists for any of the 5+ external sources (Product Owner/credential) |
+
+#### Rust first-party analytics preparation
+
+| Requirement                                 | Files                                                                                                                    | Tests                               | Status                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| Typed adapter boundary, disabled-by-default | `packages/infrastructure/src/analytics/rust-analytics-event-sink.ts`                                                     | `rust-analytics-event-sink.test.ts` | **V**                                                                                    |
+| Health/diagnostic contract                  | `packages/application/src/analytics-diagnostics.ts` (`rust_analytics` row, always `configValid: true`, no config needed) | `analytics-diagnostics.test.ts`     | **V**                                                                                    |
+| Real Rust service integration               | —                                                                                                                        | —                                   | **N/I, correctly** — not expected before October 2026 (CLAUDE.md); must not block launch |
+
+#### Merchant Offer/feed foundation (dormant, ADR-0019)
+
+| Requirement                                                           | Files                                                                                          | Tests                                                                                                                                               | Status                                                                                                                                              |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Versioned `Offer` entity, separate from quote-only price              | `packages/domain/src/offer.ts`, `packages/infrastructure/src/repositories/offer-repository.ts` | `offer.test.ts` (29 domain + 14 application cases)                                                                                                  | **V**                                                                                                                                               |
+| `merchantCenterEnabled` hard-rejected at write time                   | `packages/domain/src/platform-settings.ts`'s `validateEffectivePlatformSettings`               | `platform-settings.test.ts`                                                                                                                         | **V**                                                                                                                                               |
+| Feed/JSON-LD generator provably dormant                               | `packages/application/src/merchant-feed.ts`                                                    | `merchant-feed.test.ts` line 128 ("provably always empty while merchantCenterEnabled stays hard-false, even for an otherwise fully eligible offer") | **V**                                                                                                                                               |
+| No public feed URL, no real Merchant Center submission                | (no such route exists — only RBAC-protected `/api/admin/offers/feed-preview`)                  | confirmed by route enumeration                                                                                                                      | **V** (absence confirmed)                                                                                                                           |
+| Regression: Phase D slices 1-7 never touched the Offer feature area   | —                                                                                              | `git log --name-only` (Phase D slice 9's own regression check, re-confirmed: HEAD unchanged in this area since)                                     | **V**                                                                                                                                               |
+| Real checkout/legal/policies/Merchant verification/rollout/monitoring | —                                                                                              | —                                                                                                                                                   | **N/I, correctly** — steps 2/4/5/6 of the runbook's launch sequence, blocked on real commercial facts/checkout, explicitly out of this pass's scope |
+
+#### Security, RBAC, privacy, OpenAPI
+
+| Requirement                                                                  | Files                                                                                                  | Tests                                                                                                             | Status                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OIDC Authorization Code + PKCE, issuer/audience/signature/expiry/nonce/JWKS  | `packages/infrastructure/src/oidc/`                                                                    | `oidc-identity-provider.test.ts` (7 cases: state/nonce/forged-signature rejection)                                | **V** (generic flow); **N/I** real ODS tenant (Q-01, Product Owner/credential blocker)                                                                                                                           |
+| HttpOnly/SameSite session cookie, no client-JS token access                  | `apps/web/src/app/api/auth/{login,callback}/route.ts`, `session-codec.ts`                              | `session.test.ts` (5 cases), live cookie-flag verification recorded in Phase 4 status block                       | **V**                                                                                                                                                                                                            |
+| Server-side permission enforcement (IAM-008), hidden UI is not authorization | `packages/application/src/authorization.ts`, every route's `requirePermission`                         | `authorization.test.ts` (15 cases incl. ORD-008 boundary), live 401 verification recorded in Phase 4 status block | **V**                                                                                                                                                                                                            |
+| Rate limits: auth/search/order-submission/uploads/admin/analytics            | `apps/web/src/server/rate-limit.ts`                                                                    | live 429+`Retry-After` verification recorded in Phase 7 status block                                              | **V** (single-instance in-memory — documented, needs a shared store once >1 instance)                                                                                                                            |
+| CSRF (Origin/Referer same-host check)                                        | `apps/web/src/server/csrf.ts`                                                                          | `csrf.test.ts` (6 cases), live cross-origin 403 verification recorded                                             | **V**                                                                                                                                                                                                            |
+| CSP/security headers                                                         | `apps/web/next.config.ts`'s `headers()`                                                                | live `curl -D -` header verification recorded in the CSRF/CSP status block                                        | **V**                                                                                                                                                                                                            |
+| Upload allowlist/signature/malware-scan/signed-download                      | `packages/domain/src/upload-validation.ts`, `packages/application/src/uploads.ts`, `product-assets.ts` | 20+ tests across domain/application/infrastructure (Phase 6 status block)                                         | **V** (dev-stub scanner/storage — ADR-0006 blocked, honestly labeled, never claims production-grade)                                                                                                             |
+| No secrets/PII in logs; `.env*` never committed                              | `packages/infrastructure/src/env.ts`, `docs/runbooks/security.md`, CI `security` job                   | `env-example.test.ts`; CI `dotenvx precommit`/`prebuild` + `gitleaks` (green every run, including this pass's)    | **V**                                                                                                                                                                                                            |
+| STRIDE threat model (SEC-009)                                                | —                                                                                                      | —                                                                                                                 | **Partial, by design** — CSP/CSRF (SEC-002/003) closed with a working implementation; the full cross-surface STRIDE write-up is a separate, broader pre-production deliverable, documented as such since Phase 7 |
+| OpenAPI 3.2 contract, `redocly lint` clean                                   | `packages/contracts/openapi/openapi.yaml`                                                              | `redocly lint` reproduced clean this session (zero errors/warnings/unused-component findings)                     | **V**                                                                                                                                                                                                            |
+| No `id-slug` combined column; immutable `publicId`/`orderNumber`             | `packages/infrastructure/prisma/schema.prisma`                                                         | confirmed by direct schema read this session                                                                      | **V**                                                                                                                                                                                                            |
+| UUIDv7 internal-ID policy                                                    | —                                                                                                      | —                                                                                                                 | **N/A** — grepped this session (`uuidv7`/`uuid_v7`/`uuid7`): no such initiative exists in this codebase; Prisma's default `cuid`/`uuid` generation is unchanged, so there is nothing to test                     |
+
+### Summary
+
+Every requirement domain named in this pass's scope has real, tested,
+CI-green non-Pi implementation except the items marked **N/I** above, each of
+which is blocked on one of exactly four things: a real external credential
+(GA4/Yandex/IndexNow/advertising/Search Console/Rust-analytics/ODS), a
+Product Owner business/legal decision already tracked in
+`docs/OPEN_QUESTIONS.md` (Q-01/Q-05/Q-06/Q-09), a real checkout/commercial
+launch step for Merchant Center (steps 2/4/5/6 of the runbook's own launch
+sequence), or an out-of-Git external artifact (semantic backlog,
+native-review workflow). None of these can be closed from this laptop
+without violating this session's own hard boundaries (no invented
+credentials, checkout, or business facts) — they are launch prerequisites,
+not implementation defects.
+
+## Launch-readiness checklist
+
+This section is the non-Pi acceptance-readiness pass's Part D deliverable —
+an operational checklist for the Product Owner, added to this authoritative
+document rather than a new speculative one.
+
+### 1. External inputs required before activation
+
+| Input                                                             | Owner                 | Tracked at                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canonical production domain, HTTPS/redirect/trailing-slash policy | Product Owner         | `PlatformSettings.canonicalHost` (`/admin/settings`)                                                                                                                                                       |
+| Organization/NAP/social facts                                     | Product Owner         | `PlatformSettings` organization fields (published only when set)                                                                                                                                           |
+| Consent-policy text/version and legal approval                    | Legal + Product Owner | `packages/domain/src/consent.ts`'s `CONSENT_POLICY_VERSION`; bump on any real policy change. **Includes native review of this pass's `ru`/`uz` consent-banner strings** (see the audit-finding note above) |
+| GA4 Measurement ID                                                | Product Owner         | `PlatformSettings.ga4MeasurementId` + `GA4_API_SECRET` deployment secret                                                                                                                                   |
+| Yandex Metrica counter ID                                         | Product Owner         | `PlatformSettings.yandexMetricaCounterId`                                                                                                                                                                  |
+| IndexNow key                                                      | Product Owner         | `INDEXNOW_KEY` deployment secret; verification file is `GET /api/seo/indexnow-key.txt`                                                                                                                     |
+| Search Console, Yandex Webmaster, Bing verification tokens        | Product Owner         | `PlatformSettings`'s non-secret verification-token fields                                                                                                                                                  |
+| Advertising provider account/conversion identifiers               | Product Owner         | `AdvertisingProviderConfig` rows (`/admin/advertising`)                                                                                                                                                    |
+| Real OIDC tenant (issuer, endpoints, scopes, claims, test tenant) | Product + Security    | Q-01 (`docs/OPEN_QUESTIONS.md`), ADR-0003 (currently blocked)                                                                                                                                              |
+| Hosting/email/storage decisions                                   | Architecture          | Q-06 (`docs/OPEN_QUESTIONS.md`), ADR-0006/0007/0008 (currently blocked)                                                                                                                                    |
+| Company legal/registration required fields                        | Product + Legal       | Q-09 (`docs/OPEN_QUESTIONS.md`); `Company.metadata` remains a placeholder                                                                                                                                  |
+| Data retention/legal-privacy approval                             | Legal                 | Q-05 (`docs/OPEN_QUESTIONS.md`)                                                                                                                                                                            |
+| Direct-sale/Merchant facts (checkout, seller, policies, price)    | Product Owner         | Only once real checkout exists — `Offer` model is ready, dormant (ADR-0019)                                                                                                                                |
+
+### 2. Explicit activation order
+
+1. Deploy the application (staging first) — needs Q-06's hosting decision and
+   the Docker images this repository's CI already builds
+   (`infra/docker/{web,worker}.Dockerfile`).
+2. Validate canonical host and TLS (HSTS is already sent unconditionally by
+   the app; verify the reverse proxy/load balancer terminates TLS correctly).
+3. Validate robots/sitemap/canonical/hreflang/JSON-LD against the live
+   deployment (automated tests already cover the logic; this step is the
+   live-HTTP confirmation named throughout this document as Pi/VPS-pending).
+4. Verify the consent UI on the live deployment, in all three locales,
+   including the native-review pass named above.
+5. Configure and test one external integration at a time (GA4, then Yandex
+   Metrica, then IndexNow, then each advertising provider) — each has its own
+   admin diagnostics view (`/admin/analytics`, `/admin/indexnow`,
+   `/admin/advertising`) built specifically to make this a safe, observable,
+   one-at-a-time rollout, not a single all-or-nothing switch.
+6. Validate analytics/debug views show no PII (the domain schema already
+   structurally forbids this; this step is a live-traffic spot check).
+7. Submit/verify search surfaces in Search Console and Yandex Webmaster (per
+   `docs/runbooks/search-visibility.md`'s "Search Console and Webmaster
+   operations" section).
+8. Only later, after a real checkout/legal/policy decision, enable Merchant
+   Center via its own separate commercial acceptance gate — `PlatformSettings.merchantCenterEnabled`
+   stays hard-rejected at the validator level until that decision is made and
+   the validator itself is deliberately relaxed as its own reviewed change.
+
+### 3. Pi-only acceptance commands and expected evidence
+
+All of the following are already written and ready in `scripts/pi/` and
+`e2e/` (see Phase 8's status block) — none has executed even once, per the
+laptop's standing no-Pi/Docker/Postgres/browser constraint:
+
+| Command                                                                  | Expected evidence                                                                                                                                        |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/pi/01-postgres-migration-verify.sh`                             | PostgreSQL 19 Beta 2 image digest resolved/pinned; every migration applies from empty; CHECK constraints and partial unique indexes proven live-enforced |
+| `scripts/pi/02-storage-flow-verify.sh`                                   | Real upload/scan/store/download round trip, including the 404-for-unpublished-asset and OCC-version-bump assertions                                      |
+| `scripts/pi/03-oidc-login-verify.sh`                                     | Real Authorization Code + PKCE round trip for all 5 fixture roles, session/logout/RBAC negative cases                                                    |
+| `scripts/pi/04-production-build-and-demo.sh`                             | Real Docker images running (`NODE_ENV=production`), `/health/live`/`/health/ready` genuinely `ok`                                                        |
+| `scripts/pi/05-browser-e2e-run.sh`                                       | `e2e/specs/*.spec.ts` (public-catalog, auth-rbac, ordering, admin-product-assets, accessibility) all green                                               |
+| Lighthouse/Core Web Vitals against the running demo                      | LCP/INP/CLS against the runbook's "good" thresholds (LCP ≤2.5s, INP ≤200ms, CLS ≤0.1 at p75)                                                             |
+| IndexNow/GA4/Yandex/advertising dry-run (once credentials are available) | A real, observable diagnostics-view result (`/admin/indexnow`, `/admin/analytics`, `/admin/advertising`) — never a fabricated one                        |
+
+### 4. VPS/staging/production gates
+
+| Gate                                              | Status                                                                                                                                         |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backup/restore                                    | `docs/runbooks/backup-restore.md` written (pg_dump/pg_restore + checklist); the drill itself needs a running container (Pi/VPS-pending)        |
+| Monitoring/alerting                               | OpenTelemetry/OTLP wired (`packages/infrastructure/src/telemetry.ts`); no real alerting backend connected yet (VPS/hosting-decision-pending)   |
+| Deployment rollback                               | Not yet built — no staging/production deployment pipeline exists (VPS/hosting-decision-pending, Q-06)                                          |
+| Smoke tests                                       | `scripts/pi/04-production-build-and-demo.sh` (written, Pi-pending)                                                                             |
+| No production promotion without terminal evidence | Standing policy (CLAUDE.md's fail-closed delivery policy); Phase 8's own UAT precondition remains correctly unmet until the above run for real |
+
 ## Required task format for the CLI agent
 
 For every task, report:
