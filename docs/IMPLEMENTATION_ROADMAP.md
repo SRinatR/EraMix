@@ -2916,6 +2916,39 @@ build` registers the same route table (no route added/removed by this
   per this repository's standing convention); no browser/Pi confirmation
   that a real crawler receives the 308 with the correct `Location` header.
 
+### Phase D slice 2: PlatformSettings evidence completion
+
+Most of this item was already delivered in Phase C (the 6-case real-Postgres
+integration suite for singleton/OCC/JSONB-snapshot/history/rollback/
+audit-outbox atomicity; `robots.test.ts`/`sitemap.test.ts`'s
+`crawlerGlobalNoindex` coverage) — this slice closes the two remaining gaps
+and records the verification of what was already true by construction.
+
+- **Settings-preview non-persistence**: `GET`/`POST /api/admin/settings/preview`
+  had no dedicated route-level test. New
+  `apps/web/src/app/api/admin/settings/preview/route.test.ts` (3 cases)
+  mocks `settingsRepo.update` to _throw_ if ever called (not merely spy-and-
+  assert) — proving both that the route only ever reads and that a POST
+  hypothetical patch genuinely computes the effective merged preview (a
+  distinct `canonicalOrigin`/`robotsGlobalNoindex` in the response) without
+  writing it. This is also the first test in the repository to exercise a
+  real mutating-shaped route handler through `withApiHandler`'s CSRF check
+  (`assertSameOrigin`) — a constructed `NextRequest` needs an explicit
+  `host` header matching its `origin` header, since the Fetch API's
+  `Request` does not synthesize one from the URL the way a real inbound
+  HTTP request would; recorded here as a reusable pattern for future
+  mutating-route tests, not just this one.
+- **Locale allowlist confirmed non-editable**: grepped
+  `settings-form.tsx`/`PATCH /api/admin/settings`'s zod schema for any
+  locale-related field — none exists. `ru`/`en`/`uz` is a
+  `packages/domain/src/locale.ts` constant, never a `PlatformSettings`
+  column, so there is no admin surface capable of changing it even in
+  principle; verified, not built (CLAUDE.md's own instruction: "Do not make
+  the approved locale set editable" — it already wasn't).
+- **Verified locally**: `pnpm run format`/`lint`/`typecheck` all exit 0;
+  `pnpm run test` — **555 unit tests** (up from 552). `pnpm run build` exit
+  0, route table unchanged.
+
 ## Required task format for the CLI agent
 
 For every task, report:
