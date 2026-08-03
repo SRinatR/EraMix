@@ -3347,6 +3347,35 @@ never a dashboard displaying fabricated live numbers.
   require an external credential or integration authorization this session
   does not have and must not invent.
 
+### Phase D slice 9: Merchant foundation regression check
+
+CLAUDE.md item 9: verify the dormant Merchant Offer/feed foundation
+(ADR-0019, Phase B slice 6: `packages/application/src/merchant-feed.ts`,
+`packages/domain/src/offer.ts`, `packages/application/src/json-ld.ts`, the
+`/admin/offers` admin surface) was neither reimplemented nor weakened by
+Phase D slices 1-7. A regression check, not new work — nothing in this
+feature area needed a code change.
+
+- **Confirmed no Phase D commit touched it**: `git log --name-only` across
+  every Phase D commit on this branch shows zero overlap with
+  `merchant-feed.ts`/`offer.ts`/`json-ld.ts`/`apps/web/src/app/[locale]/admin/offers/*`/
+  `apps/web/src/app/api/admin/offers/*` — those paths last changed in the
+  pre-Phase-D commits `cbb246a` (feed/JSON-LD generator) and `e66a6ec`
+  (status doc).
+- **Re-ran the existing suite in isolation**: `packages/domain/src/offer.test.ts`
+  (29 tests), `packages/application/src/offer.test.ts` +
+  `merchant-feed.test.ts` + `json-ld.test.ts` (33 tests) — all still pass
+  unchanged, confirming the eligibility rules (quote-only products never
+  emit `offers`/price specification, an offer excluded the moment any
+  required fact goes missing or stale) and the deterministic feed/JSON-LD
+  generation remain intact.
+- **Dormant state still correct**: `merchantCenterEnabled` still defaults to
+  `false` in every `PlatformSettings` fixture used across this session's new
+  tests (analytics/IndexNow/advertising/metrics diagnostics all construct a
+  full settings object and never flip this flag) — the feature remains
+  off-by-default exactly as ADR-0019 requires, never implicitly enabled by
+  an unrelated slice.
+
 ## Required task format for the CLI agent
 
 For every task, report:
