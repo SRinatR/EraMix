@@ -3,7 +3,7 @@ import { ContentBody } from '@/components/content-body';
 import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { contentAlternates } from '@/server/seo';
-import { resolveContentRoute } from '@eramix/application';
+import { buildWebPageJsonLd, resolveContentRoute } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -64,15 +64,7 @@ export default async function CmsPage({ params }: { params: Promise<PageParams> 
           canonicalPath: `/${locale}/pages/${slug}`,
         }}
       />
-      <JsonLd
-        data={{
-          '@context': 'https://schema.org',
-          '@type': 'WebPage',
-          name: translation.title,
-          ...(translation.summary !== undefined ? { description: translation.summary } : {}),
-          inLanguage: locale,
-        }}
-      />
+      <JsonLd data={{ ...buildWebPageJsonLd(translation) }} />
       <h1>{translation.title}</h1>
       {translation.summary && <p>{translation.summary}</p>}
       <ContentBody content={translation.content} />

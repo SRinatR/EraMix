@@ -7,6 +7,8 @@ import { getContainer } from '@/server/container';
 import { parsePaginationParams, parseStringParam } from '@/server/pagination';
 import { productAlternates, categoryAlternates } from '@/server/seo';
 import {
+  buildCollectionPageJsonLd,
+  buildProductJsonLd,
   listCatalogCategories,
   listCatalogProducts,
   resolveCategoryRoute,
@@ -104,21 +106,7 @@ export default async function CatalogEntryPage({
           locale={locale}
           fields={{ eventName: 'view_item', productPublicId: product.publicId }}
         />
-        {/* schema.org Product — deliberately no "offers"/price: ADR-0005's
-            quote-only model means indicativePrice is explicitly non-binding,
-            and an Offer/price in structured data risks a search engine
-            treating it as a real, transactable price. */}
-        <JsonLd
-          data={{
-            '@context': 'https://schema.org',
-            '@type': 'Product',
-            name: translation.name,
-            sku: product.sku,
-            ...(translation.description !== undefined
-              ? { description: translation.description }
-              : {}),
-          }}
-        />
+        <JsonLd data={{ ...buildProductJsonLd(product, translation) }} />
         <h1>{translation.name}</h1>
         <p>SKU: {product.sku}</p>
         {translation.description && <p>{translation.description}</p>}
@@ -174,13 +162,7 @@ export default async function CatalogEntryPage({
           resultCount: productPage.data.length,
         }}
       />
-      <JsonLd
-        data={{
-          '@context': 'https://schema.org',
-          '@type': 'CollectionPage',
-          name: translation.name,
-        }}
-      />
+      <JsonLd data={{ ...buildCollectionPageJsonLd(translation) }} />
       <h1>{translation.name}</h1>
 
       {subcategories.length > 0 && (

@@ -3,7 +3,7 @@ import { ContentBody } from '@/components/content-body';
 import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { contentAlternates } from '@/server/seo';
-import { resolveContentRoute } from '@eramix/application';
+import { buildArticleJsonLd, resolveContentRoute } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -64,19 +64,7 @@ export default async function ArticlePage({ params }: { params: Promise<PagePara
           canonicalPath: `/${locale}/articles/${slug}`,
         }}
       />
-      <JsonLd
-        data={{
-          '@context': 'https://schema.org',
-          '@type': 'Article',
-          headline: translation.title,
-          ...(translation.summary !== undefined ? { description: translation.summary } : {}),
-          inLanguage: locale,
-          ...(content.publishedAt !== undefined
-            ? { datePublished: content.publishedAt.toISOString() }
-            : {}),
-          dateModified: translation.updatedAt.toISOString(),
-        }}
-      />
+      <JsonLd data={{ ...buildArticleJsonLd(content, translation) }} />
       <h1>{translation.title}</h1>
       {translation.summary && <p>{translation.summary}</p>}
       <ContentBody content={translation.content} />

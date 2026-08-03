@@ -81,6 +81,20 @@ export { hasPermission, requirePermission, assertOrderCompanyAccess } from './au
 export type { Permission } from './authorization.js';
 export { buildSitemapEntries } from './sitemap.js';
 export type { SitemapEntry } from './sitemap.js';
+export {
+  buildProductJsonLd,
+  buildCollectionPageJsonLd,
+  buildArticleJsonLd,
+  buildWebPageJsonLd,
+  buildFaqPageJsonLd,
+} from './json-ld.js';
+export type {
+  ProductJsonLd,
+  CollectionPageJsonLd,
+  ArticleJsonLd,
+  WebPageJsonLd,
+  FaqPageJsonLd,
+} from './json-ld.js';
 export { buildAlternateLinks } from './metadata.js';
 export type { AlternateLinks } from './metadata.js';
 export { changeContentSlug, changeCategorySlug } from './slug-change.js';

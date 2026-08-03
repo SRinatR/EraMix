@@ -2,7 +2,7 @@ import { ContentBody, toParagraphs } from '@/components/content-body';
 import { JsonLd } from '@/components/json-ld';
 import { getContainer } from '@/server/container';
 import { staticPageAlternates } from '@/server/seo';
-import { listContentByType } from '@eramix/application';
+import { buildFaqPageJsonLd, listContentByType } from '@eramix/application';
 import { isSupportedLocale, type LocaleCode } from '@eramix/domain';
 import { setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
@@ -47,24 +47,16 @@ export default async function FaqPage({ params }: { params: Promise<{ locale: st
       (translation): translation is NonNullable<typeof translation> => translation !== undefined,
     );
 
+  const faqPageJsonLd = buildFaqPageJsonLd(
+    localizedItems.map((translation) => ({
+      title: translation.title,
+      answerText: toParagraphs(translation.content).join('\n\n'),
+    })),
+  );
+
   return (
     <main>
-      {localizedItems.length > 0 && (
-        <JsonLd
-          data={{
-            '@context': 'https://schema.org',
-            '@type': 'FAQPage',
-            mainEntity: localizedItems.map((translation) => ({
-              '@type': 'Question',
-              name: translation.title,
-              acceptedAnswer: {
-                '@type': 'Answer',
-                text: toParagraphs(translation.content).join('\n\n'),
-              },
-            })),
-          }}
-        />
-      )}
+      {faqPageJsonLd && <JsonLd data={{ ...faqPageJsonLd }} />}
       <h1>FAQ</h1>
       {items.length === 0 ? (
         <p>No FAQ entries are published yet.</p>
