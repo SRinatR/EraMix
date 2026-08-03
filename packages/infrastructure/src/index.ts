@@ -20,6 +20,7 @@ export {
 } from './repositories/platform-settings-repository.js';
 export { PrismaAdvertisingProviderConfigRepository } from './repositories/advertising-provider-config-repository.js';
 export { PrismaAnalyticsSinkStatusRepository } from './repositories/analytics-sink-status-repository.js';
+export { PrismaIndexNowEngineStatusRepository } from './repositories/indexnow-engine-status-repository.js';
 export { PrismaOfferRepository } from './repositories/offer-repository.js';
 export { CryptoIdGenerator } from './id-generator.js';
 export { JsonLogger } from './logger.js';

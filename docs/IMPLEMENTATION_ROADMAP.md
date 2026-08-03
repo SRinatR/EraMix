@@ -3154,6 +3154,75 @@ the same admin diagnostics surface, delivered together rather than twice.
   same sink overwrites, never inserts a second row) was added but is
   CI-only, same as every other Postgres-backed test in this repository.
 
+### Phase D slice 5: IndexNow completeness review
+
+CLAUDE.md item 5: "IndexNow is a P1, secret-managed notification adapter for
+Bing/Yandex only... queue only eligible canonical published URLs... bounded
+retry/backoff, dead-letter/error visibility, admin health/history view,
+emergency disable, secret redaction, tests without external calls." The
+existing dormant IndexNow submission path (queued on `PUBLISHED` transitions,
+built from the same canonical URL builders as the sitemap) was reviewed
+against this fuller requirement rather than rebuilt from scratch.
+
+- **Verified already correct by construction, not rebuilt**: eligibility
+  exclusions for drafts/private records, redirect-only routes, `noindex`
+  pages, stale/superseded slugs, and invalid-offer records — the submission
+  call only ever fires from the same `PUBLISHED`-transition code path that
+  emits sitemap/canonical data from the typed URL builder, so a record that
+  cannot appear in the sitemap cannot reach IndexNow either. Parameterized
+  filter/sort/search/pagination variants are excluded the same way: the
+  submission path only ever receives the unparameterized canonical URL, never
+  a `CollectionQueryVariant`.
+- **Gap found and fixed**: the emergency sitewide `crawlerGlobalNoindex`
+  kill-switch (`PlatformSettings`) was already honored by public metadata/
+  robots/sitemap output but was **not** checked by `maybeSubmitIndexNow` in
+  `apps/worker/src/outbox-worker.ts` — a real gap against "emergency disable"
+  where the switch would suppress a page from search yet an already-queued
+  IndexNow notification would still fire. Fixed by adding the same
+  `crawlerGlobalNoindex` gate before submission.
+- **Schema** (migration `20260803210000_add_indexnow_engine_status`): new
+  `IndexNowEngineStatus` table, one row per engine (`bing`/`yandex`),
+  upserted, mirroring the `AnalyticsSinkStatus` diagnostic-snapshot pattern
+  from slice 4 — never a history log, best-effort recording that never
+  affects the outbox message's own retry/dead-letter outcome.
+- **Application** (`packages/application/src/indexnow-diagnostics.ts`, 5 unit
+  tests): `getIndexNowDiagnostics` (`settings.manage`, ADMIN-only) reports
+  `indexNowEnabled`, `crawlerGlobalNoindex`, the derived `effectivelyActive`
+  (both must be true), whether a deployment key is configured (boolean only —
+  the key itself is a deployment secret, never read or exposed here), and the
+  last recorded per-engine result.
+- **Recording** (`apps/worker/src/outbox-worker.ts`): `recordIndexNowStatuses`
+  upserts one row per engine after every submission attempt; a status-write
+  failure is logged but never rethrown, so it cannot turn a successful
+  submission into a retried/dead-lettered outbox message — the same isolation
+  property verified for analytics sinks in slice 4, now covered by 4 new
+  worker tests (`crawlerGlobalNoindex` gate, per-engine status recording,
+  status-write-failure isolation).
+- **Delivery**: `GET /api/admin/indexnow/diagnostics` and a new
+  `/admin/indexnow` page (linked from the admin nav) render admin-enabled
+  state, the emergency-noindex switch, key-configured state, effective
+  activity, and a per-engine last-result table — the admin health/history
+  view the requirement names. New `IndexNow` OpenAPI tag, `IndexNowDiagnostics`/
+  `IndexNowEngineDiagnostic` schemas, and the previously-undocumented
+  `/api/seo/indexnow-key.txt` verification-key route; `redocly lint` passes.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`) pass
+  across all 8 workspace projects. Per-package `typecheck` passes clean in
+  every workspace. Local `pnpm run test` hit the same disk/memory exhaustion
+  signature documented in prior slices (~198 MB free on `C:`); re-run
+  per-package with `--no-file-parallelism` to work around it, all green:
+  domain 182, application 240, infrastructure 46 (unit only), worker 22, web
+  119, contracts 5 — **614 unit tests total**, up from 604. `pnpm --filter
+  @eramix/web run build` succeeded locally this time (bundler, type-check,
+  and page-data collection all completed; the new
+  `/api/admin/indexnow/diagnostics` and `/api/seo/indexnow-key.txt` routes
+  are present in the output).
+- **Not yet verified locally**: the new `IndexNowEngineStatus` table against
+  a real Postgres row — a new integration test (`recordResult` upsert
+  semantics: a second call for the same engine overwrites, never inserts a
+  second row) was added to `postgres.integration.test.ts` but is CI-only
+  (`db-integration` job), same standing convention as every other
+  Postgres-backed test in this repository.
+
 ## Required task format for the CLI agent
 
 For every task, report:

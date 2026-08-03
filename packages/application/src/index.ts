@@ -65,6 +65,8 @@ export type {
   AdvertisingProviderConfigRepository,
   AnalyticsSinkStatus,
   AnalyticsSinkStatusRepository,
+  IndexNowEngineStatus,
+  IndexNowEngineStatusRepository,
   OfferListFilter,
   OfferPatch,
   OfferRepository,
@@ -205,6 +207,8 @@ export type {
 export { recordAnalyticsEvents, dispatchAnalyticsEvent } from './analytics.js';
 export { getAnalyticsDiagnostics } from './analytics-diagnostics.js';
 export type { AnalyticsSinkName, AnalyticsSinkDiagnostic } from './analytics-diagnostics.js';
+export { getIndexNowDiagnostics } from './indexnow-diagnostics.js';
+export type { IndexNowDiagnostics } from './indexnow-diagnostics.js';
 export type { RecordAnalyticsEventsDeps, DispatchAnalyticsEventDeps } from './analytics.js';
 export {
   createOffer,

@@ -611,3 +611,25 @@ export interface AnalyticsSinkStatusRepository {
   recordResult(status: AnalyticsSinkStatus): Promise<void>;
   listAll(): Promise<readonly AnalyticsSinkStatus[]>;
 }
+
+/**
+ * The last-observed outcome of one IndexNow engine's submission attempt
+ * (admin diagnostics — CLAUDE.md: "dead-letter/error visibility... admin
+ * health/history view"). `lastError` is always the notifier's own
+ * already-safe error string (e.g. `HTTP 429`) — never the submitted URL
+ * list or the IndexNow key.
+ */
+export interface IndexNowEngineStatus {
+  readonly engine: string;
+  readonly lastAttemptAt: Date;
+  readonly lastSucceeded: boolean;
+  readonly lastStatusCode?: number | undefined;
+  readonly lastError?: string | undefined;
+  readonly lastUrlCount: number;
+}
+
+export interface IndexNowEngineStatusRepository {
+  /** Upserts the one row for this engine — a diagnostic snapshot, not a history log. */
+  recordResult(status: IndexNowEngineStatus): Promise<void>;
+  listAll(): Promise<readonly IndexNowEngineStatus[]>;
+}

@@ -340,6 +340,94 @@ describe('processOutboxBatch — IndexNow (P1 adapter)', () => {
     expect(result.sent).toBe(1);
     expect(outbox.get(seeded.id)?.status).toBe('SENT');
   });
+
+  it('never submits when the emergency sitewide crawlerGlobalNoindex switch is on, even though indexNowEnabled is true (telling crawlers to recrawl while also telling them not to index would be self-contradictory)', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(
+        makePlatformSettings({ indexNowEnabled: true, crawlerGlobalNoindex: true }),
+      ),
+      indexNowKey: 'a1b2c3d4e5f6',
+    });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('records a per-engine diagnostic status (admin health/history view) after a successful submission', async () => {
+    const outbox = new InMemoryOutbox();
+    outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+    const recordResult = vi.fn().mockResolvedValue(undefined);
+    const now = new Date();
+
+    await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(now),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+      indexNowStatusRepo: { recordResult, listAll: () => Promise.resolve([]) },
+    });
+
+    expect(recordResult).toHaveBeenCalledWith({
+      engine: 'bing',
+      lastAttemptAt: now,
+      lastSucceeded: true,
+      lastStatusCode: 200,
+      lastError: undefined,
+      lastUrlCount: 1,
+    });
+    expect(recordResult).toHaveBeenCalledWith({
+      engine: 'yandex',
+      lastAttemptAt: now,
+      lastSucceeded: true,
+      lastStatusCode: 200,
+      lastError: undefined,
+      lastUrlCount: 1,
+    });
+  });
+
+  it('an IndexNow status-recording failure never affects the outbox message SENT outcome', async () => {
+    const outbox = new InMemoryOutbox();
+    const seeded = outbox.seed({
+      eventType: 'category.status_changed',
+      payload: { newStatus: 'PUBLISHED', canonicalUrls: ['/en/catalog/chairs'] },
+    });
+    const submit = vi.fn().mockResolvedValue(SUCCESS_RESULT);
+
+    const result = await processOutboxBatch({
+      outbox,
+      email: { send: () => Promise.resolve() },
+      logger: fakeLogger(),
+      clock: fixedClock(new Date()),
+      indexNow: fakeIndexNow(submit),
+      settingsRepo: fakeSettingsRepo(makePlatformSettings()),
+      indexNowKey: 'a1b2c3d4e5f6',
+      indexNowStatusRepo: {
+        recordResult: () => Promise.reject(new Error('status store unavailable')),
+        listAll: () => Promise.resolve([]),
+      },
+    });
+
+    expect(result.sent).toBe(1);
+    expect(outbox.get(seeded.id)?.status).toBe('SENT');
+  });
 });
 
 describe('processOutboxBatch — analytics.event_captured dispatch', () => {

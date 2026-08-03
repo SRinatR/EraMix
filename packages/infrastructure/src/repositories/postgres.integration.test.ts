@@ -14,6 +14,7 @@ import { PrismaAdvertisingProviderConfigRepository } from './advertising-provide
 import { PrismaAnalyticsSinkStatusRepository } from './analytics-sink-status-repository.js';
 import { PrismaAuditEventRepository } from './audit-event-repository.js';
 import { PrismaCategoryRepository } from './category-repository.js';
+import { PrismaIndexNowEngineStatusRepository } from './indexnow-engine-status-repository.js';
 import { PrismaOfferRepository } from './offer-repository.js';
 import { PrismaOutboxMessageRepository } from './outbox-message-repository.js';
 import {
@@ -40,6 +41,7 @@ describe('PostgreSQL integration', () => {
   const auditRepo = () => new PrismaAuditEventRepository(prisma);
   const advertisingRepo = () => new PrismaAdvertisingProviderConfigRepository(prisma);
   const analyticsSinkStatusRepo = () => new PrismaAnalyticsSinkStatusRepository(prisma);
+  const indexNowEngineStatusRepo = () => new PrismaIndexNowEngineStatusRepository(prisma);
   const offerRepo = () => new PrismaOfferRepository(prisma);
   const outboxRepo = () => new PrismaOutboxMessageRepository(prisma);
   const settingsRepo = () => new PrismaPlatformSettingsRepository(prisma);
@@ -653,6 +655,52 @@ describe('PostgreSQL integration', () => {
     const matchingRows = afterSecond.filter((row) => row.sink === sinkName);
     expect(matchingRows).toHaveLength(1);
     expect(matchingRows[0]).toMatchObject({ lastSucceeded: true, lastError: undefined });
+    expect(matchingRows[0]?.lastAttemptAt.toISOString()).toBe(secondAttemptAt.toISOString());
+  });
+
+  it('IndexNowEngineStatus.recordResult upserts a real row and listAll reflects the latest snapshot per engine', async () => {
+    const engineName = `test-engine-${randomUUID()}`;
+    const firstAttemptAt = new Date('2026-08-03T09:00:00.000Z');
+
+    await indexNowEngineStatusRepo().recordResult({
+      engine: engineName,
+      lastAttemptAt: firstAttemptAt,
+      lastSucceeded: false,
+      lastStatusCode: 503,
+      lastError: 'HTTP 503',
+      lastUrlCount: 3,
+    });
+
+    const afterFirst = await indexNowEngineStatusRepo().listAll();
+    const firstRow = afterFirst.find((row) => row.engine === engineName);
+    expect(firstRow).toMatchObject({
+      lastSucceeded: false,
+      lastStatusCode: 503,
+      lastError: 'HTTP 503',
+      lastUrlCount: 3,
+    });
+    expect(firstRow?.lastAttemptAt.toISOString()).toBe(firstAttemptAt.toISOString());
+
+    // A second recordResult() call for the same engine must upsert (overwrite),
+    // never insert a second row — this is a diagnostic snapshot, not a log.
+    const secondAttemptAt = new Date('2026-08-03T10:00:00.000Z');
+    await indexNowEngineStatusRepo().recordResult({
+      engine: engineName,
+      lastAttemptAt: secondAttemptAt,
+      lastSucceeded: true,
+      lastStatusCode: 200,
+      lastUrlCount: 1,
+    });
+
+    const afterSecond = await indexNowEngineStatusRepo().listAll();
+    const matchingRows = afterSecond.filter((row) => row.engine === engineName);
+    expect(matchingRows).toHaveLength(1);
+    expect(matchingRows[0]).toMatchObject({
+      lastSucceeded: true,
+      lastStatusCode: 200,
+      lastError: undefined,
+      lastUrlCount: 1,
+    });
     expect(matchingRows[0]?.lastAttemptAt.toISOString()).toBe(secondAttemptAt.toISOString());
   });
 });

@@ -3,6 +3,7 @@ import type {
   AnalyticsSinkStatusRepository,
   Clock,
   EmailSender,
+  IndexNowEngineStatusRepository,
   IndexNowNotifier,
   OutboxMessageRepository,
   PlatformSettingsRepository,
@@ -27,6 +28,8 @@ export interface OutboxWorkerDeps {
   readonly indexNow?: IndexNowNotifier;
   readonly settingsRepo?: PlatformSettingsRepository;
   readonly indexNowKey?: string;
+  /** Records the per-engine diagnostic snapshot admin sees (CLAUDE.md: "dead-letter/error visibility... admin health/history view"). Optional and best-effort — a write failure here must never affect the outbox message's own SENT/FAILED/DEAD_LETTER outcome. */
+  readonly indexNowStatusRepo?: IndexNowEngineStatusRepository;
   /** GA4/Yandex Metrica/Rust sinks (packages/application/src/analytics.ts's dispatchAnalyticsEvent does the consent/enablement gating per sink). Empty/omitted means analytics.event_captured messages are simply marked SENT with nothing dispatched. */
   readonly analyticsSinks?: readonly AnalyticsEventSink[];
   /** Records the per-sink diagnostic snapshot admin sees (CLAUDE.md: "last safe delivery result"). Optional and best-effort — a write failure here must never affect the outbox message's own SENT/FAILED/DEAD_LETTER outcome. */
@@ -99,7 +102,12 @@ async function maybeSubmitIndexNow(deps: OutboxWorkerDeps, message: OutboxMessag
   }
   try {
     const settings = await deps.settingsRepo.get();
-    if (!settings.indexNowEnabled) {
+    // Emergency sitewide noindex is a stronger, higher-priority signal than
+    // indexNowEnabled alone: telling Bing/Yandex "please recrawl this" while
+    // simultaneously telling every crawler "do not index anything" would be
+    // self-contradictory (the same belt-and-suspenders convention robots.ts/
+    // sitemap.ts already apply to this exact switch).
+    if (!settings.indexNowEnabled || settings.crawlerGlobalNoindex) {
       return;
     }
     const origin = buildCanonicalOrigin(settings);
@@ -115,12 +123,54 @@ async function maybeSubmitIndexNow(deps: OutboxWorkerDeps, message: OutboxMessag
       urlCount: urlPaths.length,
       results,
     });
+    await recordIndexNowStatuses(deps, results, urlPaths.length);
   } catch (error) {
     deps.logger.log('warn', 'indexnow_submission_failed', {
       messageId: message.id,
       eventType: message.eventType,
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+/**
+ * Best-effort admin-diagnostic snapshot per IndexNow engine (CLAUDE.md:
+ * "dead-letter/error visibility... admin health/history view"). A write
+ * failure here is logged but never rethrown — this must never turn a
+ * successful IndexNow submission into a retried/dead-lettered outbox
+ * message (IndexNow is a secondary notification, never the source of
+ * truth).
+ */
+async function recordIndexNowStatuses(
+  deps: OutboxWorkerDeps,
+  results: readonly {
+    readonly engine: string;
+    readonly succeeded: boolean;
+    readonly statusCode?: number;
+    readonly error?: string;
+  }[],
+  urlCount: number,
+): Promise<void> {
+  if (!deps.indexNowStatusRepo) {
+    return;
+  }
+  const now = deps.clock.now();
+  for (const result of results) {
+    try {
+      await deps.indexNowStatusRepo.recordResult({
+        engine: result.engine,
+        lastAttemptAt: now,
+        lastSucceeded: result.succeeded,
+        lastStatusCode: result.statusCode,
+        lastError: result.error,
+        lastUrlCount: urlCount,
+      });
+    } catch (error) {
+      deps.logger.log('warn', 'indexnow_status_record_failed', {
+        engine: result.engine,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 }
 

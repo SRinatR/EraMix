@@ -83,6 +83,14 @@ tags:
       an unknown field is rejected, not silently dropped. GA4/Yandex
       Metrica/Rust analytics dispatch is consent- and admin-enablement-
       gated per event, never automatic.
+  - name: IndexNow
+    description: >-
+      A P1, secret-managed notification adapter for Bing/Yandex only
+      (CLAUDE.md) — it never submits to Google and never replaces
+      sitemap/canonical correctness. The real key is a deployment secret,
+      never a database column or API response field; the verification-key
+      file endpoint serves it as plain text specifically because IndexNow's
+      own protocol requires that, not as an admin-facing surface.
 security:
   - sessionCookie: []
 paths:
@@ -2727,6 +2735,57 @@ paths:
         '400':
           $ref: '#/components/responses/MalformedRequest'
 
+  /api/seo/indexnow-key.txt:
+    get:
+      operationId: getIndexNowVerificationKey
+      summary: >-
+        IndexNow's required key-ownership verification file (CLAUDE.md:
+        "expose the required verification file"). apps/worker's
+        submissions always pass this exact URL as `keyLocation`, so no
+        root-relative `/{key}.txt` auto-discovery convention is relied
+        upon. 404s (never a fabricated placeholder) when `INDEXNOW_KEY` is
+        not configured — fail closed, matching every other secret-gated
+        feature in this codebase. Public by necessity (IndexNow's own
+        protocol requires the key be servable), not an admin surface.
+      tags: [IndexNow]
+      security: []
+      responses:
+        '200':
+          description: The raw IndexNow key, as plain text.
+          content:
+            text/plain:
+              schema: { type: string }
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/admin/indexnow/diagnostics:
+    get:
+      operationId: getIndexNowDiagnostics
+      summary: >-
+        Admin health/history view for the IndexNow adapter
+        (settings.manage — ADMIN only): whether it is admin-enabled, the
+        emergency sitewide-noindex kill switch state, whether the
+        deployment secret is configured, the folded `effectivelyActive`
+        signal (false whenever any of those three would block a real
+        submission), and the last recorded submission result per engine.
+        Never exposes the real key — only a boolean `keyConfigured` flag.
+      tags: [IndexNow]
+      responses:
+        '200':
+          description: IndexNow adapter diagnostics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexNowDiagnostics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/AccessDenied'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
   /api/media:
     post:
       operationId: uploadMedia
@@ -3767,6 +3826,37 @@ components:
         lastError:
           type: string
           description: The sink's own already-safe error string — never an event payload, PII, or secret.
+    IndexNowEngineDiagnostic:
+      type: object
+      required: [engine]
+      properties:
+        engine: { type: string, enum: [bing, yandex] }
+        lastAttemptAt: { type: string, format: date-time }
+        lastSucceeded: { type: boolean }
+        lastStatusCode: { type: integer }
+        lastError:
+          type: string
+          description: The notifier's own already-safe error string — never the submitted URL list or the IndexNow key.
+        lastUrlCount: { type: integer }
+    IndexNowDiagnostics:
+      type: object
+      required: [indexNowEnabled, crawlerGlobalNoindex, effectivelyActive, keyConfigured, engines]
+      properties:
+        indexNowEnabled: { type: boolean }
+        crawlerGlobalNoindex: { type: boolean }
+        effectivelyActive:
+          type: boolean
+          description: >-
+            False whenever indexNowEnabled is off, crawlerGlobalNoindex is
+            on, or the deployment secret is not configured — the single
+            "will a real submission actually happen right now" signal.
+        keyConfigured:
+          type: boolean
+          description: Whether the INDEXNOW_KEY deployment secret is set — never the key value itself.
+        engines:
+          type: array
+          items:
+            $ref: '#/components/schemas/IndexNowEngineDiagnostic'
     AdvertisingProviderConfig:
       type: object
       required: [provider, enabled, consentCategory, testMode, updatedAt, version]

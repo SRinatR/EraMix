@@ -9,6 +9,7 @@ import {
   PrismaAdvertisingProviderConfigRepository,
   PrismaAnalyticsSinkStatusRepository,
   PrismaAuditEventRepository,
+  PrismaIndexNowEngineStatusRepository,
   PrismaCategoryRepository,
   PrismaCompanyRepository,
   PrismaContentRepository,
@@ -72,6 +73,7 @@ function buildContainer() {
     settingsHistoryRepo: new PrismaPlatformSettingsHistoryRepository(prisma),
     advertisingProviders: new PrismaAdvertisingProviderConfigRepository(prisma),
     analyticsSinkStatus: new PrismaAnalyticsSinkStatusRepository(prisma),
+    indexNowEngineStatus: new PrismaIndexNowEngineStatusRepository(prisma),
     offers: new PrismaOfferRepository(prisma),
     get identityProvider() {
       if (env.OIDC_ISSUER_URL === undefined || env.OIDC_CLIENT_ID === undefined) {

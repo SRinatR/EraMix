@@ -6,6 +6,7 @@ import {
   HttpIndexNowNotifier,
   JsonLogger,
   PrismaAnalyticsSinkStatusRepository,
+  PrismaIndexNowEngineStatusRepository,
   PrismaOutboxMessageRepository,
   PrismaPlatformSettingsRepository,
   RustAnalyticsEventSink,
@@ -59,6 +60,7 @@ const deps = {
   indexNow: new HttpIndexNowNotifier(),
   settingsRepo: new PrismaPlatformSettingsRepository(prisma),
   ...(env.INDEXNOW_KEY !== undefined ? { indexNowKey: env.INDEXNOW_KEY } : {}),
+  indexNowStatusRepo: new PrismaIndexNowEngineStatusRepository(prisma),
   analyticsSinks,
   analyticsSinkStatusRepo: new PrismaAnalyticsSinkStatusRepository(prisma),
 };

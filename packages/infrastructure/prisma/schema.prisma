@@ -326,9 +326,9 @@ model Category {
   /// Optional materially-equivalent canonical replacement — see Content.successorId.
   successorId      String?           @db.Uuid
 
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children Category[] @relation("CategoryHierarchy")
-  successor Category? @relation("CategorySuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children   Category[] @relation("CategoryHierarchy")
+  successor  Category?  @relation("CategorySuccessor", fields: [successorId], references: [id], onDelete: SetNull)
   supersedes Category[] @relation("CategorySuccessor")
 
   translations CategoryTranslation[]
@@ -401,8 +401,8 @@ model Product {
   /// product where this is false is invalid at the domain-validation layer.
   directSaleEnabled Boolean           @default(false)
 
-  category  Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  successor Product? @relation("ProductSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  successor  Product?  @relation("ProductSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
   supersedes Product[] @relation("ProductSuccessor")
 
   translations ProductTranslation[]
@@ -816,6 +816,25 @@ model AnalyticsSinkStatus {
   updatedAt DateTime @updatedAt
 
   @@map("analytics_sink_status")
+}
+
+/// Diagnostic snapshot of the last submission attempt per IndexNow engine
+/// (admin diagnostics — CLAUDE.md: "dead-letter/error visibility... admin
+/// health/history view"). One row per engine name ('bing'/'yandex'),
+/// upserted by apps/worker after every submission attempt — never a
+/// history log, and `lastError` is always the notifier's own already-safe
+/// error string (never the submitted URL list or the IndexNow key).
+model IndexNowEngineStatus {
+  engine         String   @id
+  lastAttemptAt  DateTime
+  lastSucceeded  Boolean
+  lastStatusCode Int?
+  lastError      String?
+  lastUrlCount   Int
+
+  updatedAt DateTime @updatedAt
+
+  @@map("indexnow_engine_status")
 }
 
 // ---------- Dormant Merchant Offer foundation (ADR-0019) ----------
