@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { ConcurrencyConflictError, SlugConflictError } from '@eramix/domain';
+import {
+  getPlatformSettings,
+  listPlatformSettingsHistory,
+  rollbackPlatformSettings,
+  updatePlatformSettings,
+} from '@eramix/application';
+import { ConcurrencyConflictError, SlugConflictError, ValidationFailedError } from '@eramix/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadEnv } from '../env.js';
 import { createPrismaClient, type PrismaClient } from '../prisma-client.js';
@@ -8,7 +14,13 @@ import { PrismaAdvertisingProviderConfigRepository } from './advertising-provide
 import { PrismaAuditEventRepository } from './audit-event-repository.js';
 import { PrismaCategoryRepository } from './category-repository.js';
 import { PrismaOfferRepository } from './offer-repository.js';
+import { PrismaOutboxMessageRepository } from './outbox-message-repository.js';
+import {
+  PrismaPlatformSettingsHistoryRepository,
+  PrismaPlatformSettingsRepository,
+} from './platform-settings-repository.js';
 import { PrismaProductRepository } from './product-repository.js';
+import { PrismaUserRepository } from './user-repository.js';
 
 /**
  * Exercises the Prisma repository adapters against a real, migrated
@@ -27,6 +39,34 @@ describe('PostgreSQL integration', () => {
   const auditRepo = () => new PrismaAuditEventRepository(prisma);
   const advertisingRepo = () => new PrismaAdvertisingProviderConfigRepository(prisma);
   const offerRepo = () => new PrismaOfferRepository(prisma);
+  const outboxRepo = () => new PrismaOutboxMessageRepository(prisma);
+  const settingsRepo = () => new PrismaPlatformSettingsRepository(prisma);
+  const settingsHistoryRepo = () => new PrismaPlatformSettingsHistoryRepository(prisma);
+  const userRepo = () => new PrismaUserRepository(prisma);
+
+  /** platform_settings is a true singleton (Phase B slice 1) — never created by a test, only ever read/updated; each test re-fetches the live version rather than assuming 0, since earlier tests in this file mutate it too. */
+  async function createTestActor(): Promise<string> {
+    const user = await userRepo().create({
+      id: randomUUID(),
+      issuer: 'https://integration-test.example',
+      subject: `settings-actor-${randomUUID()}`,
+      email: `settings-actor-${randomUUID()}@example.test`,
+      displayName: 'Settings Integration Test Actor',
+      status: 'ACTIVE',
+      platformRole: 'ADMIN',
+    });
+    return user.id;
+  }
+
+  function settingsDeps() {
+    return {
+      settingsRepo: settingsRepo(),
+      historyRepo: settingsHistoryRepo(),
+      auditRepo: auditRepo(),
+      outboxRepo: outboxRepo(),
+      uow: new PrismaUnitOfWork(prisma),
+    };
+  }
 
   beforeAll(() => {
     const env = loadEnv();
@@ -313,5 +353,195 @@ describe('PostgreSQL integration', () => {
         },
       }),
     ).rejects.toThrow();
+  });
+
+  it('PlatformSettings is a real singleton: get() returns the seeded row, update() persists a patch and bumps version', async () => {
+    const before = await settingsRepo().get();
+    expect(before.id).toBe('singleton');
+    const actorUserId = await createTestActor();
+    const uniqueTitle = `Integration test title ${randomUUID()}`;
+
+    const updated = await settingsRepo().update(
+      before.version,
+      { seoDefaultTitleTemplate: uniqueTitle },
+      actorUserId,
+    );
+
+    expect(updated.id).toBe('singleton');
+    expect(updated.seoDefaultTitleTemplate).toBe(uniqueTitle);
+    expect(updated.version).toBe(before.version + 1);
+    expect(updated.updatedByUserId).toBe(actorUserId);
+
+    // get() always re-reads the same singleton row, never a second row.
+    const again = await settingsRepo().get();
+    expect(again.seoDefaultTitleTemplate).toBe(uniqueTitle);
+    expect(again.version).toBe(updated.version);
+  });
+
+  it('PlatformSettings.update() with a stale expectedVersion throws ConcurrencyConflictError (real OCC row-matching)', async () => {
+    const current = await settingsRepo().get();
+    const actorUserId = await createTestActor();
+    // current.version is valid *right now*, but the bump below immediately
+    // makes it stale — proving the real row-matching check, not a hardcoded
+    // "always try version 0" assumption.
+    const staleVersion = current.version;
+
+    await settingsRepo().update(
+      current.version,
+      { stripTrailingSlash: current.stripTrailingSlash },
+      actorUserId,
+    );
+
+    await expect(
+      settingsRepo().update(
+        staleVersion,
+        { stripTrailingSlash: current.stripTrailingSlash },
+        actorUserId,
+      ),
+    ).rejects.toThrow(ConcurrencyConflictError);
+  });
+
+  it('updatePlatformSettings/history: the JSONB previousSnapshot round-trips Date fields as real Date instances, not strings', async () => {
+    const actorUserId = await createTestActor();
+    const current = await getPlatformSettings({ settingsRepo: settingsRepo() });
+    const uniqueTitle = `Snapshot round-trip ${randomUUID()}`;
+
+    await updatePlatformSettings(settingsDeps(), {
+      expectedVersion: current.version,
+      patch: { seoDefaultTitleTemplate: uniqueTitle },
+      changeReason: 'Integration test: JSONB snapshot round-trip.',
+      actorUserId,
+      actorRole: 'ADMIN',
+    });
+
+    const page = await listPlatformSettingsHistory(
+      { historyRepo: settingsHistoryRepo() },
+      { limit: 1 },
+    );
+    const latest = page.data[0]!;
+    expect(latest.previousVersion).toBe(current.version);
+    // The snapshot captured is the state *before* this change — its own
+    // title must not yet be the new one just written.
+    expect(latest.previousSnapshot.seoDefaultTitleTemplate).not.toBe(uniqueTitle);
+    expect(latest.previousSnapshot.createdAt).toBeInstanceOf(Date);
+    expect(latest.previousSnapshot.updatedAt).toBeInstanceOf(Date);
+    expect(Number.isNaN(latest.previousSnapshot.createdAt.getTime())).toBe(false);
+    expect(latest.changeReason).toBe('Integration test: JSONB snapshot round-trip.');
+    expect(latest.changedByUserId).toBe(actorUserId);
+  });
+
+  it('updatePlatformSettings records one audit event and one outbox message atomically alongside the history row', async () => {
+    const actorUserId = await createTestActor();
+    const current = await getPlatformSettings({ settingsRepo: settingsRepo() });
+    const beforeOutboxCount = await prisma.outboxMessage.count({
+      where: { aggregateType: 'PlatformSettings', aggregateId: 'singleton' },
+    });
+
+    const updated = await updatePlatformSettings(settingsDeps(), {
+      expectedVersion: current.version,
+      patch: { seoDefaultDescriptionFallback: `Atomicity test ${randomUUID()}` },
+      changeReason: 'Integration test: atomic history+audit+outbox.',
+      actorUserId,
+      actorRole: 'ADMIN',
+    });
+
+    const auditEvents = await auditRepo().listByEntity('PlatformSettings', 'singleton');
+    const thisEvent = auditEvents.data.find(
+      (event) => event.action === 'platform_settings.updated' && event.actorUserId === actorUserId,
+    );
+    expect(thisEvent).toBeDefined();
+
+    const afterOutboxCount = await prisma.outboxMessage.count({
+      where: { aggregateType: 'PlatformSettings', aggregateId: 'singleton' },
+    });
+    expect(afterOutboxCount).toBe(beforeOutboxCount + 1);
+
+    const latestOutbox = await prisma.outboxMessage.findFirst({
+      where: { aggregateType: 'PlatformSettings', aggregateId: 'singleton' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(latestOutbox?.eventType).toBe('platform_settings.updated');
+    expect(updated.version).toBe(current.version + 1);
+  });
+
+  it('updatePlatformSettings rolls back history/audit/outbox together when validation fails mid-transaction (fail-closed atomicity)', async () => {
+    const actorUserId = await createTestActor();
+    const current = await getPlatformSettings({ settingsRepo: settingsRepo() });
+    const beforeOutboxCount = await prisma.outboxMessage.count({
+      where: { aggregateType: 'PlatformSettings', aggregateId: 'singleton' },
+    });
+    const beforeHistoryPage = await settingsHistoryRepo().list({ limit: 1 });
+
+    // merchantCenterEnabled: true is unconditionally rejected by
+    // validateEffectivePlatformSettings (CLAUDE.md: "do not enable Merchant
+    // output for current quote-only products") — this must throw *before*
+    // settingsRepo.update()/historyRepo.record()/outboxRepo.enqueue() ever
+    // run, and the whole transaction must roll back if any of them did.
+    await expect(
+      updatePlatformSettings(settingsDeps(), {
+        expectedVersion: current.version,
+        patch: { merchantCenterEnabled: true },
+        actorUserId,
+        actorRole: 'ADMIN',
+      }),
+    ).rejects.toThrow(ValidationFailedError);
+
+    const afterOutboxCount = await prisma.outboxMessage.count({
+      where: { aggregateType: 'PlatformSettings', aggregateId: 'singleton' },
+    });
+    expect(afterOutboxCount).toBe(beforeOutboxCount);
+
+    const afterHistoryPage = await settingsHistoryRepo().list({ limit: 1 });
+    expect(afterHistoryPage.data[0]?.id).toBe(beforeHistoryPage.data[0]?.id);
+
+    const unchanged = await settingsRepo().get();
+    expect(unchanged.version).toBe(current.version);
+    expect(unchanged.merchantCenterEnabled).toBe(false);
+  });
+
+  it('rollbackPlatformSettings applies a past snapshot as a new audited update, never a destructive rewrite of history', async () => {
+    const actorUserId = await createTestActor();
+    const original = await getPlatformSettings({ settingsRepo: settingsRepo() });
+    const originalTitle = original.seoDefaultTitleTemplate;
+
+    const changed = await updatePlatformSettings(settingsDeps(), {
+      expectedVersion: original.version,
+      patch: { seoDefaultTitleTemplate: `Pre-rollback value ${randomUUID()}` },
+      changeReason: 'Integration test: value to be rolled back.',
+      actorUserId,
+      actorRole: 'ADMIN',
+    });
+
+    const page = await listPlatformSettingsHistory(
+      { historyRepo: settingsHistoryRepo() },
+      { limit: 1 },
+    );
+    const historyEntryToRollBack = page.data[0]!;
+    expect(historyEntryToRollBack.previousVersion).toBe(original.version);
+
+    const rolledBack = await rollbackPlatformSettings(settingsDeps(), {
+      historyEntryId: historyEntryToRollBack.id,
+      expectedVersion: changed.version,
+      actorUserId,
+      actorRole: 'ADMIN',
+    });
+
+    expect(rolledBack.seoDefaultTitleTemplate).toBe(originalTitle);
+    // Rollback is itself a new, forward-only version bump, never a rewrite
+    // of a past row — the settings row's version keeps advancing.
+    expect(rolledBack.version).toBe(changed.version + 1);
+
+    // The rollback is itself audited as a new history entry — the original
+    // "pre-rollback" entry created above is never deleted or mutated.
+    const pageAfterRollback = await listPlatformSettingsHistory(
+      { historyRepo: settingsHistoryRepo() },
+      { limit: 2 },
+    );
+    expect(pageAfterRollback.data[0]!.changeReason).toContain(
+      'Rollback to the state before history entry',
+    );
+    expect(pageAfterRollback.data.some((entry) => entry.id === historyEntryToRollBack.id)).toBe(
+      true,
+    );
   });
 });
