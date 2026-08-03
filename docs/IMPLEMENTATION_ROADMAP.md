@@ -3212,7 +3212,7 @@ against this fuller requirement rather than rebuilt from scratch.
   per-package with `--no-file-parallelism` to work around it, all green:
   domain 182, application 240, infrastructure 46 (unit only), worker 22, web
   119, contracts 5 — **614 unit tests total**, up from 604. `pnpm --filter
-  @eramix/web run build` succeeded locally this time (bundler, type-check,
+@eramix/web run build` succeeded locally this time (bundler, type-check,
   and page-data collection all completed; the new
   `/api/admin/indexnow/diagnostics` and `/api/seo/indexnow-key.txt` routes
   are present in the output).
