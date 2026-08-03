@@ -166,8 +166,13 @@ export interface CategoryRepository {
     expectedVersion: number,
     status: Category['status'],
   ): Promise<CategoryWithTranslations>;
-  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
-  retire(id: string, expectedVersion: number, reason: string): Promise<CategoryWithTranslations>;
+  /** Sets the durable retiredAt/retirementReason(/successorId) triple. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(
+    id: string,
+    expectedVersion: number,
+    reason: string,
+    successorId?: string,
+  ): Promise<CategoryWithTranslations>;
 }
 
 export interface ProductWithTranslations extends Product {
@@ -225,8 +230,13 @@ export interface ProductRepository {
   listAll(
     input?: CursorPaginationInput & ProductListFilter,
   ): Promise<CursorPage<ProductWithTranslations>>;
-  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
-  retire(id: string, expectedVersion: number, reason: string): Promise<ProductWithTranslations>;
+  /** Sets the durable retiredAt/retirementReason(/successorId) triple. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(
+    id: string,
+    expectedVersion: number,
+    reason: string,
+    successorId?: string,
+  ): Promise<ProductWithTranslations>;
   /** Explicit opt-in/out for the future direct-sale/Merchant commercial mode (ADR-0019). Throws ConcurrencyConflictError on a stale expectedVersion. */
   setDirectSaleEnabled(
     id: string,
@@ -343,8 +353,13 @@ export interface ContentRepository {
     expectedVersion: number,
     status: Content['status'],
   ): Promise<ContentWithTranslations>;
-  /** Sets the durable retiredAt/retirementReason pair. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
-  retire(id: string, expectedVersion: number, reason: string): Promise<ContentWithTranslations>;
+  /** Sets the durable retiredAt/retirementReason(/successorId) triple. Throws ConcurrencyConflictError on a stale expectedVersion. Callers (packages/application/src/publication.ts) are responsible for the ARCHIVED-first precondition. */
+  retire(
+    id: string,
+    expectedVersion: number,
+    reason: string,
+    successorId?: string,
+  ): Promise<ContentWithTranslations>;
 }
 
 export interface OrderWithLines extends Order {

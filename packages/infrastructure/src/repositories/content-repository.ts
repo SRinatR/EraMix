@@ -264,11 +264,17 @@ export class PrismaContentRepository implements ContentRepository {
     id: string,
     expectedVersion: number,
     reason: string,
+    successorId?: string,
   ): Promise<ContentWithTranslations> {
     const client = resolveClient(this.prisma);
     const { count } = await client.content.updateMany({
       where: { id, version: expectedVersion },
-      data: { retiredAt: new Date(), retirementReason: reason, version: { increment: 1 } },
+      data: {
+        retiredAt: new Date(),
+        retirementReason: reason,
+        successorId: successorId ?? null,
+        version: { increment: 1 },
+      },
     });
     await assertOptimisticLockAcquired(
       count,
@@ -349,6 +355,7 @@ function toDomain(row: ContentRowWithTranslations): ContentWithTranslations {
     publishedAt: nullToUndefined(row.publishedAt),
     retiredAt: nullToUndefined(row.retiredAt),
     retirementReason: nullToUndefined(row.retirementReason),
+    successorId: nullToUndefined(row.successorId),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,

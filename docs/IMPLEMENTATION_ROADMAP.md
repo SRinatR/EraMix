@@ -2836,6 +2836,86 @@ next commit began — no batch push, no unverified commit left behind.
   and are not already covered by Phase B slice 5's event union should be
   the first step of that slice, not assumed from this status block.
 
+## Phase D — measurement, marketing-control-plane, and remaining SEO completeness
+
+Product Owner instruction, 2026-08-03: deliver all remaining non-Pi,
+non-deployment SEO, measurement, and marketing-control-plane work after the
+dormant Merchant Offer/feed foundation, in small independently tested
+commits. Hard boundaries carried through every slice: no Pi/Docker/VPS, no
+Merchant Center/public Offer output, no invented checkout/prices/stock/
+credentials/endpoints, no mocks/skipped tests/silent fallbacks.
+
+### Phase D slice 1: durable-retirement successor + one-hop 308 redirect
+
+Closes a gap the original requirement always named (ADR-0018's own quoted
+requirement source: "a permanent removal without a suitable successor
+returns 410") but Phase B slice 2 deliberately left unbuilt (410-only).
+
+- **Schema**: `Category`/`Content`/`Product` each gain an optional, nullable,
+  same-type self-referencing `successorId` (migration
+  `20260803190000_add_retirement_successor`, generated fully offline via
+  `prisma migrate diff` against the previous committed schema — the same
+  method as every prior incremental migration in this repo). Two manual
+  `CHECK` constraints per table mirror the domain/application validation:
+  `*_successor_requires_retired` (a successor is only ever meaningful once
+  `retiredAt` is set) and `*_successor_not_self` (a row can never name
+  itself). `onDelete: SetNull` on the FK, matching
+  `PlatformSettingsHistory.changedByUser`'s existing convention.
+- **Domain**: `successorId?: string | undefined` added to all three
+  entities (`packages/domain/src/entities.ts`).
+- **Application** (`packages/application/src/publication.ts`): new
+  `assertValidSuccessor` (shared by all three `retireX` functions) requires
+  the named successor to exist, not be the entity itself, and be currently
+  `PUBLISHED` at retirement time — a fail-fast `ValidationFailedError`/
+  `ResourceNotFoundError` before ever reaching the database, not just the
+  data-layer `CHECK`. `retireCategory`/`retireContent`/`retireProduct` pass
+  `successorId` through to `retire()` and record it on the audit
+  (`{reason, successorId}`) and outbox (`{reason, successorId}`) payloads.
+- **Route resolution** (`packages/application/src/route-resolution.ts`):
+  `ContentRouteResolution`/`CategoryRouteResolution`/`ProductRouteResolution`'s
+  `'retired'` member gained an optional `successorCanonicalUrl`, computed by
+  a dedicated `resolve*SuccessorUrl` helper per type — re-checks the
+  successor's _live_ status/translation/canonical-route on every single
+  request (never frozen at retirement time), one hop only (a successor's own
+  successor is never followed). A successor that is later itself
+  unpublished/retired, or has no translation/canonical route for the
+  requested locale, transparently yields `undefined` — the caller falls back
+  to a plain 410, never a broken redirect. Also closes a pre-existing,
+  independently-noted gap: `resolveCategoryRoute` had no dedicated unit test
+  file at all before this slice (Phase B slice 2's own status block flagged
+  this without fixing it) — a full `InMemoryCategoryRepository` test suite
+  was added alongside the successor cases, not just the new behaviour.
+- **Delivery**: `apps/web/src/proxy.ts`'s `retiredResponse` issues
+  `NextResponse.redirect(url, 308)` when `successorCanonicalUrl` is present,
+  the existing `buildGoneResponse` (410) otherwise. All three `page.tsx`
+  detail routes gained the matching `permanentRedirect()` call in their
+  defense-in-depth branch (the proxy is the real mechanism; this only keeps
+  the fallback path consistent with it). The three `PATCH .../retire`
+  routes accept an optional `successorId` in the request body (zod
+  `.optional()`), and the shared `RetireForm` admin component gained an
+  optional "Successor ID" text field with a context-sensitive confirm
+  message. `RetireRequest`/`RetireResult` OpenAPI schemas updated to match;
+  `redocly lint` passes.
+- **Documentation**: `docs/runbooks/search-visibility.md`'s retirement
+  policy line was corrected from a stray `301` to `308`, matching every
+  other permanent-redirect use in this same document and the codebase's
+  actual `permanentRedirect()`/`NextResponse.redirect(url, 308)` convention
+  (no policy change — a pre-existing internal inconsistency). ADR-0018
+  gained an "Update, 2026-08-03" section recording this extension rather
+  than a new ADR number, since it extends the same accepted architecture
+  (proxy-based arbitrary-status response) rather than introducing a new one.
+- **Verified locally**: `pnpm run format`/`lint` (incl. `redocly lint`)/
+  `typecheck` all exit 0 across all 7 workspace projects; `pnpm run test` —
+  **552 unit tests** (up from 532 before this slice: +7 domain/publication/
+  route-resolution successor cases, +1 CHECK-constraint integration test, +
+  a full new `resolveCategoryRoute` suite). `pnpm run build` exit 0, `next
+build` registers the same route table (no route added/removed by this
+  slice) plus the unchanged `ƒ Proxy (Middleware)` entry.
+- **Not yet verified**: the actual 308 response and the new `CHECK`
+  constraints against a real Postgres row (CI's `db-integration` job only,
+  per this repository's standing convention); no browser/Pi confirmation
+  that a real crawler receives the 308 with the correct `Location` header.
+
 ## Required task format for the CLI agent
 
 For every task, report:

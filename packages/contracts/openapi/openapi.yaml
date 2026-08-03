@@ -2994,6 +2994,16 @@ components:
           description: >-
             Required, real reason recorded on the audit trail — never blank.
         expectedVersion: { type: integer }
+        successorId:
+          type: string
+          minLength: 1
+          description: >-
+            Optional id of an existing, different, currently PUBLISHED entity
+            of the same type (search-visibility.md: "a 308 is used only for a
+            materially equivalent canonical replacement"). When set, the
+            public route returns a one-hop 308 to the successor's live
+            canonical URL instead of 410 — re-checked on every request, never
+            frozen at retirement time.
     RetireResult:
       type: object
       required: [id, status, version]
@@ -3003,6 +3013,7 @@ components:
           $ref: '#/components/schemas/PublicationStatus'
         retiredAt: { type: string, format: date-time }
         retirementReason: { type: string }
+        successorId: { type: [string, 'null'] }
         version: { type: integer }
     AuditEvent:
       type: object

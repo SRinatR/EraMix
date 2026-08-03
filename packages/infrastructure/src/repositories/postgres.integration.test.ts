@@ -239,6 +239,68 @@ describe('PostgreSQL integration', () => {
     ).rejects.toThrow();
   });
 
+  it('retire() persists a real successorId and the migration 20260803190000_add_retirement_successor CHECK constraints reject an invalid raw write', async () => {
+    const successor = await categoryRepo().create(
+      { id: randomUUID(), status: 'PUBLISHED', sortOrder: 0 },
+      [
+        {
+          id: randomUUID(),
+          categoryId: '',
+          locale: 'en',
+          name: `Integration test successor ${randomUUID()}`,
+        },
+      ],
+    );
+    const retiring = await categoryRepo().create(
+      { id: randomUUID(), status: 'ARCHIVED', sortOrder: 0 },
+      [
+        {
+          id: randomUUID(),
+          categoryId: '',
+          locale: 'en',
+          name: `Integration test retiring ${randomUUID()}`,
+        },
+      ],
+    );
+
+    const retired = await categoryRepo().retire(
+      retiring.id,
+      0,
+      'Merged (integration test).',
+      successor.id,
+    );
+    expect(retired.successorId).toBe(successor.id);
+
+    // category_successor_requires_retired: a raw write bypassing the
+    // application layer must still fail when successorId is set on a
+    // not-yet-retired row.
+    const notYetRetired = await categoryRepo().create(
+      { id: randomUUID(), status: 'ARCHIVED', sortOrder: 0 },
+      [
+        {
+          id: randomUUID(),
+          categoryId: '',
+          locale: 'en',
+          name: `Integration test not-yet-retired ${randomUUID()}`,
+        },
+      ],
+    );
+    await expect(
+      prisma.category.update({
+        where: { id: notYetRetired.id },
+        data: { successorId: successor.id },
+      }),
+    ).rejects.toThrow();
+
+    // category_successor_not_self: a row can never name itself as its own successor.
+    await expect(
+      prisma.category.update({
+        where: { id: retired.id },
+        data: { successorId: retired.id },
+      }),
+    ).rejects.toThrow();
+  });
+
   it('advertising_provider_requires_identifier_when_enabled CHECK rejects an enabled provider with no identifier', async () => {
     const config = await prisma.advertisingProviderConfig.create({
       data: { provider: 'TIKTOK' },

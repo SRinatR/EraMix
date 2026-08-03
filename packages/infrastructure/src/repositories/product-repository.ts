@@ -201,11 +201,17 @@ export class PrismaProductRepository implements ProductRepository {
     id: string,
     expectedVersion: number,
     reason: string,
+    successorId?: string,
   ): Promise<ProductWithTranslations> {
     const client = resolveClient(this.prisma);
     const { count } = await client.product.updateMany({
       where: { id, version: expectedVersion },
-      data: { retiredAt: new Date(), retirementReason: reason, version: { increment: 1 } },
+      data: {
+        retiredAt: new Date(),
+        retirementReason: reason,
+        successorId: successorId ?? null,
+        version: { increment: 1 },
+      },
     });
     await assertOptimisticLockAcquired(
       count,
@@ -338,6 +344,7 @@ function toDomain(row: ProductRowWithTranslations): ProductWithTranslations {
     publishedAt: nullToUndefined(row.publishedAt),
     retiredAt: nullToUndefined(row.retiredAt),
     retirementReason: nullToUndefined(row.retirementReason),
+    successorId: nullToUndefined(row.successorId),
     directSaleEnabled: row.directSaleEnabled,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

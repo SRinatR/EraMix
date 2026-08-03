@@ -94,6 +94,8 @@ export interface Category extends Versioned, Timestamped {
   /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
   readonly retiredAt?: Date | undefined;
   readonly retirementReason?: string | undefined;
+  /** Optional materially-equivalent canonical replacement (same-type entity id) — only meaningful once retired. See packages/domain/src/retirement.ts. */
+  readonly successorId?: string | undefined;
 }
 
 export interface ProductTranslation extends Versioned, Timestamped {
@@ -118,6 +120,8 @@ export interface Product extends Versioned, Timestamped {
   /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
   readonly retiredAt?: Date | undefined;
   readonly retirementReason?: string | undefined;
+  /** Optional materially-equivalent canonical replacement (same-type entity id) — only meaningful once retired. See packages/domain/src/retirement.ts. */
+  readonly successorId?: string | undefined;
   /**
    * Explicit opt-in for the future direct-sale/Merchant commercial mode
    * (ADR-0019) — defaults false (quote-only). A Product.Offer belonging to
@@ -159,6 +163,8 @@ export interface Content extends Versioned, Timestamped {
   /** Durable, one-way "permanently retired" state — distinct from ARCHIVED (reversible unpublish). See packages/domain/src/retirement.ts. */
   readonly retiredAt?: Date | undefined;
   readonly retirementReason?: string | undefined;
+  /** Optional materially-equivalent canonical replacement (same-type entity id) — only meaningful once retired. See packages/domain/src/retirement.ts. */
+  readonly successorId?: string | undefined;
 }
 
 export interface ProductAsset extends Versioned, Timestamped {

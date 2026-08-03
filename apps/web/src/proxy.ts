@@ -26,8 +26,30 @@ const intlMiddleware = createMiddleware(routing);
 const RETIRABLE_PATH = /^\/([a-z]{2})\/(articles|pages|catalog)\/([^/]+)\/?$/;
 
 /**
- * Real HTTP 410 for a durably retired content/category/product route — the
- * one Next.js surface that can set an arbitrary status code with a real
+ * Maps a 'retired' resolution to the correct response: a one-hop `308` when
+ * the retired entity names a still-live, still-published successor
+ * (search-visibility.md: "a 308 is used only for a materially equivalent
+ * canonical replacement"), otherwise the existing real HTTP `410` (ADR-0018).
+ * `NextResponse.redirect(url, 308)` is used directly rather than
+ * `permanentRedirect()` (a `page.tsx`-only API) since this runs in the proxy.
+ */
+function retiredResponse(
+  request: NextRequest,
+  resolution: {
+    readonly retirementReason: string | undefined;
+    readonly successorCanonicalUrl?: string | undefined;
+  },
+  locale: LocaleCode,
+): NextResponse {
+  if (resolution.successorCanonicalUrl !== undefined) {
+    return NextResponse.redirect(new URL(resolution.successorCanonicalUrl, request.url), 308);
+  }
+  return buildGoneResponse(locale, resolution.retirementReason);
+}
+
+/**
+ * Real HTTP 410/308 for a durably retired content/category/product route —
+ * the one Next.js surface that can set an arbitrary status code with a real
  * response body before the App Router renders anything (ADR-0018).
  * Returns undefined (fall through to next-intl) for every non-matching or
  * non-retired request.
@@ -50,9 +72,7 @@ async function checkRetired(request: NextRequest): Promise<NextResponse | undefi
   if (segment === 'articles' || segment === 'pages') {
     const namespace = segment === 'articles' ? 'ARTICLES' : 'PAGES';
     const resolution = await resolveContentRoute(container.content, namespace, locale, slug);
-    return resolution.kind === 'retired'
-      ? buildGoneResponse(locale, resolution.retirementReason)
-      : undefined;
+    return resolution.kind === 'retired' ? retiredResponse(request, resolution, locale) : undefined;
   }
 
   // segment === 'catalog': disambiguate product ({publicId}-{slug}) vs. category (plain slug).
@@ -64,14 +84,10 @@ async function checkRetired(request: NextRequest): Promise<NextResponse | undefi
       locale,
       asProduct.rest,
     );
-    return resolution.kind === 'retired'
-      ? buildGoneResponse(locale, resolution.retirementReason)
-      : undefined;
+    return resolution.kind === 'retired' ? retiredResponse(request, resolution, locale) : undefined;
   }
   const resolution = await resolveCategoryRoute(container.categories, locale, slug);
-  return resolution.kind === 'retired'
-    ? buildGoneResponse(locale, resolution.retirementReason)
-    : undefined;
+  return resolution.kind === 'retired' ? retiredResponse(request, resolution, locale) : undefined;
 }
 
 export default async function proxy(request: NextRequest) {

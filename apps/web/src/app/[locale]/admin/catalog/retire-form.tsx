@@ -21,16 +21,18 @@ export function RetireForm({
 }) {
   const router = useRouter();
   const [reason, setReason] = useState('');
+  const [successorId, setSuccessorId] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    if (
-      !window.confirm(
-        'Permanently retire this item? This cannot be undone — the public URL will start returning HTTP 410 Gone.',
-      )
-    ) {
+    const trimmedSuccessorId = successorId.trim();
+    const confirmMessage =
+      trimmedSuccessorId.length > 0
+        ? 'Permanently retire this item and redirect its public URL (308) to the successor? This cannot be undone.'
+        : 'Permanently retire this item? This cannot be undone — the public URL will start returning HTTP 410 Gone.';
+    if (!window.confirm(confirmMessage)) {
       return;
     }
     setPending(true);
@@ -39,7 +41,11 @@ export function RetireForm({
       const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ reason, expectedVersion }),
+        body: JSON.stringify({
+          reason,
+          expectedVersion,
+          ...(trimmedSuccessorId.length > 0 ? { successorId: trimmedSuccessorId } : {}),
+        }),
       });
       if (!response.ok) {
         const problem = (await response.json()) as { detail?: string; title?: string };
@@ -61,6 +67,15 @@ export function RetireForm({
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           required
+        />
+      </label>
+      <label>
+        Successor ID (optional — a materially equivalent PUBLISHED replacement; leave blank for a
+        plain 410)
+        <input
+          type="text"
+          value={successorId}
+          onChange={(event) => setSuccessorId(event.target.value)}
         />
       </label>
       <button type="submit" disabled={pending || reason.trim().length === 0}>

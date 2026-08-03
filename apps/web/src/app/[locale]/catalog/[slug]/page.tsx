@@ -81,10 +81,14 @@ export default async function CatalogEntryPage({
   setRequestLocale(locale);
 
   const resolved = await resolve(locale, slug);
+  if (resolved.resolution.kind === 'retired' && resolved.resolution.successorCanonicalUrl) {
+    permanentRedirect(resolved.resolution.successorCanonicalUrl);
+  }
   if (resolved.resolution.kind === 'not-found' || resolved.resolution.kind === 'retired') {
-    // A real HTTP 410 for the 'retired' case is served by src/proxy.ts before
-    // this page ever renders (page.tsx/Server Components cannot set a
-    // custom status code — see ADR-0018). This is defense-in-depth only.
+    // A real HTTP 410 for the successor-less 'retired' case is served by
+    // src/proxy.ts before this page ever renders (page.tsx/Server Components
+    // cannot set a custom status code — see ADR-0018). This is
+    // defense-in-depth only.
     notFound();
   }
   if (resolved.resolution.kind === 'redirect') {

@@ -39,8 +39,43 @@ export type ContentRouteResolution =
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
   | { readonly kind: 'not-found' }
-  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
-  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
+  /**
+   * Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/
+   * missing/DRAFT item, only when retiredAt is set. `successorCanonicalUrl`
+   * is present only when the retired entity names a successor AND that
+   * successor is, right now, a real published entity with a resolvable
+   * canonical URL for this locale (search-visibility.md: "a 308 is used only
+   * for a materially equivalent canonical replacement") — re-checked live on
+   * every request, never frozen at retirement time, so a successor that is
+   * later itself unpublished/retired simply falls back to a plain 410.
+   */
+  | {
+      readonly kind: 'retired';
+      readonly retirementReason: string | undefined;
+      readonly successorCanonicalUrl?: string | undefined;
+    };
+
+/** One-hop only: does not follow the successor's own successor, even if it has one. */
+async function resolveContentSuccessorUrl(
+  repository: ContentRepository,
+  successorId: string,
+  locale: LocaleCode,
+): Promise<string | undefined> {
+  const successor = await repository.findById(successorId);
+  if (!successor || successor.status !== 'PUBLISHED' || successor.retiredAt !== undefined) {
+    return undefined;
+  }
+  const translation = successor.translations.find((entry) => entry.locale === locale);
+  const canonicalRoute = translation?.routes.find((route) => route.isCanonical);
+  if (!translation || !canonicalRoute) {
+    return undefined;
+  }
+  return successor.type === 'ARTICLE'
+    ? articleUrl({ locale: canonicalRoute.locale, slug: canonicalRoute.slug })
+    : successor.type === 'PAGE'
+      ? pageUrl({ locale: canonicalRoute.locale, slug: canonicalRoute.slug })
+      : undefined; // FAQ_ITEM has no per-item canonical URL (TZ Appendix F.3).
+}
 
 export async function resolveContentRoute(
   repository: ContentRepository,
@@ -70,7 +105,11 @@ export async function resolveContentRoute(
 
   const content = await repository.findByCanonicalSlug(namespace, locale, slug);
   if (content?.retiredAt !== undefined) {
-    return { kind: 'retired', retirementReason: content?.retirementReason };
+    const successorCanonicalUrl =
+      content.successorId !== undefined
+        ? await resolveContentSuccessorUrl(repository, content.successorId, locale)
+        : undefined;
+    return { kind: 'retired', retirementReason: content.retirementReason, successorCanonicalUrl };
   }
   if (!content || content.status !== 'PUBLISHED') {
     return { kind: 'not-found' };
@@ -93,8 +132,30 @@ export type CategoryRouteResolution =
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
   | { readonly kind: 'not-found' }
-  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
-  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
+  /** Durable retirement (CLAUDE.md) — see ContentRouteResolution's matching member for the successorCanonicalUrl contract. */
+  | {
+      readonly kind: 'retired';
+      readonly retirementReason: string | undefined;
+      readonly successorCanonicalUrl?: string | undefined;
+    };
+
+/** One-hop only: does not follow the successor's own successor, even if it has one. */
+async function resolveCategorySuccessorUrl(
+  repository: CategoryRepository,
+  successorId: string,
+  locale: LocaleCode,
+): Promise<string | undefined> {
+  const successor = await repository.findById(successorId);
+  if (!successor || successor.status !== 'PUBLISHED' || successor.retiredAt !== undefined) {
+    return undefined;
+  }
+  const translation = successor.translations.find((entry) => entry.locale === locale);
+  const canonicalRoute = translation?.routes.find((route) => route.isCanonical);
+  if (!translation || !canonicalRoute) {
+    return undefined;
+  }
+  return categoryUrl({ locale: canonicalRoute.locale, slug: canonicalRoute.slug });
+}
 
 export async function resolveCategoryRoute(
   repository: CategoryRepository,
@@ -122,7 +183,15 @@ export async function resolveCategoryRoute(
 
   const category = await repository.findByCanonicalSlug(locale, slug);
   if (category?.retiredAt !== undefined) {
-    return { kind: 'retired', retirementReason: category?.retirementReason };
+    const successorCanonicalUrl =
+      category.successorId !== undefined
+        ? await resolveCategorySuccessorUrl(repository, category.successorId, locale)
+        : undefined;
+    return {
+      kind: 'retired',
+      retirementReason: category.retirementReason,
+      successorCanonicalUrl,
+    };
   }
   if (!category || category.status !== 'PUBLISHED') {
     return { kind: 'not-found' };
@@ -145,8 +214,34 @@ export type ProductRouteResolution =
     }
   | { readonly kind: 'redirect'; readonly canonicalUrl: string }
   | { readonly kind: 'not-found' }
-  /** Durable retirement (CLAUDE.md) — never emitted for a merely-unpublished/missing/DRAFT item, only when retiredAt is set. */
-  | { readonly kind: 'retired'; readonly retirementReason: string | undefined };
+  /** Durable retirement (CLAUDE.md) — see ContentRouteResolution's matching member for the successorCanonicalUrl contract. */
+  | {
+      readonly kind: 'retired';
+      readonly retirementReason: string | undefined;
+      readonly successorCanonicalUrl?: string | undefined;
+    };
+
+/**
+ * One-hop only: does not follow the successor's own successor. Products
+ * have no separate route table (ADR-0010 — resolution is always by
+ * publicId), so unlike Category/Content this only needs the successor's own
+ * translation, never a canonical-route lookup.
+ */
+async function resolveProductSuccessorUrl(
+  repository: ProductRepository,
+  successorId: string,
+  locale: LocaleCode,
+): Promise<string | undefined> {
+  const successor = await repository.findById(successorId);
+  if (!successor || successor.status !== 'PUBLISHED' || successor.retiredAt !== undefined) {
+    return undefined;
+  }
+  const translation = successor.translations.find((entry) => entry.locale === locale);
+  if (!translation) {
+    return undefined;
+  }
+  return productUrl({ locale, publicId: successor.publicId, slug: translation.slug });
+}
 
 /**
  * Resolution is always by publicId (ADR-0010); `requestedSlug` is only
@@ -164,7 +259,15 @@ export async function resolveProductRoute(
   }
   const product = await repository.findByPublicId(publicId);
   if (product?.retiredAt !== undefined) {
-    return { kind: 'retired', retirementReason: product?.retirementReason };
+    const successorCanonicalUrl =
+      product.successorId !== undefined
+        ? await resolveProductSuccessorUrl(repository, product.successorId, locale)
+        : undefined;
+    return {
+      kind: 'retired',
+      retirementReason: product.retirementReason,
+      successorCanonicalUrl,
+    };
   }
   if (!product || product.status !== 'PUBLISHED') {
     return { kind: 'not-found' };

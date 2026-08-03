@@ -240,11 +240,17 @@ export class PrismaCategoryRepository implements CategoryRepository {
     id: string,
     expectedVersion: number,
     reason: string,
+    successorId?: string,
   ): Promise<CategoryWithTranslations> {
     const client = resolveClient(this.prisma);
     const { count } = await client.category.updateMany({
       where: { id, version: expectedVersion },
-      data: { retiredAt: new Date(), retirementReason: reason, version: { increment: 1 } },
+      data: {
+        retiredAt: new Date(),
+        retirementReason: reason,
+        successorId: successorId ?? null,
+        version: { increment: 1 },
+      },
     });
     await assertOptimisticLockAcquired(
       count,
@@ -335,6 +341,7 @@ function toDomain(row: CategoryRowWithTranslations): CategoryWithTranslations {
     sortOrder: row.sortOrder,
     retiredAt: nullToUndefined(row.retiredAt),
     retirementReason: nullToUndefined(row.retirementReason),
+    successorId: nullToUndefined(row.successorId),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     version: row.version,

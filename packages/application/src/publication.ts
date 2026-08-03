@@ -47,9 +47,46 @@ export interface RetireInput {
   readonly id: string;
   readonly expectedVersion: number;
   readonly reason: string;
+  /**
+   * Optional materially-equivalent canonical replacement (search-visibility.md:
+   * "a 308 is used only for a materially equivalent canonical replacement" —
+   * never a blanket redirect to a category/listing). Must reference an
+   * existing, different, currently PUBLISHED entity of the same type —
+   * validated at retirement time by `assertValidSuccessor` below. Route
+   * resolution re-checks the successor's live status at request time, so a
+   * successor that is later unpublished/retired itself simply falls back to
+   * 410, never a broken redirect.
+   */
+  readonly successorId?: string | undefined;
   readonly actorUserId: string;
   readonly actorRole: PlatformRole;
   readonly traceId?: string;
+}
+
+/** Shared by retireCategory/retireContent/retireProduct — see RetireInput.successorId. */
+async function assertValidSuccessor(
+  entityLabel: string,
+  currentId: string,
+  successorId: string,
+  findById: (id: string) => Promise<{ readonly status: PublicationStatus } | undefined>,
+): Promise<void> {
+  if (successorId === currentId) {
+    throw new ValidationFailedError(`A ${entityLabel} cannot be its own successor.`, {
+      id: currentId,
+    });
+  }
+  const successor = await findById(successorId);
+  if (!successor) {
+    throw new ResourceNotFoundError(`Successor ${entityLabel} ${successorId} not found.`, {
+      successorId,
+    });
+  }
+  if (successor.status !== 'PUBLISHED') {
+    throw new ValidationFailedError(
+      `Successor ${entityLabel} ${successorId} must be PUBLISHED, not ${successor.status}.`,
+      { successorId, status: successor.status },
+    );
+  }
 }
 
 /**
@@ -365,20 +402,30 @@ export async function retireCategory(
     }
     assertNotRetired(current);
     assertRetirable(current);
-    const updated = await deps.categoryRepo.retire(input.id, input.expectedVersion, reason);
+    if (input.successorId !== undefined) {
+      await assertValidSuccessor('category', input.id, input.successorId, (id) =>
+        deps.categoryRepo.findById(id),
+      );
+    }
+    const updated = await deps.categoryRepo.retire(
+      input.id,
+      input.expectedVersion,
+      reason,
+      input.successorId,
+    );
     await deps.auditRepo.record({
       actorUserId: input.actorUserId,
       action: 'category.retired',
       entityType: 'Category',
       entityId: input.id,
-      metadata: { reason },
+      metadata: { reason, successorId: input.successorId },
       traceId: input.traceId,
     });
     await deps.outboxRepo.enqueue({
       aggregateType: 'Category',
       aggregateId: input.id,
       eventType: 'category.retired',
-      payload: { reason },
+      payload: { reason, successorId: input.successorId },
     });
     return updated;
   });
@@ -402,20 +449,30 @@ export async function retireContent(
     }
     assertNotRetired(current);
     assertRetirable(current);
-    const updated = await deps.contentRepo.retire(input.id, input.expectedVersion, reason);
+    if (input.successorId !== undefined) {
+      await assertValidSuccessor('content', input.id, input.successorId, (id) =>
+        deps.contentRepo.findById(id),
+      );
+    }
+    const updated = await deps.contentRepo.retire(
+      input.id,
+      input.expectedVersion,
+      reason,
+      input.successorId,
+    );
     await deps.auditRepo.record({
       actorUserId: input.actorUserId,
       action: 'content.retired',
       entityType: 'Content',
       entityId: input.id,
-      metadata: { reason },
+      metadata: { reason, successorId: input.successorId },
       traceId: input.traceId,
     });
     await deps.outboxRepo.enqueue({
       aggregateType: 'Content',
       aggregateId: input.id,
       eventType: 'content.retired',
-      payload: { reason },
+      payload: { reason, successorId: input.successorId },
     });
     return updated;
   });
@@ -439,20 +496,30 @@ export async function retireProduct(
     }
     assertNotRetired(current);
     assertRetirable(current);
-    const updated = await deps.productRepo.retire(input.id, input.expectedVersion, reason);
+    if (input.successorId !== undefined) {
+      await assertValidSuccessor('product', input.id, input.successorId, (id) =>
+        deps.productRepo.findById(id),
+      );
+    }
+    const updated = await deps.productRepo.retire(
+      input.id,
+      input.expectedVersion,
+      reason,
+      input.successorId,
+    );
     await deps.auditRepo.record({
       actorUserId: input.actorUserId,
       action: 'product.retired',
       entityType: 'Product',
       entityId: input.id,
-      metadata: { reason },
+      metadata: { reason, successorId: input.successorId },
       traceId: input.traceId,
     });
     await deps.outboxRepo.enqueue({
       aggregateType: 'Product',
       aggregateId: input.id,
       eventType: 'product.retired',
-      payload: { reason },
+      payload: { reason, successorId: input.successorId },
     });
     return updated;
   });

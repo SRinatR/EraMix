@@ -43,10 +43,14 @@ export default async function ArticlePage({ params }: { params: Promise<PagePara
 
   const container = getContainer();
   const resolution = await resolveContentRoute(container.content, 'ARTICLES', locale, slug);
+  if (resolution.kind === 'retired' && resolution.successorCanonicalUrl) {
+    permanentRedirect(resolution.successorCanonicalUrl);
+  }
   if (resolution.kind === 'not-found' || resolution.kind === 'retired') {
-    // A real HTTP 410 for the 'retired' case is served by src/proxy.ts before
-    // this page ever renders (page.tsx/Server Components cannot set a
-    // custom status code — see ADR-0018). This is defense-in-depth only.
+    // A real HTTP 410 for the successor-less 'retired' case is served by
+    // src/proxy.ts before this page ever renders (page.tsx/Server Components
+    // cannot set a custom status code — see ADR-0018). This is
+    // defense-in-depth only.
     notFound();
   }
   if (resolution.kind === 'redirect') {

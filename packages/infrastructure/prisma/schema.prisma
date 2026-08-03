@@ -246,8 +246,17 @@ model Content {
   /// in migration.sql tying retiredAt to status = ARCHIVED.
   retiredAt        DateTime?
   retirementReason String?
+  /// Optional materially-equivalent canonical replacement (search-visibility.md:
+  /// "a 308 is used only for a materially equivalent canonical replacement" —
+  /// never a blanket redirect to a category/listing). Only ever read when
+  /// retiredAt is set (see the manual CHECK in migration.sql); route
+  /// resolution re-checks the successor's live PUBLISHED status/canonical
+  /// route at request time rather than freezing a URL at retirement time.
+  successorId      String?           @db.Uuid
 
   translations ContentTranslation[]
+  successor    Content?             @relation("ContentSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  supersedes   Content[]            @relation("ContentSuccessor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -314,9 +323,13 @@ model Category {
   /// Durable, one-way "permanently retired" state — see Content.retiredAt.
   retiredAt        DateTime?
   retirementReason String?
+  /// Optional materially-equivalent canonical replacement — see Content.successorId.
+  successorId      String?           @db.Uuid
 
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children Category[] @relation("CategoryHierarchy")
+  successor Category? @relation("CategorySuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  supersedes Category[] @relation("CategorySuccessor")
 
   translations CategoryTranslation[]
   products     Product[]
@@ -381,12 +394,16 @@ model Product {
   /// Durable, one-way "permanently retired" state — see Content.retiredAt.
   retiredAt         DateTime?
   retirementReason  String?
+  /// Optional materially-equivalent canonical replacement — see Content.successorId.
+  successorId       String?           @db.Uuid
   /// Explicit opt-in for the future direct-sale/Merchant commercial mode
   /// (ADR-0019) — defaults false (quote-only). An Offer belonging to a
   /// product where this is false is invalid at the domain-validation layer.
   directSaleEnabled Boolean           @default(false)
 
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category  Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  successor Product? @relation("ProductSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  supersedes Product[] @relation("ProductSuccessor")
 
   translations ProductTranslation[]
   orderLines   OrderLine[]

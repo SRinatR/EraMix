@@ -1,5 +1,8 @@
 import { CanonicalRouteMissingError, SlugConflictError } from '@eramix/domain';
 import type {
+  Category,
+  CategoryRoute,
+  CategoryTranslation,
   Content,
   ContentRoute,
   ContentTranslation,
@@ -9,11 +12,17 @@ import type {
 import { describe, expect, it } from 'vitest';
 import type { CursorPage } from './pagination.js';
 import type {
+  CategoryRepository,
+  CategoryWithTranslations,
   ContentRepository,
   ContentWithTranslations,
   ProductRepository,
 } from './repositories.js';
-import { resolveContentRoute, resolveProductRoute } from './route-resolution.js';
+import {
+  resolveCategoryRoute,
+  resolveContentRoute,
+  resolveProductRoute,
+} from './route-resolution.js';
 
 /**
  * In-memory test doubles for ContentRepository/ProductRepository, used only
@@ -322,6 +331,152 @@ describe('resolveContentRoute', () => {
     expect(result).toEqual({ kind: 'retired', retirementReason: 'Discontinued, no successor.' });
   });
 
+  it('returns a 308-eligible successorCanonicalUrl when the retired entity names a live, PUBLISHED successor', async () => {
+    const repo = new InMemoryContentRepository();
+    const retiredTranslation = makeTranslation({ id: 'retired-translation' });
+    repo.seed({
+      ...makeContent({
+        id: 'retired-content',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Superseded by a newer article.',
+        successorId: 'successor-content',
+      }),
+      translations: [
+        {
+          ...retiredTranslation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: retiredTranslation.id,
+              locale: 'en',
+              namespace: 'ARTICLES',
+              slug: 'old-article',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+    const successorTranslation = makeTranslation({ id: 'successor-translation' });
+    repo.seed({
+      ...makeContent({ id: 'successor-content', status: 'PUBLISHED' }),
+      translations: [
+        {
+          ...successorTranslation,
+          routes: [
+            {
+              id: 'r2',
+              translationId: successorTranslation.id,
+              locale: 'en',
+              namespace: 'ARTICLES',
+              slug: 'new-article',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveContentRoute(repo, 'ARTICLES', 'en', 'old-article');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Superseded by a newer article.',
+      successorCanonicalUrl: '/en/articles/new-article',
+    });
+  });
+
+  it('falls back to a plain 410 (no successorCanonicalUrl) when the named successor is itself retired', async () => {
+    const repo = new InMemoryContentRepository();
+    const retiredTranslation = makeTranslation({ id: 'retired-translation' });
+    repo.seed({
+      ...makeContent({
+        id: 'retired-content',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Superseded, but the successor is now also gone.',
+        successorId: 'also-retired-successor',
+      }),
+      translations: [
+        {
+          ...retiredTranslation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: retiredTranslation.id,
+              locale: 'en',
+              namespace: 'ARTICLES',
+              slug: 'old-article',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+    repo.seed({
+      ...makeContent({
+        id: 'also-retired-successor',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'This one is retired too — no chained redirect.',
+      }),
+      translations: [],
+    });
+
+    const result = await resolveContentRoute(repo, 'ARTICLES', 'en', 'old-article');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Superseded, but the successor is now also gone.',
+      successorCanonicalUrl: undefined,
+    });
+  });
+
+  it('falls back to a plain 410 when the named successor has no translation for the requested locale', async () => {
+    const repo = new InMemoryContentRepository();
+    const retiredTranslation = makeTranslation({ id: 'retired-translation' });
+    repo.seed({
+      ...makeContent({
+        id: 'retired-content',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Superseded.',
+        successorId: 'successor-content',
+      }),
+      translations: [
+        {
+          ...retiredTranslation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: retiredTranslation.id,
+              locale: 'en',
+              namespace: 'ARTICLES',
+              slug: 'old-article',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+    repo.seed({
+      ...makeContent({ id: 'successor-content', status: 'PUBLISHED' }),
+      translations: [
+        {
+          ...makeTranslation({ id: 'ru-only-translation', locale: 'ru' }),
+          routes: [],
+        },
+      ],
+    });
+
+    const result = await resolveContentRoute(repo, 'ARTICLES', 'en', 'old-article');
+    expect(result.kind).toBe('retired');
+    expect((result as { successorCanonicalUrl?: string }).successorCanonicalUrl).toBeUndefined();
+  });
+
   it('throws CanonicalRouteMissingError if the canonical route points at a translation the content no longer has (data-integrity guard, not a normal 404)', async () => {
     const translation = makeTranslation({ id: 'orphan-translation' });
     const canonicalRoute: ContentRoute = {
@@ -374,12 +529,22 @@ describe('resolveContentRoute', () => {
 });
 
 class InMemoryProductRepository implements ProductRepository {
+  private readonly extraProducts: (Product & { translations: ProductTranslation[] })[] = [];
+
   constructor(
     private readonly product: (Product & { translations: ProductTranslation[] }) | undefined,
   ) {}
 
-  findById(): Promise<(Product & { translations: ProductTranslation[] }) | undefined> {
-    return Promise.resolve(this.product);
+  /** Additional products (e.g. a retirement successor) resolvable only via findById, mirroring how a real repository holds every row regardless of which one a given test's "primary" slug lookup targets. */
+  seedExtra(product: Product & { translations: ProductTranslation[] }): void {
+    this.extraProducts.push(product);
+  }
+
+  findById(id: string): Promise<(Product & { translations: ProductTranslation[] }) | undefined> {
+    if (this.product?.id === id) {
+      return Promise.resolve(this.product);
+    }
+    return Promise.resolve(this.extraProducts.find((candidate) => candidate.id === id));
   }
 
   findByPublicId(
@@ -507,6 +672,60 @@ describe('resolveProductRoute', () => {
     expect(result).toEqual({ kind: 'retired', retirementReason: 'Discontinued by manufacturer.' });
   });
 
+  it('returns a 308-eligible successorCanonicalUrl when the retired product names a live, PUBLISHED successor', async () => {
+    const repo = new InMemoryProductRepository({
+      ...makeProduct({
+        id: 'retired-product',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Replaced by the newer model.',
+        successorId: 'successor-product',
+      }),
+      translations: [makeProductTranslation()],
+    });
+    repo.seedExtra({
+      ...makeProduct({ id: 'successor-product', publicId: 'S1B2C3D4', status: 'PUBLISHED' }),
+      translations: [
+        makeProductTranslation({
+          id: 'successor-pt',
+          productId: 'successor-product',
+          slug: 'blue-t-shirt',
+        }),
+      ],
+    });
+
+    const result = await resolveProductRoute(repo, 'P8K4F2M9', 'en', 'red-t-shirt');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Replaced by the newer model.',
+      successorCanonicalUrl: '/en/catalog/S1B2C3D4-blue-t-shirt',
+    });
+  });
+
+  it('falls back to a plain 410 when the named successor product is not PUBLISHED', async () => {
+    const repo = new InMemoryProductRepository({
+      ...makeProduct({
+        id: 'retired-product',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Replaced, but the replacement is still a draft.',
+        successorId: 'draft-successor',
+      }),
+      translations: [makeProductTranslation()],
+    });
+    repo.seedExtra({
+      ...makeProduct({ id: 'draft-successor', publicId: 'D1R2A3F4', status: 'DRAFT' }),
+      translations: [makeProductTranslation({ id: 'draft-pt', productId: 'draft-successor' })],
+    });
+
+    const result = await resolveProductRoute(repo, 'P8K4F2M9', 'en', 'red-t-shirt');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Replaced, but the replacement is still a draft.',
+      successorCanonicalUrl: undefined,
+    });
+  });
+
   it('returns not-found when the product has no translation for the requested locale', async () => {
     const repo = new InMemoryProductRepository({
       ...makeProduct(),
@@ -561,5 +780,359 @@ describe('CanonicalRouteMissingError', () => {
     await expect(resolveContentRoute(brokenRepo, 'ARTICLES', 'en', 'orphaned')).rejects.toThrow(
       CanonicalRouteMissingError,
     );
+  });
+});
+
+/**
+ * resolveCategoryRoute had no dedicated unit test file before this suite
+ * (a pre-existing gap noted, not introduced, in Phase B slice 2's status
+ * block) — mirrors InMemoryContentRepository's shape/conventions above.
+ */
+class InMemoryCategoryRepository implements CategoryRepository {
+  private readonly categories = new Map<string, CategoryWithTranslations>();
+  private readonly routes: CategoryRoute[] = [];
+  private nextRouteId = 1;
+
+  seed(category: CategoryWithTranslations): void {
+    this.categories.set(category.id, category);
+    for (const translation of category.translations) {
+      for (const route of translation.routes) {
+        this.routes.push(route);
+      }
+    }
+  }
+
+  findById(id: string): Promise<CategoryWithTranslations | undefined> {
+    return Promise.resolve(this.categories.get(id));
+  }
+
+  async findByCanonicalSlug(
+    locale: CategoryRoute['locale'],
+    slug: string,
+  ): Promise<CategoryWithTranslations | undefined> {
+    const route = this.routes.find(
+      (candidate) =>
+        candidate.locale === locale && candidate.slug === slug && candidate.isCanonical,
+    );
+    if (!route) {
+      return undefined;
+    }
+    for (const category of this.categories.values()) {
+      if (category.translations.some((translation) => translation.id === route.translationId)) {
+        return category;
+      }
+    }
+    return undefined;
+  }
+
+  findRouteBySlug(
+    locale: CategoryRoute['locale'],
+    slug: string,
+  ): Promise<CategoryRoute | undefined> {
+    return Promise.resolve(
+      this.routes.find((route) => route.locale === locale && route.slug === slug),
+    );
+  }
+
+  findCanonicalRouteByTranslationId(translationId: string): Promise<CategoryRoute | undefined> {
+    return Promise.resolve(
+      this.routes.find((route) => route.translationId === translationId && route.isCanonical),
+    );
+  }
+
+  create(): Promise<CategoryWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  addTranslation(): Promise<CategoryWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  updateTranslation(): Promise<CategoryWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  listPublished(): Promise<readonly CategoryWithTranslations[]> {
+    return Promise.resolve([...this.categories.values()].filter((c) => c.status === 'PUBLISHED'));
+  }
+
+  listByParent(): Promise<readonly CategoryWithTranslations[]> {
+    throw new Error('not needed for these tests');
+  }
+
+  updateStatus(): Promise<CategoryWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  retire(): Promise<CategoryWithTranslations> {
+    throw new Error('not needed for these tests');
+  }
+
+  listAll(): Promise<CursorPage<CategoryWithTranslations>> {
+    throw new Error('not needed for these tests');
+  }
+
+  async setCanonicalRoute(
+    route: Omit<CategoryRoute, 'id' | 'createdAt' | 'isCanonical'>,
+  ): Promise<CategoryRoute> {
+    const collision = this.routes.find(
+      (candidate) => candidate.locale === route.locale && candidate.slug === route.slug,
+    );
+    if (collision) {
+      throw new SlugConflictError('Slug already used by another route.', { route });
+    }
+    for (const existing of this.routes) {
+      if (existing.translationId === route.translationId) {
+        (existing as { isCanonical: boolean }).isCanonical = false;
+      }
+    }
+    const created: CategoryRoute = {
+      id: String(this.nextRouteId++),
+      translationId: route.translationId,
+      locale: route.locale,
+      slug: route.slug,
+      isCanonical: true,
+      createdAt: new Date(),
+    };
+    this.routes.push(created);
+    return Promise.resolve(created);
+  }
+}
+
+function makeCategory(overrides: Partial<Category> = {}): Category {
+  return {
+    id: 'category-1',
+    status: 'PUBLISHED',
+    sortOrder: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    version: 0,
+    ...overrides,
+  };
+}
+
+function makeCategoryTranslation(
+  overrides: Partial<CategoryTranslation> = {},
+): CategoryTranslation {
+  return {
+    id: 'category-translation-1',
+    categoryId: 'category-1',
+    locale: 'en',
+    name: 'Widgets',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    version: 0,
+    ...overrides,
+  };
+}
+
+describe('resolveCategoryRoute', () => {
+  it('resolves the current canonical route', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const translation = makeCategoryTranslation();
+    repo.seed({
+      ...makeCategory(),
+      translations: [
+        {
+          ...translation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: translation.id,
+              locale: 'en',
+              slug: 'widgets',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveCategoryRoute(repo, 'en', 'widgets');
+    expect(result.kind).toBe('canonical');
+  });
+
+  it('returns not-found for an unknown slug (404)', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const result = await resolveCategoryRoute(repo, 'en', 'does-not-exist');
+    expect(result).toEqual({ kind: 'not-found' });
+  });
+
+  it('redirects an old slug to the current canonical URL in a single hop, never a chain', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const translation = makeCategoryTranslation();
+
+    await repo.setCanonicalRoute({ translationId: translation.id, locale: 'en', slug: 'v1-slug' });
+    await repo.setCanonicalRoute({ translationId: translation.id, locale: 'en', slug: 'v2-slug' });
+    const finalRoute = await repo.setCanonicalRoute({
+      translationId: translation.id,
+      locale: 'en',
+      slug: 'v3-slug',
+    });
+    repo.seed({ ...makeCategory(), translations: [{ ...translation, routes: [] }] });
+
+    const fromOldest = await resolveCategoryRoute(repo, 'en', 'v1-slug');
+    expect(fromOldest).toEqual({ kind: 'redirect', canonicalUrl: '/en/catalog/v3-slug' });
+
+    const fromMiddle = await resolveCategoryRoute(repo, 'en', 'v2-slug');
+    expect(fromMiddle).toEqual({
+      kind: 'redirect',
+      canonicalUrl: `/en/catalog/${finalRoute.slug}`,
+    });
+
+    const fromCurrent = await resolveCategoryRoute(repo, 'en', 'v3-slug');
+    expect(fromCurrent.kind).toBe('canonical');
+  });
+
+  it('treats unpublished categories as not-found even though its canonical route exists', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const translation = makeCategoryTranslation();
+    repo.seed({
+      ...makeCategory({ status: 'DRAFT' }),
+      translations: [
+        {
+          ...translation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: translation.id,
+              locale: 'en',
+              slug: 'widgets',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveCategoryRoute(repo, 'en', 'widgets');
+    expect(result).toEqual({ kind: 'not-found' });
+  });
+
+  it('returns retired (410), not not-found (404), for a durably retired category', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const translation = makeCategoryTranslation();
+    repo.seed({
+      ...makeCategory({
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Discontinued, no successor.',
+      }),
+      translations: [
+        {
+          ...translation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: translation.id,
+              locale: 'en',
+              slug: 'widgets',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveCategoryRoute(repo, 'en', 'widgets');
+    expect(result).toEqual({ kind: 'retired', retirementReason: 'Discontinued, no successor.' });
+  });
+
+  it('returns a 308-eligible successorCanonicalUrl when the retired category names a live, PUBLISHED successor', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const retiredTranslation = makeCategoryTranslation({ id: 'retired-translation' });
+    repo.seed({
+      ...makeCategory({
+        id: 'retired-category',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Merged into a broader category.',
+        successorId: 'successor-category',
+      }),
+      translations: [
+        {
+          ...retiredTranslation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: retiredTranslation.id,
+              locale: 'en',
+              slug: 'old-widgets',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+    const successorTranslation = makeCategoryTranslation({ id: 'successor-translation' });
+    repo.seed({
+      ...makeCategory({ id: 'successor-category', status: 'PUBLISHED' }),
+      translations: [
+        {
+          ...successorTranslation,
+          routes: [
+            {
+              id: 'r2',
+              translationId: successorTranslation.id,
+              locale: 'en',
+              slug: 'all-hardware',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await resolveCategoryRoute(repo, 'en', 'old-widgets');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Merged into a broader category.',
+      successorCanonicalUrl: '/en/catalog/all-hardware',
+    });
+  });
+
+  it('falls back to a plain 410 when the named successor category has no canonical route', async () => {
+    const repo = new InMemoryCategoryRepository();
+    const retiredTranslation = makeCategoryTranslation({ id: 'retired-translation' });
+    repo.seed({
+      ...makeCategory({
+        id: 'retired-category',
+        status: 'ARCHIVED',
+        retiredAt: new Date('2026-08-03T00:00:00Z'),
+        retirementReason: 'Merged, but the successor has no route yet.',
+        successorId: 'successor-category',
+      }),
+      translations: [
+        {
+          ...retiredTranslation,
+          routes: [
+            {
+              id: 'r1',
+              translationId: retiredTranslation.id,
+              locale: 'en',
+              slug: 'old-widgets',
+              isCanonical: true,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ],
+    });
+    repo.seed({
+      ...makeCategory({ id: 'successor-category', status: 'PUBLISHED' }),
+      translations: [{ ...makeCategoryTranslation({ id: 'successor-translation' }), routes: [] }],
+    });
+
+    const result = await resolveCategoryRoute(repo, 'en', 'old-widgets');
+    expect(result).toEqual({
+      kind: 'retired',
+      retirementReason: 'Merged, but the successor has no route yet.',
+      successorCanonicalUrl: undefined,
+    });
   });
 });

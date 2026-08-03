@@ -215,8 +215,10 @@ containers.
   application relevance, not forced exact-match anchors. Breadcrumbs, related
   content and footer navigation are server-rendered ordinary links.
 - Retired products return `410` only when permanently unavailable with no
-  useful successor; a `301` is used only for a materially equivalent canonical
-  replacement. Never redirect removed products indiscriminately to a category.
+  useful successor; a `308` is used only for a materially equivalent canonical
+  replacement (matching this contract's other permanent-redirect uses — see
+  "Permanent duplicate/history URL changes use a direct server-side `308`"
+  above). Never redirect removed products indiscriminately to a category.
 
 ## Implementation and acceptance matrix
 

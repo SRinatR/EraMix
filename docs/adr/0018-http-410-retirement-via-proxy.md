@@ -96,3 +96,25 @@ case a request ever reaches the page without passing through the proxy
   local dev-server/browser check on this laptop (no local Postgres).
 - If a future Next.js major version removes `proxy.ts`'s always-Node.js
   guarantee, this decision must be revisited before upgrading.
+
+## Update, 2026-08-03: successor/308 extension
+
+The original requirement source (quoted above) always named the successor
+case ("a permanent removal without a suitable successor returns 410"), but
+the first slice deliberately implemented 410-only and left the successor
+half unbuilt. This extension closes that gap without changing the decision
+above: `Category`/`Content`/`Product` each gain an optional, nullable,
+same-type self-referencing `successorId` (migration
+`20260803190000_add_retirement_successor`, with `CHECK` constraints tying it
+to `retiredAt IS NOT NULL` and rejecting self-reference). `retireCategory`/
+`retireContent`/`retireProduct` validate the successor exists and is
+currently `PUBLISHED` at retirement time (`assertValidSuccessor`,
+`packages/application/src/publication.ts`). `resolveContentRoute`/
+`resolveCategoryRoute`/`resolveProductRoute`'s `'retired'` result gained an
+optional `successorCanonicalUrl`, computed by re-checking the successor's
+_live_ status/canonical route on every request — never frozen at retirement
+time — so a successor that is later itself unpublished/retired transparently
+falls back to a plain 410 rather than a broken redirect. `proxy.ts` issues
+`NextResponse.redirect(url, 308)` when present, the existing `buildGoneResponse`
+(410) otherwise — one hop only, the successor's own successor (if any) is
+never followed.

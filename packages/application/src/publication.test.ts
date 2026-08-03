@@ -419,6 +419,135 @@ describe('retireCategory', () => {
     expect(outboxRepo.calls).toHaveLength(1);
     expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'category.retired' });
   });
+
+  it('retires with a valid PUBLISHED successor and records it on the retire()/audit/outbox calls', async () => {
+    const category = makeCategory({ status: 'ARCHIVED' });
+    const successor = makeCategory({ id: 'successor-1', status: 'PUBLISHED' });
+    const retireCalls: unknown[] = [];
+    const categoryRepo = {
+      findById: (id: string) =>
+        Promise.resolve(
+          id === 'successor-1' ? successor : id === category.id ? category : undefined,
+        ),
+      retire: (...args: unknown[]) => {
+        retireCalls.push(args);
+        return Promise.resolve({
+          ...category,
+          retiredAt: new Date('2026-08-03T00:00:00Z'),
+          retirementReason: 'Merged.',
+          successorId: 'successor-1',
+          version: 1,
+        });
+      },
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireCategory(
+      { categoryRepo: categoryRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: category.id,
+        expectedVersion: 0,
+        reason: 'Merged.',
+        successorId: 'successor-1',
+        actorUserId: 'admin-1',
+        actorRole: 'ADMIN',
+      },
+    );
+
+    expect(result.successorId).toBe('successor-1');
+    expect(retireCalls[0]).toEqual([category.id, 0, 'Merged.', 'successor-1']);
+    expect(auditRepo.calls[0]).toMatchObject({ metadata: { successorId: 'successor-1' } });
+    expect(outboxRepo.calls[0]).toMatchObject({ payload: { successorId: 'successor-1' } });
+  });
+
+  it('rejects a category naming itself as its own successor', async () => {
+    const category = makeCategory({ status: 'ARCHIVED' });
+    const categoryRepo = {
+      findById: () => Promise.resolve(category),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: category.id,
+          expectedVersion: 0,
+          reason: 'Merged.',
+          successorId: category.id,
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
+
+  it('rejects a successor that does not exist', async () => {
+    const category = makeCategory({ status: 'ARCHIVED' });
+    const categoryRepo = {
+      findById: (id: string) => Promise.resolve(id === category.id ? category : undefined),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: category.id,
+          expectedVersion: 0,
+          reason: 'Merged.',
+          successorId: 'does-not-exist',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ResourceNotFoundError);
+  });
+
+  it('rejects a successor that is not PUBLISHED', async () => {
+    const category = makeCategory({ status: 'ARCHIVED' });
+    const draftSuccessor = makeCategory({ id: 'successor-1', status: 'DRAFT' });
+    const categoryRepo = {
+      findById: (id: string) =>
+        Promise.resolve(
+          id === 'successor-1' ? draftSuccessor : id === category.id ? category : undefined,
+        ),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireCategory(
+        {
+          categoryRepo: categoryRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: category.id,
+          expectedVersion: 0,
+          reason: 'Merged.',
+          successorId: 'successor-1',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
 });
 
 const canonicalContentRoute: ContentRoute = {
@@ -635,6 +764,77 @@ describe('retireContent', () => {
     expect(auditRepo.calls[0]).toMatchObject({ action: 'content.retired' });
     expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'content.retired' });
   });
+
+  it('retires with a valid PUBLISHED successor and records it on the retire()/audit/outbox calls', async () => {
+    const content = makeContent({ status: 'ARCHIVED' });
+    const successor = makeContent({ id: 'successor-1', status: 'PUBLISHED' });
+    const retireCalls: unknown[] = [];
+    const contentRepo = {
+      findById: (id: string) =>
+        Promise.resolve(id === 'successor-1' ? successor : id === content.id ? content : undefined),
+      retire: (...args: unknown[]) => {
+        retireCalls.push(args);
+        return Promise.resolve({
+          ...content,
+          retiredAt: new Date('2026-08-03T00:00:00Z'),
+          retirementReason: 'Superseded.',
+          successorId: 'successor-1',
+          version: 1,
+        });
+      },
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireContent(
+      { contentRepo: contentRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: content.id,
+        expectedVersion: 0,
+        reason: 'Superseded.',
+        successorId: 'successor-1',
+        actorUserId: 'editor-1',
+        actorRole: 'CONTENT_EDITOR',
+      },
+    );
+
+    expect(result.successorId).toBe('successor-1');
+    expect(retireCalls[0]).toEqual([content.id, 0, 'Superseded.', 'successor-1']);
+    expect(auditRepo.calls[0]).toMatchObject({ metadata: { successorId: 'successor-1' } });
+    expect(outboxRepo.calls[0]).toMatchObject({ payload: { successorId: 'successor-1' } });
+  });
+
+  it('rejects a successor that is not PUBLISHED', async () => {
+    const content = makeContent({ status: 'ARCHIVED' });
+    const draftSuccessor = makeContent({ id: 'successor-1', status: 'DRAFT' });
+    const contentRepo = {
+      findById: (id: string) =>
+        Promise.resolve(
+          id === 'successor-1' ? draftSuccessor : id === content.id ? content : undefined,
+        ),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireContent(
+        {
+          contentRepo: contentRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: content.id,
+          expectedVersion: 0,
+          reason: 'Superseded.',
+          successorId: 'successor-1',
+          actorUserId: 'editor-1',
+          actorRole: 'CONTENT_EDITOR',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
+  });
 });
 
 function makeProductTranslation(overrides: Partial<ProductTranslation> = {}): ProductTranslation {
@@ -811,5 +1011,84 @@ describe('retireProduct', () => {
     expect(result.retiredAt).toBeDefined();
     expect(auditRepo.calls[0]).toMatchObject({ action: 'product.retired' });
     expect(outboxRepo.calls[0]).toMatchObject({ eventType: 'product.retired' });
+  });
+
+  it('retires with a valid PUBLISHED successor and records it on the retire()/audit/outbox calls', async () => {
+    const product = makeProduct({ status: 'ARCHIVED' });
+    const successor = makeProduct({
+      id: 'successor-1',
+      publicId: 'S1B2C3D4',
+      status: 'PUBLISHED',
+    });
+    const retireCalls: unknown[] = [];
+    const productRepo = {
+      findById: (id: string) =>
+        Promise.resolve(id === 'successor-1' ? successor : id === product.id ? product : undefined),
+      retire: (...args: unknown[]) => {
+        retireCalls.push(args);
+        return Promise.resolve({
+          ...product,
+          retiredAt: new Date('2026-08-03T00:00:00Z'),
+          retirementReason: 'Replaced.',
+          successorId: 'successor-1',
+          version: 1,
+        });
+      },
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await retireProduct(
+      { productRepo: productRepo as never, auditRepo, outboxRepo, uow: new InMemoryUnitOfWork() },
+      {
+        id: product.id,
+        expectedVersion: 0,
+        reason: 'Replaced.',
+        successorId: 'successor-1',
+        actorUserId: 'admin-1',
+        actorRole: 'ADMIN',
+      },
+    );
+
+    expect(result.successorId).toBe('successor-1');
+    expect(retireCalls[0]).toEqual([product.id, 0, 'Replaced.', 'successor-1']);
+    expect(auditRepo.calls[0]).toMatchObject({ metadata: { successorId: 'successor-1' } });
+    expect(outboxRepo.calls[0]).toMatchObject({ payload: { successorId: 'successor-1' } });
+  });
+
+  it('rejects a successor that is not PUBLISHED', async () => {
+    const product = makeProduct({ status: 'ARCHIVED' });
+    const draftSuccessor = makeProduct({
+      id: 'successor-1',
+      publicId: 'S1B2C3D4',
+      status: 'DRAFT',
+    });
+    const productRepo = {
+      findById: (id: string) =>
+        Promise.resolve(
+          id === 'successor-1' ? draftSuccessor : id === product.id ? product : undefined,
+        ),
+      retire: () => {
+        throw new Error('should not be called');
+      },
+    };
+    await expect(
+      retireProduct(
+        {
+          productRepo: productRepo as never,
+          auditRepo: fakeAuditRepo(),
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+        },
+        {
+          id: product.id,
+          expectedVersion: 0,
+          reason: 'Replaced.',
+          successorId: 'successor-1',
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(ValidationFailedError);
   });
 });

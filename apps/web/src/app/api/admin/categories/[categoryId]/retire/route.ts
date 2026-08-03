@@ -9,6 +9,7 @@ import { z } from 'zod';
 const retireSchema = z.object({
   reason: z.string().min(1),
   expectedVersion: z.number().int().min(0),
+  successorId: z.string().min(1).optional(),
 });
 
 const patchHandler = withApiHandler<{ categoryId: string }>(
@@ -31,6 +32,7 @@ const patchHandler = withApiHandler<{ categoryId: string }>(
         id: categoryId,
         expectedVersion: body.expectedVersion,
         reason: body.reason,
+        successorId: body.successorId,
         actorUserId: actor.userId,
         actorRole: actor.platformRole,
         traceId,
@@ -42,6 +44,7 @@ const patchHandler = withApiHandler<{ categoryId: string }>(
       status: updated.status,
       retiredAt: updated.retiredAt,
       retirementReason: updated.retirementReason,
+      successorId: updated.successorId ?? null,
       version: updated.version,
     });
   },
