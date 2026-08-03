@@ -1,4 +1,4 @@
-import { ValidationFailedError } from '@eramix/domain';
+import { ValidationFailedError, generateUuidV7 } from '@eramix/domain';
 import type { AnalyticsEvent, PlatformSettings } from '@eramix/domain';
 import { describe, expect, it, vi } from 'vitest';
 import type { AnalyticsDispatchResult, AnalyticsEventSink, Clock } from './ports.js';
@@ -10,7 +10,7 @@ const CONSENT_GRANTED = { analytics: true, advertising: false };
 
 function pageView(overrides: Partial<AnalyticsEvent> = {}): AnalyticsEvent {
   return {
-    eventId: 'evt-1',
+    eventId: generateUuidV7(),
     schemaVersion: 2,
     occurredAt: NOW.toISOString(),
     sessionId: 'session-1',
@@ -31,10 +31,11 @@ describe('recordAnalyticsEvents', () => {
   it('enqueues one outbox message per valid event', async () => {
     const enqueue = vi.fn().mockResolvedValue({});
     const outboxRepo = { enqueue } as unknown as OutboxMessageRepository;
+    const firstEvent = pageView();
 
     await recordAnalyticsEvents({ outboxRepo, clock: fixedClock() }, [
-      pageView(),
-      pageView({ eventId: 'evt-2' }),
+      firstEvent,
+      pageView({ eventId: generateUuidV7() }),
     ]);
 
     expect(enqueue).toHaveBeenCalledTimes(2);
@@ -42,7 +43,7 @@ describe('recordAnalyticsEvents', () => {
       1,
       expect.objectContaining({
         aggregateType: 'AnalyticsEvent',
-        aggregateId: 'evt-1',
+        aggregateId: firstEvent.eventId,
         eventType: 'analytics.event_captured',
       }),
     );

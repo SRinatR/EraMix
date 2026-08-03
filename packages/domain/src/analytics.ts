@@ -1,5 +1,6 @@
 import { ValidationFailedError } from './errors.js';
 import { isSupportedLocale, type LocaleCode } from './locale.js';
+import { isValidUuidV7 } from './uuidv7.js';
 
 /**
  * CLAUDE.md's shared, versioned event library: "one semantic event to Rust
@@ -137,8 +138,12 @@ const SUSPICIOUS_PII_PATTERN = /(^|[?&])(email|phone|password|token|card|ssn)=|@
  * package validates invariants" convention). Throws ValidationFailedError.
  */
 export function validateAnalyticsEvent(event: AnalyticsEvent, now: Date): void {
-  if (event.eventId.trim().length === 0) {
-    throw new ValidationFailedError('Analytics event requires a non-empty eventId.', {
+  // ADR-0021: eventId must be a real UUIDv7 (generated client-side —
+  // packages/domain/src/uuidv7.ts — never database-backed, since this event
+  // is created in the browser before any request exists). A UUIDv4 (or any
+  // other malformed/non-UUID value) is rejected, not merely an empty string.
+  if (!isValidUuidV7(event.eventId)) {
+    throw new ValidationFailedError('Analytics event eventId must be a valid UUIDv7.', {
       eventName: event.eventName,
     });
   }

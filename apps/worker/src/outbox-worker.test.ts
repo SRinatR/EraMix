@@ -9,7 +9,7 @@ import type {
   OutboxMessageRepository,
   PlatformSettingsRepository,
 } from '@eramix/application';
-import type { OutboxMessage, PlatformSettings } from '@eramix/domain';
+import { generateUuidV7, type OutboxMessage, type PlatformSettings } from '@eramix/domain';
 import type { Logger } from '@eramix/infrastructure';
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_OUTBOX_ATTEMPTS, processOutboxBatch } from './outbox-worker.js';
@@ -432,7 +432,7 @@ describe('processOutboxBatch — IndexNow (P1 adapter)', () => {
 
 describe('processOutboxBatch — analytics.event_captured dispatch', () => {
   const VALID_EVENT = {
-    eventId: 'evt-1',
+    eventId: generateUuidV7(),
     schemaVersion: 2,
     occurredAt: new Date().toISOString(),
     sessionId: 'session-1',

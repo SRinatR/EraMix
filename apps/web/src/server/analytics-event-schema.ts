@@ -1,4 +1,4 @@
-import { ANALYTICS_SCHEMA_VERSION, SUPPORTED_LOCALES } from '@eramix/domain';
+import { ANALYTICS_SCHEMA_VERSION, SUPPORTED_LOCALES, isValidUuidV7 } from '@eramix/domain';
 import { z } from 'zod';
 
 /**
@@ -27,7 +27,8 @@ const pageTypeSchema = z.enum([
  * event, not only page_view, now carries the page context it fired from.
  */
 const baseFields = {
-  eventId: z.string().min(1).max(128),
+  /** ADR-0021: eventId must be a real UUIDv7 (client-generated, packages/domain/src/uuidv7.ts) — never an arbitrary string, and never a UUIDv4/other version. */
+  eventId: z.string().refine(isValidUuidV7, { message: 'eventId must be a valid UUIDv7.' }),
   schemaVersion: z.literal(ANALYTICS_SCHEMA_VERSION),
   occurredAt: z.string().min(1),
   sessionId: z.string().min(1).max(128),

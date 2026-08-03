@@ -1,8 +1,9 @@
+import { generateUuidV7 } from '@eramix/domain';
 import { describe, expect, it } from 'vitest';
 import { analyticsEventSchema, analyticsEventsRequestSchema } from './analytics-event-schema.js';
 
 const VALID_PAGE_VIEW = {
-  eventId: 'evt-1',
+  eventId: generateUuidV7(),
   schemaVersion: 2,
   occurredAt: '2026-08-03T12:00:00Z',
   sessionId: 'session-1',
@@ -21,7 +22,7 @@ describe('analyticsEventSchema', () => {
   it('accepts a well-formed lead_submitted event', () => {
     const result = analyticsEventSchema.safeParse({
       ...VALID_PAGE_VIEW,
-      eventId: 'evt-2',
+      eventId: generateUuidV7(),
       locale: 'ru',
       eventName: 'lead_submitted',
       orderNumber: 'ORD-ABC123',
@@ -192,6 +193,27 @@ describe('analyticsEventSchema', () => {
       false,
     );
   });
+
+  it('ADR-0021: accepts a real UUIDv7 eventId', () => {
+    expect(
+      analyticsEventSchema.safeParse({ ...VALID_PAGE_VIEW, eventId: generateUuidV7() }).success,
+    ).toBe(true);
+  });
+
+  it('ADR-0021: rejects a malformed/non-UUID eventId', () => {
+    expect(analyticsEventSchema.safeParse({ ...VALID_PAGE_VIEW, eventId: 'evt-1' }).success).toBe(
+      false,
+    );
+  });
+
+  it('ADR-0021: rejects a syntactically valid UUID that is the wrong version (UUIDv4, not UUIDv7)', () => {
+    expect(
+      analyticsEventSchema.safeParse({
+        ...VALID_PAGE_VIEW,
+        eventId: '3f8e1c2a-4b5d-4e6f-8a9b-0c1d2e3f4a5b',
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('analyticsEventsRequestSchema', () => {
@@ -206,9 +228,9 @@ describe('analyticsEventsRequestSchema', () => {
   });
 
   it('rejects a batch exceeding the maximum size', () => {
-    const events = Array.from({ length: 21 }, (_, i) => ({
+    const events = Array.from({ length: 21 }, () => ({
       ...VALID_PAGE_VIEW,
-      eventId: `evt-${i}`,
+      eventId: generateUuidV7(),
     }));
     expect(analyticsEventsRequestSchema.safeParse({ events }).success).toBe(false);
   });

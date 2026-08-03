@@ -1,7 +1,7 @@
 'use client';
 
 import type { AnalyticsConsentState, AnalyticsEventName, LocaleCode } from '@eramix/domain';
-import { ANALYTICS_SCHEMA_VERSION } from '@eramix/domain';
+import { ANALYTICS_SCHEMA_VERSION, generateUuidV7 } from '@eramix/domain';
 import { getStoredConsent } from './consent-store';
 
 /**
@@ -89,7 +89,10 @@ type AnalyticsEventFields = AnalyticsEventFieldsBase &
  */
 export function sendAnalyticsEvent(locale: LocaleCode, fields: AnalyticsEventFields): void {
   const event = {
-    eventId: crypto.randomUUID(),
+    // ADR-0021: a real UUIDv7 (time-ordered, RFC 9562), not crypto.randomUUID()'s
+    // UUIDv4 — helps ingestion/debugging/storage ordering, never used for
+    // identity/PII (packages/domain/src/uuidv7.ts).
+    eventId: generateUuidV7(),
     schemaVersion: ANALYTICS_SCHEMA_VERSION,
     occurredAt: new Date().toISOString(),
     sessionId: getSessionId(),

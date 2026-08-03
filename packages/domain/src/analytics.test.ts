@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { ValidationFailedError } from './errors.js';
 import { ANALYTICS_SCHEMA_VERSION, validateAnalyticsEvent } from './analytics.js';
 import type { AnalyticsEvent } from './analytics.js';
+import { generateUuidV7 } from './uuidv7.js';
 
 const NOW = new Date('2026-08-03T12:00:00Z');
 const CONSENT_GRANTED = { analytics: true, advertising: false };
 
 function pageView(overrides: Partial<AnalyticsEvent> = {}): AnalyticsEvent {
   return {
-    eventId: 'evt-1',
+    eventId: generateUuidV7(),
     schemaVersion: ANALYTICS_SCHEMA_VERSION,
     occurredAt: NOW.toISOString(),
     sessionId: 'session-1',
@@ -28,7 +29,7 @@ describe('validateAnalyticsEvent', () => {
 
   it('accepts a well-formed lead_submitted event (the primary organic conversion)', () => {
     const event: AnalyticsEvent = {
-      eventId: 'evt-2',
+      eventId: generateUuidV7(),
       schemaVersion: ANALYTICS_SCHEMA_VERSION,
       occurredAt: NOW.toISOString(),
       sessionId: 'session-1',
@@ -46,6 +47,18 @@ describe('validateAnalyticsEvent', () => {
     expect(() => validateAnalyticsEvent(pageView({ eventId: '' }), NOW)).toThrow(
       ValidationFailedError,
     );
+  });
+
+  it('rejects a malformed/non-UUID eventId', () => {
+    expect(() => validateAnalyticsEvent(pageView({ eventId: 'not-a-uuid' }), NOW)).toThrow(
+      ValidationFailedError,
+    );
+  });
+
+  it('rejects a syntactically valid UUID that is the wrong version (UUIDv4, not UUIDv7)', () => {
+    expect(() =>
+      validateAnalyticsEvent(pageView({ eventId: '3f8e1c2a-4b5d-4e6f-8a9b-0c1d2e3f4a5b' }), NOW),
+    ).toThrow(ValidationFailedError);
   });
 
   it('rejects an unsupported schemaVersion', () => {
@@ -106,7 +119,7 @@ describe('validateAnalyticsEvent', () => {
 
   it('requires pageType/canonicalPath on every event, not only page_view', () => {
     const event: AnalyticsEvent = {
-      eventId: 'evt-3',
+      eventId: generateUuidV7(),
       schemaVersion: ANALYTICS_SCHEMA_VERSION,
       occurredAt: NOW.toISOString(),
       sessionId: 'session-1',
