@@ -1,4 +1,9 @@
-import { AccessDeniedError, ResourceNotFoundError, ValidationFailedError } from '@eramix/domain';
+import {
+  AccessDeniedError,
+  PublicIdConflictError,
+  ResourceNotFoundError,
+  ValidationFailedError,
+} from '@eramix/domain';
 import type { CategoryRoute, ContentRoute } from '@eramix/domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -339,7 +344,7 @@ describe('createProduct', () => {
       categoryId: 'category-1',
       status: 'DRAFT',
     });
-    expect((capturedProduct as { publicId: string }).publicId).toMatch(/^[0-9A-Z]{8}$/);
+    expect((capturedProduct as { publicId: string }).publicId).toMatch(/^[0-9A-Z]{16}$/);
     expect(capturedTranslations).toEqual([
       expect.objectContaining({
         locale: 'en',
@@ -351,6 +356,114 @@ describe('createProduct', () => {
     expect(result).toBeDefined();
     expect(auditRepo.calls).toEqual([expect.objectContaining({ action: 'product.created' })]);
     expect(outboxRepo.calls).toEqual([expect.objectContaining({ eventType: 'product.created' })]);
+  });
+
+  it('retries with a fresh publicId on a PublicIdConflictError and records collision telemetry (ADR-0021)', async () => {
+    const category: CategoryWithTranslations = {
+      id: 'category-1',
+      status: 'PUBLISHED',
+      sortOrder: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      translations: [],
+    };
+    const capturedPublicIds: string[] = [];
+    let attempts = 0;
+    const productRepo = {
+      create: vi.fn((product: { publicId: string }, translations: unknown) => {
+        attempts += 1;
+        capturedPublicIds.push(product.publicId);
+        if (attempts === 1) {
+          return Promise.reject(
+            new PublicIdConflictError('Product publicId already exists.', {
+              publicId: product.publicId,
+            }),
+          );
+        }
+        return Promise.resolve({ ...product, translations } as unknown as ProductWithTranslations);
+      }),
+    };
+    const auditRepo = fakeAuditRepo();
+    const outboxRepo = fakeOutboxRepo();
+
+    const result = await createProduct(
+      {
+        productRepo: productRepo as never,
+        categoryRepo: { findById: () => Promise.resolve(category) },
+        auditRepo,
+        outboxRepo,
+        uow: new InMemoryUnitOfWork(),
+        idGen: new SequentialIdGenerator(),
+      },
+      {
+        sku: 'SKU-RETRY',
+        categoryId: 'category-1',
+        translations: [{ locale: 'en', name: 'Chair', slug: 'chair' }],
+        actorUserId: 'admin-1',
+        actorRole: 'ADMIN',
+      },
+    );
+
+    expect(productRepo.create).toHaveBeenCalledTimes(2);
+    expect(capturedPublicIds).toHaveLength(2);
+    expect(capturedPublicIds[0]).not.toBe(capturedPublicIds[1]);
+    expect(result).toBeDefined();
+    expect(auditRepo.calls).toEqual([
+      expect.objectContaining({
+        action: 'product.public_id_collision',
+        metadata: { attempt: 1, sku: 'SKU-RETRY' },
+      }),
+      expect.objectContaining({ action: 'product.created' }),
+    ]);
+    expect(outboxRepo.calls).toEqual([expect.objectContaining({ eventType: 'product.created' })]);
+  });
+
+  it('propagates PublicIdConflictError after exhausting every retry attempt, never overwriting or resolving to the wrong product', async () => {
+    const category: CategoryWithTranslations = {
+      id: 'category-1',
+      status: 'PUBLISHED',
+      sortOrder: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 0,
+      translations: [],
+    };
+    const productRepo = {
+      create: vi.fn(() =>
+        Promise.reject(new PublicIdConflictError('Product publicId already exists.', {})),
+      ),
+    };
+    const auditRepo = fakeAuditRepo();
+
+    await expect(
+      createProduct(
+        {
+          productRepo: productRepo as never,
+          categoryRepo: { findById: () => Promise.resolve(category) },
+          auditRepo,
+          outboxRepo: fakeOutboxRepo(),
+          uow: new InMemoryUnitOfWork(),
+          idGen: new SequentialIdGenerator(),
+        },
+        {
+          sku: 'SKU-EXHAUSTED',
+          categoryId: 'category-1',
+          translations: [{ locale: 'en', name: 'Chair', slug: 'chair' }],
+          actorUserId: 'admin-1',
+          actorRole: 'ADMIN',
+        },
+      ),
+    ).rejects.toThrow(PublicIdConflictError);
+
+    expect(productRepo.create).toHaveBeenCalledTimes(5);
+    // 4 collision-telemetry audit records (one per retried attempt) — the
+    // 5th, final attempt propagates instead of recording another retry.
+    expect(
+      auditRepo.calls.filter(
+        (c) => (c as { action: string }).action === 'product.public_id_collision',
+      ),
+    ).toHaveLength(4);
   });
 });
 

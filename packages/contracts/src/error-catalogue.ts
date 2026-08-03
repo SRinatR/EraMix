@@ -61,6 +61,11 @@ export const ERROR_CATALOGUE = [
     meaning: 'Slug is already held by a current or historical route in this locale/type',
   },
   {
+    code: 'PUBLIC_ID_CONFLICT',
+    status: 409,
+    meaning: 'Generated public identifier collided with an existing one after exhausting retries',
+  },
+  {
     // Historically mapped to 404, inherited from a design that assumed
     // this code would gate URL locale segments. In fact URL locale
     // segments use isSupportedLocale()/notFound() directly and never

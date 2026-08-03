@@ -6,6 +6,7 @@ export type DomainErrorCode =
   | 'CONCURRENCY_CONFLICT'
   | 'IDEMPOTENCY_CONFLICT'
   | 'SLUG_CONFLICT'
+  | 'PUBLIC_ID_CONFLICT'
   | 'LOCALE_NOT_SUPPORTED'
   | 'CANONICAL_ROUTE_MISSING'
   | 'AUTH_REQUIRED'
@@ -103,6 +104,19 @@ export class IdempotencyConflictError extends DomainError {
 //the same locale/route-type/namespace.
 export class SlugConflictError extends DomainError {
   readonly code = 'SLUG_CONFLICT' as const;
+}
+
+/**
+ * ADR-0021: thrown when a newly generated Product.publicId collides with an
+ * existing one. `createProduct` (packages/application/src/authoring.ts)
+ * catches this internally and retries with a fresh publicId a bounded
+ * number of times; it only ever reaches the delivery boundary (409) if
+ * every retry is exhausted — at the 16-character keyspace this is
+ * astronomically unreachable in practice and would itself indicate a
+ * systemic RNG/entropy fault worth surfacing loudly.
+ */
+export class PublicIdConflictError extends DomainError {
+  readonly code = 'PUBLIC_ID_CONFLICT' as const;
 }
 
 //Thrown when a published translation is missing its canonical route — an

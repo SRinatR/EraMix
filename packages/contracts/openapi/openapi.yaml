@@ -3272,7 +3272,15 @@ components:
       type: object
       required: [publicId, sku, slug, name, status]
       properties:
-        publicId: { type: string }
+        publicId:
+          type: string
+          pattern: ^[0-9A-HJKMNP-TV-Z]{8}$|^[0-9A-HJKMNP-TV-Z]{16}$
+          description: >-
+            Opaque, cryptographically random, immutable public identifier
+            (ADR-0021) — never the internal UUID. New products get a
+            16-character Crockford Base32 id; every product created before
+            this policy keeps its original 8-character id forever, both are
+            equally valid and canonical.
         sku: { type: string }
         slug: { type: string }
         name: { type: string }
@@ -3576,7 +3584,12 @@ components:
       required: [id, publicId, status, version]
       properties:
         id: { type: string }
-        publicId: { type: string }
+        publicId:
+          type: string
+          pattern: ^[0-9A-HJKMNP-TV-Z]{8}$|^[0-9A-HJKMNP-TV-Z]{16}$
+          description: >-
+            Opaque, cryptographically random, immutable public identifier
+            (ADR-0021). Always 16 characters for a newly created product.
         status:
           $ref: '#/components/schemas/PublicationStatus'
         version: { type: integer }

@@ -7,8 +7,10 @@ import {
 } from '@eramix/application';
 import {
   ConcurrencyConflictError,
+  PublicIdConflictError,
   SlugConflictError,
   ValidationFailedError,
+  generatePublicId,
   isValidUuidV7,
 } from '@eramix/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -832,6 +834,114 @@ describe('PostgreSQL integration', () => {
       const reloaded = await categoryRepo().findById(legacyCategoryId);
       expect(reloaded?.translations[0]?.id).toBe(legacyTranslationId);
       expect(reloaded?.translations[0]?.routes[0]?.id).toBe(route.id);
+    });
+  });
+
+  describe('Product publicId collision handling (ADR-0021)', () => {
+    async function makeCategory() {
+      return categoryRepo().create({ id: randomUUID(), status: 'DRAFT', sortOrder: 0 }, [
+        { id: randomUUID(), categoryId: '', locale: 'en', name: `Category ${randomUUID()}` },
+      ]);
+    }
+
+    it('a real publicId collision is rejected as PublicIdConflictError, never overwriting or resolving to the wrong product', async () => {
+      const category = await makeCategory();
+      const sharedPublicId = generatePublicId();
+
+      const first = await productRepo().create(
+        {
+          id: randomUUID(),
+          publicId: sharedPublicId,
+          sku: `SKU-${randomUUID()}`,
+          categoryId: category.id,
+          status: 'DRAFT',
+          directSaleEnabled: false,
+        },
+        [
+          {
+            id: randomUUID(),
+            productId: '',
+            locale: 'en',
+            name: 'First product',
+            slug: `first-product-${randomUUID().slice(0, 8)}`,
+          },
+        ],
+      );
+      expect(first.publicId).toBe(sharedPublicId);
+
+      await expect(
+        productRepo().create(
+          {
+            id: randomUUID(),
+            publicId: sharedPublicId,
+            sku: `SKU-${randomUUID()}`,
+            categoryId: category.id,
+            status: 'DRAFT',
+            directSaleEnabled: false,
+          },
+          [
+            {
+              id: randomUUID(),
+              productId: '',
+              locale: 'en',
+              name: 'Second product (collision)',
+              slug: `second-product-${randomUUID().slice(0, 8)}`,
+            },
+          ],
+        ),
+      ).rejects.toThrow(PublicIdConflictError);
+
+      // The first product's data is untouched by the rejected second attempt.
+      const reloaded = await productRepo().findByPublicId(sharedPublicId);
+      expect(reloaded?.id).toBe(first.id);
+      expect(reloaded?.translations[0]?.name).toBe('First product');
+    });
+
+    it('a real SKU collision (a different unique constraint on the same table) still maps to SlugConflictError, not PublicIdConflictError', async () => {
+      const category = await makeCategory();
+      const sharedSku = `SKU-${randomUUID()}`;
+
+      await productRepo().create(
+        {
+          id: randomUUID(),
+          publicId: generatePublicId(),
+          sku: sharedSku,
+          categoryId: category.id,
+          status: 'DRAFT',
+          directSaleEnabled: false,
+        },
+        [
+          {
+            id: randomUUID(),
+            productId: '',
+            locale: 'en',
+            name: 'SKU test product',
+            slug: `sku-test-${randomUUID().slice(0, 8)}`,
+          },
+        ],
+      );
+
+      await expect(
+        productRepo().create(
+          {
+            id: randomUUID(),
+            publicId: generatePublicId(),
+            sku: sharedSku,
+            categoryId: category.id,
+            status: 'DRAFT',
+            directSaleEnabled: false,
+          },
+          [
+            {
+              id: randomUUID(),
+              productId: '',
+              locale: 'en',
+              name: 'SKU test product 2',
+              slug: `sku-test-2-${randomUUID().slice(0, 8)}`,
+            },
+          ],
+        ),
+      ).rejects.toThrow(SlugConflictError);
     });
   });
 });

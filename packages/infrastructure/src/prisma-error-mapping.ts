@@ -43,6 +43,31 @@ export async function withUniqueConstraintMapping<T>(
  * throws ConcurrencyConflictError when zero rows matched — the aggregate was
  * changed by another operation since the caller read `expected`.
  */
+/**
+ * Disambiguates which column a P2002 unique-constraint violation actually
+ * hit, when a single Prisma `.create()` call could plausibly violate more
+ * than one unique constraint (e.g. Product.create's nested write can
+ * collide on `publicId`, `sku`, or a translation's `(productId, locale)`
+ * pair). Prisma's `meta.target` is either an array of column names or a
+ * single constraint-name string depending on the underlying error path;
+ * `.includes(column)` as a substring check handles both shapes, since a
+ * Postgres auto-generated constraint name (e.g. `products_publicId_key`)
+ * always contains the column name.
+ */
+export function conflictTargetIncludes(
+  meta: Record<string, unknown> | undefined,
+  column: string,
+): boolean {
+  const target = meta?.['target'];
+  if (typeof target === 'string') {
+    return target.includes(column);
+  }
+  if (Array.isArray(target)) {
+    return target.includes(column);
+  }
+  return false;
+}
+
 export async function assertOptimisticLockAcquired(
   count: number,
   message: string,

@@ -23,6 +23,7 @@ describe('catalogueEntryFor', () => {
     expect(catalogueEntryFor('UNSUPPORTED_MEDIA_TYPE')).toMatchObject({ status: 415 });
     expect(catalogueEntryFor('MALFORMED_REQUEST')).toMatchObject({ status: 400 });
     expect(catalogueEntryFor('METHOD_NOT_ALLOWED')).toMatchObject({ status: 405 });
+    expect(catalogueEntryFor('PUBLIC_ID_CONFLICT')).toMatchObject({ status: 409 });
   });
 
   it('throws for an unknown code', () => {

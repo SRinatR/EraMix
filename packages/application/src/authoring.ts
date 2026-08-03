@@ -1,4 +1,5 @@
 import {
+  PublicIdConflictError,
   ResourceNotFoundError,
   ValidationFailedError,
   createIndicativePrice,
@@ -230,6 +231,17 @@ export interface ProductAuthoringDeps {
   readonly idGen: IdGenerator;
 }
 
+/**
+ * ADR-0021: bounded retry for a Product.publicId collision. At the
+ * 16-character Crockford Base32 keyspace (32^16 ≈ 1.2 × 10^24) a real
+ * collision is astronomically unreachable in practice; this exists as a
+ * defense-in-depth guarantee, not because collisions are expected. Each
+ * retry regenerates the entire transaction's ids (productId, every
+ * translation id, and publicId) — a collision means nothing committed, so
+ * there is no reason to special-case reusing the non-conflicting ids.
+ */
+const MAX_PUBLIC_ID_COLLISION_ATTEMPTS = 5;
+
 export async function createProduct(
   deps: ProductAuthoringDeps,
   input: CreateProductInput,
@@ -242,57 +254,82 @@ export async function createProduct(
     throw new ValidationFailedError('A product needs at least one translation.', {});
   }
 
-  return deps.uow.runInTransaction(async () => {
-    const category = await deps.categoryRepo.findById(input.categoryId);
-    if (!category) {
-      throw new ResourceNotFoundError(`Category ${input.categoryId} not found.`, {
-        categoryId: input.categoryId,
+  for (let attempt = 1; attempt <= MAX_PUBLIC_ID_COLLISION_ATTEMPTS; attempt += 1) {
+    const publicId = generatePublicId();
+    try {
+      return await deps.uow.runInTransaction(async () => {
+        const category = await deps.categoryRepo.findById(input.categoryId);
+        if (!category) {
+          throw new ResourceNotFoundError(`Category ${input.categoryId} not found.`, {
+            categoryId: input.categoryId,
+          });
+        }
+
+        const productId = await deps.idGen.nextId();
+        const translationRows = await Promise.all(
+          input.translations.map(async (translation) => ({
+            id: await deps.idGen.nextId(),
+            productId,
+            locale: translation.locale,
+            name: translation.name,
+            slug: normalizeSlug(translation.slug),
+            description: translation.description,
+            seoTitle: translation.seoTitle,
+            seoDescription: translation.seoDescription,
+            indicativePrice: createIndicativePrice(translation.indicativePrice ?? {}),
+          })),
+        );
+        const created = await deps.productRepo.create(
+          {
+            id: productId,
+            publicId,
+            sku: input.sku.trim(),
+            categoryId: input.categoryId,
+            status: 'DRAFT',
+            directSaleEnabled: false,
+          },
+          translationRows,
+        );
+
+        await deps.auditRepo.record({
+          actorUserId: input.actorUserId,
+          action: 'product.created',
+          entityType: 'Product',
+          entityId: productId,
+          metadata: { sku: created.sku, publicId },
+          traceId: input.traceId,
+        });
+        await deps.outboxRepo.enqueue({
+          aggregateType: 'Product',
+          aggregateId: productId,
+          eventType: 'product.created',
+          payload: { publicId, sku: created.sku },
+        });
+        return created;
+      });
+    } catch (error) {
+      if (!(error instanceof PublicIdConflictError)) {
+        throw error;
+      }
+      if (attempt >= MAX_PUBLIC_ID_COLLISION_ATTEMPTS) {
+        throw error;
+      }
+      // The transaction above already rolled back — this is a fresh,
+      // independent write recording the collision for observability
+      // (CLAUDE.md: "bounded collision retry with telemetry").
+      await deps.auditRepo.record({
+        actorUserId: input.actorUserId,
+        action: 'product.public_id_collision',
+        entityType: 'Product',
+        entityId: publicId,
+        metadata: { attempt, sku: input.sku.trim() },
+        traceId: input.traceId,
       });
     }
-
-    const productId = await deps.idGen.nextId();
-    const publicId = generatePublicId();
-    const translationRows = await Promise.all(
-      input.translations.map(async (translation) => ({
-        id: await deps.idGen.nextId(),
-        productId,
-        locale: translation.locale,
-        name: translation.name,
-        slug: normalizeSlug(translation.slug),
-        description: translation.description,
-        seoTitle: translation.seoTitle,
-        seoDescription: translation.seoDescription,
-        indicativePrice: createIndicativePrice(translation.indicativePrice ?? {}),
-      })),
-    );
-    const created = await deps.productRepo.create(
-      {
-        id: productId,
-        publicId,
-        sku: input.sku.trim(),
-        categoryId: input.categoryId,
-        status: 'DRAFT',
-        directSaleEnabled: false,
-      },
-      translationRows,
-    );
-
-    await deps.auditRepo.record({
-      actorUserId: input.actorUserId,
-      action: 'product.created',
-      entityType: 'Product',
-      entityId: productId,
-      metadata: { sku: created.sku, publicId },
-      traceId: input.traceId,
-    });
-    await deps.outboxRepo.enqueue({
-      aggregateType: 'Product',
-      aggregateId: productId,
-      eventType: 'product.created',
-      payload: { publicId, sku: created.sku },
-    });
-    return created;
-  });
+  }
+  // Unreachable: the loop above always either returns or throws on its
+  // final attempt.
+  throw new ValidationFailedError('Exhausted publicId collision retries.', {});
 }
 
 export interface AddProductTranslationInput {

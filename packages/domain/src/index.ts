@@ -8,6 +8,7 @@ export {
   ConcurrencyConflictError,
   IdempotencyConflictError,
   SlugConflictError,
+  PublicIdConflictError,
   CanonicalRouteMissingError,
   AuthRequiredError,
   AuthCallbackFailedError,
@@ -23,6 +24,7 @@ export type { LocaleCode } from './locale.js';
 export {
   generatePublicId,
   isValidPublicId,
+  LEGACY_PUBLIC_ID_LENGTH,
   PUBLIC_ID_LENGTH,
   splitCatalogSlug,
 } from './public-id.js';

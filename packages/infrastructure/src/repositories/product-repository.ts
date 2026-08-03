@@ -16,6 +16,7 @@ import {
   type SortSpec,
 } from './cursor-query.js';
 import {
+  PublicIdConflictError,
   ResourceNotFoundError,
   SlugConflictError,
   type Product,
@@ -29,6 +30,7 @@ import { nullToUndefined } from '../prisma-json.js';
 import type { PrismaClient } from '../prisma-client.js';
 import {
   assertOptimisticLockAcquired,
+  conflictTargetIncludes,
   withUniqueConstraintMapping,
 } from '../prisma-error-mapping.js';
 import { resolveClient } from '../transaction-context.js';
@@ -67,32 +69,50 @@ export class PrismaProductRepository implements ProductRepository {
     product: Omit<Product, 'version' | 'createdAt' | 'updatedAt'>,
     translations: readonly Omit<ProductTranslation, 'version' | 'createdAt' | 'updatedAt'>[],
   ): Promise<ProductWithTranslations> {
-    const row = await resolveClient(this.prisma).product.create({
-      data: {
-        id: product.id,
-        publicId: product.publicId,
-        sku: product.sku,
-        categoryId: product.categoryId,
-        status: product.status,
-        publishedAt: product.publishedAt ?? null,
-        directSaleEnabled: product.directSaleEnabled,
-        translations: {
-          create: translations.map((translation) => ({
-            id: translation.id,
-            locale: translation.locale,
-            name: translation.name,
-            slug: translation.slug,
-            description: translation.description ?? null,
-            seoTitle: translation.seoTitle ?? null,
-            seoDescription: translation.seoDescription ?? null,
-            priceFromMinor: translation.indicativePrice?.priceFromMinor ?? null,
-            currency: translation.indicativePrice?.currency ?? null,
-            priceDisclaimer: translation.indicativePrice?.priceDisclaimer ?? null,
-          })),
-        },
+    const row = await withUniqueConstraintMapping<ProductRowWithTranslations>(
+      () =>
+        resolveClient(this.prisma).product.create({
+          data: {
+            id: product.id,
+            publicId: product.publicId,
+            sku: product.sku,
+            categoryId: product.categoryId,
+            status: product.status,
+            publishedAt: product.publishedAt ?? null,
+            directSaleEnabled: product.directSaleEnabled,
+            translations: {
+              create: translations.map((translation) => ({
+                id: translation.id,
+                locale: translation.locale,
+                name: translation.name,
+                slug: translation.slug,
+                description: translation.description ?? null,
+                seoTitle: translation.seoTitle ?? null,
+                seoDescription: translation.seoDescription ?? null,
+                priceFromMinor: translation.indicativePrice?.priceFromMinor ?? null,
+                currency: translation.indicativePrice?.currency ?? null,
+                priceDisclaimer: translation.indicativePrice?.priceDisclaimer ?? null,
+              })),
+            },
+          },
+          include: WITH_TRANSLATIONS,
+        }),
+      (meta) => {
+        // ADR-0021: a publicId collision is a distinct, retry-worthy signal —
+        // never conflated with a real sku/translation-locale conflict, which
+        // still maps to SlugConflictError exactly as before.
+        if (conflictTargetIncludes(meta, 'publicId')) {
+          throw new PublicIdConflictError(
+            `Product publicId "${product.publicId}" already exists.`,
+            { publicId: product.publicId, prismaMeta: meta },
+          );
+        }
+        throw new SlugConflictError(
+          'Product SKU or a translation locale already exists on this product.',
+          { sku: product.sku, prismaMeta: meta },
+        );
       },
-      include: WITH_TRANSLATIONS,
-    });
+    );
     return toDomain(row);
   }
 
