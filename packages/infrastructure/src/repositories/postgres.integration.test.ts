@@ -737,4 +737,101 @@ describe('PostgreSQL integration', () => {
       expect(isValidUuidV7(id)).toBe(true);
     });
   });
+
+  describe('schema-level uuidv7() column defaults (ADR-0021, migration 20260804120000_add_uuidv7_defaults)', () => {
+    async function versionOf(id: string): Promise<number | undefined> {
+      const rows = await prisma.$queryRaw<{ version: number }[]>`
+        SELECT uuid_extract_version(${id}::uuid) AS version
+      `;
+      return rows[0]?.version;
+    }
+
+    it('AuditEvent.record (id omitted by the repository) receives a real database-generated UUIDv7', async () => {
+      const event = await auditRepo().record({
+        action: 'integration.uuidv7_default_test',
+        entityType: 'IntegrationTest',
+        entityId: randomUUID(),
+      });
+      expect(isValidUuidV7(event.id)).toBe(true);
+      expect(await versionOf(event.id)).toBe(7);
+    });
+
+    it('OutboxMessage.enqueue (id omitted by the repository) receives a real database-generated UUIDv7', async () => {
+      const message = await outboxRepo().enqueue({
+        aggregateType: 'IntegrationTest',
+        aggregateId: randomUUID(),
+        eventType: 'integration.uuidv7_default_test',
+        payload: {},
+      });
+      expect(isValidUuidV7(message.id)).toBe(true);
+      expect(await versionOf(message.id)).toBe(7);
+    });
+
+    it('CategoryRoute.setCanonicalRoute (id omitted by the repository) receives a real database-generated UUIDv7, correctly FK-linked to its application-supplied (UUIDv7-via-idGen) CategoryTranslation parent', async () => {
+      const idGen = new PostgresUuidV7IdGenerator(prisma);
+      const categoryId = await idGen.nextId();
+      const translationId = await idGen.nextId();
+      const category = await categoryRepo().create(
+        { id: categoryId, status: 'DRAFT', sortOrder: 0 },
+        [
+          {
+            id: translationId,
+            categoryId: '',
+            locale: 'en',
+            name: `UUIDv7 default test ${randomUUID()}`,
+          },
+        ],
+      );
+      expect(isValidUuidV7(category.id)).toBe(true);
+      expect(isValidUuidV7(category.translations[0]!.id)).toBe(true);
+
+      const route = await categoryRepo().setCanonicalRoute({
+        translationId,
+        locale: 'en',
+        slug: `uuidv7-default-test-${randomUUID().slice(0, 8)}`,
+      });
+      expect(isValidUuidV7(route.id)).toBe(true);
+      expect(await versionOf(route.id)).toBe(7);
+
+      // Proves the FK insert (CategoryRoute -> CategoryTranslation) succeeds
+      // identically regardless of which mechanism generated either side's id.
+      const reloaded = await categoryRepo().findById(categoryId);
+      expect(reloaded?.translations[0]?.routes[0]?.id).toBe(route.id);
+    });
+
+    it('a pre-existing UUIDv4 row (never touched by this migration) remains fully readable and FK-joinable alongside new UUIDv7 rows', async () => {
+      // A column default only ever applies to a value omitted from an
+      // INSERT — explicitly supplying a legacy-shaped UUIDv4 id (as every
+      // row created before this migration did) must continue to work
+      // exactly as it always has.
+      const legacyCategoryId = randomUUID();
+      const legacyTranslationId = randomUUID();
+      const category = await categoryRepo().create(
+        { id: legacyCategoryId, status: 'DRAFT', sortOrder: 0 },
+        [
+          {
+            id: legacyTranslationId,
+            categoryId: '',
+            locale: 'en',
+            name: `Legacy UUIDv4 test ${randomUUID()}`,
+          },
+        ],
+      );
+      expect(category.id).toBe(legacyCategoryId);
+      expect(await versionOf(category.id)).toBe(4);
+
+      // A new UUIDv7 CategoryRoute FK-linking to the legacy UUIDv4
+      // translation must succeed identically to the all-UUIDv7 case above.
+      const route = await categoryRepo().setCanonicalRoute({
+        translationId: legacyTranslationId,
+        locale: 'en',
+        slug: `legacy-uuidv4-test-${randomUUID().slice(0, 8)}`,
+      });
+      expect(await versionOf(route.id)).toBe(7);
+
+      const reloaded = await categoryRepo().findById(legacyCategoryId);
+      expect(reloaded?.translations[0]?.id).toBe(legacyTranslationId);
+      expect(reloaded?.translations[0]?.routes[0]?.id).toBe(route.id);
+    });
+  });
 });
