@@ -12,6 +12,7 @@ const encodeSession = vi.fn();
 
 vi.mock('@/server/container', () => ({
   getContainer: () => ({
+    env: { PUBLIC_ORIGIN: 'https://example.test' },
     pendingAuthCodec: { decode: decodePendingAuth },
     identityProvider: { handleCallback },
     users: { findByIssuerAndSubject, create: createUser },
@@ -66,6 +67,32 @@ describe('GET /api/auth/callback', () => {
     expect(response.headers.get('location')).toBe('https://example.test/');
     expect(response.cookies.get(SESSION_COOKIE_NAME)?.value).toBe('encoded-session-token');
     expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("redirects to PUBLIC_ORIGIN, never the request origin, when they differ (regression: production once redirected to the backend container's internal Docker hostname behind the reverse proxy)", async () => {
+    decodePendingAuth.mockResolvedValue({
+      state: 's1',
+      nonce: 'n1',
+      codeVerifier: 'verifier1',
+      redirectUri: 'https://example.test/api/auth/callback',
+    });
+    handleCallback.mockResolvedValue({
+      issuer: 'https://idp.example',
+      subject: 'sub-1',
+      email: 'user@example.com',
+      displayName: 'User One',
+    });
+    findByIssuerAndSubject.mockResolvedValue({ id: 'user-1', platformRole: 'CUSTOMER' });
+    listByUser.mockResolvedValue([]);
+    encodeSession.mockResolvedValue('encoded-session-token');
+
+    const request = new NextRequest(
+      'http://a0f0a37c2dbf:3000/api/auth/callback?code=abc&state=s1',
+      { headers: { cookie: `${PENDING_AUTH_COOKIE_NAME}=pending-token` } },
+    );
+    const response = await GET(request, { params: Promise.resolve({}) });
+
+    expect(response.headers.get('location')).toBe('https://example.test/');
   });
 
   it('returns 401 AUTH_CALLBACK_FAILED when the pending-auth cookie is missing (never leaks internals)', async () => {

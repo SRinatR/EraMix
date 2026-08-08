@@ -23,7 +23,6 @@ async function main(): Promise<void> {
     create: {
       id: '00000000-0000-4000-8000-000000000001',
       status: 'PUBLISHED',
-      publishedAt: new Date(),
       translations: {
         create: [
           { id: '00000000-0000-4000-8000-000000000011', locale: 'en', name: 'General' },

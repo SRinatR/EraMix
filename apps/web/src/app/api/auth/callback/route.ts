@@ -66,7 +66,13 @@ const getHandler = withApiHandler('auth.callback', async (request) => {
     companyIds,
   });
 
-  const response = NextResponse.redirect(new URL('/', request.url));
+  // Never build this from request.url's origin — behind a reverse proxy
+  // (production Caddy → the container's internal address) that can resolve
+  // to the backend's own host:port rather than the public origin. Verified
+  // live in production: this previously sent the browser to the internal
+  // Docker container hostname after a real ODS login.
+  const redirectBase = container.env.PUBLIC_ORIGIN ?? new URL(request.url).origin;
+  const response = NextResponse.redirect(new URL('/', redirectBase));
   response.cookies.set(SESSION_COOKIE_NAME, sessionToken, {
     httpOnly: true,
     secure: isSecureRequest(request),

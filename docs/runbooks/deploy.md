@@ -36,48 +36,61 @@ postgres@sha256:d37ce87b33b80bd76fb8d9bc9ff6ad2caaf6c4a50caf9ae25e393f247fc01d6e
 value (not `postgres:19beta2-alpine`, which is a floating tag) — set in
 `/opt/eramix/.env` on the server.
 
-## First-time deploy
+## First-time deploy / redeploy
 
-1. On the server, `/opt/eramix/` holds: `docker-compose.prod.yml`,
-   `Caddyfile` (copied from this repo's `infra/docker/`), and `.env`
-   (never committed — production secrets only, see
-   `docs/runbooks/deploy.md#environment-variables` below).
-2. Log in to GHCR and pull the images for the commit SHA being deployed:
-   ```sh
-   echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
-   docker pull ghcr.io/srinatr/eramix-web:<sha>
-   docker pull ghcr.io/srinatr/eramix-worker:<sha>
-   docker pull ghcr.io/srinatr/eramix-migrate:<sha>
-   ```
-   (Unnecessary once the GHCR packages are set to public — then `docker
-pull` needs no authentication.)
-3. Run migrations as a one-off container, before starting web/worker:
-   ```sh
-   docker run --rm --env-file /opt/eramix/.env \
-     --network eramix_default \
-     ghcr.io/srinatr/eramix-migrate:<sha>
-   ```
-4. Start the stack:
-   ```sh
-   cd /opt/eramix
-   WEB_IMAGE=ghcr.io/srinatr/eramix-web:<sha> \
-   WORKER_IMAGE=ghcr.io/srinatr/eramix-worker:<sha> \
-     docker compose -f docker-compose.prod.yml up -d
-   ```
-5. Verify: `docker compose -f docker-compose.prod.yml ps`, then
-   `curl -f https://eramix.uz/health/ready`.
+`/opt/eramix/` on the server holds `docker-compose.prod.yml`, `Caddyfile`
+(copied from this repo's `infra/docker/`), `.env` (never committed —
+production secrets only, see
+`docs/runbooks/deploy.md#environment-variables` below), and `deploy.sh`:
+
+```sh
+#!/usr/bin/env bash
+set -euxo pipefail
+SHA="$1"
+BASE="ghcr.io/srinatr"
+cd /opt/eramix
+
+docker pull "${BASE}/eramix-migrate:${SHA}"
+docker pull "${BASE}/eramix-web:${SHA}"
+docker pull "${BASE}/eramix-worker:${SHA}"
+
+export WEB_IMAGE="${BASE}/eramix-web:${SHA}"
+export WORKER_IMAGE="${BASE}/eramix-worker:${SHA}"
+
+# Bring up postgres first so the one-off migrate container can join the
+# compose network and reach it by service name before web/worker start.
+docker compose -f docker-compose.prod.yml up -d postgres
+docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'until pg_isready -U "$POSTGRES_USER"; do sleep 1; done'
+
+docker run --rm --env-file .env --network eramix_default \
+  "${BASE}/eramix-migrate:${SHA}"
+
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+```
+
+Run it with the commit SHA to deploy (GHCR packages are public, so no
+`docker login` is needed to pull):
+
+```sh
+bash /opt/eramix/deploy.sh <full-commit-sha>
+```
+
+Verify: `docker compose -f docker-compose.prod.yml ps`, then
+`curl -f https://eramix.uz/health/ready`.
 
 ## Redeploy (new commit on main)
 
-Same as steps 2-4 above with the new commit SHA. `web`/`worker` have
+Re-run `deploy.sh` with the new commit SHA. `web`/`worker` have
 `restart: unless-stopped`; `docker compose up -d` with a new `WEB_IMAGE`/
 `WORKER_IMAGE` recreates only the containers whose image changed.
 
 ## Rollback
 
-Re-run step 2-4 with the previous known-good commit SHA — GHCR keeps every
-tagged image, so this never requires rebuilding anything. If the rollback
-also needs a schema rollback, there is no automated down-migration path
+Re-run `deploy.sh` with the previous known-good commit SHA — GHCR keeps
+every tagged image, so this never requires rebuilding anything. If the
+rollback also needs a schema rollback, there is no automated down-migration
+path
 (consistent with Prisma's forward-only migration model); restore from the
 most recent `pg_dump` per `docs/runbooks/backup-restore.md` instead.
 

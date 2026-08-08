@@ -1,8 +1,8 @@
 services:
-  # UNVERIFIED: web/worker/migrate have never been built or started — no
-  # Docker on the authoring laptop (session policy). Verify in the
-  # authorized Docker-capable session (docs/IMPLEMENTATION_ROADMAP.md Phase
-  # 7) before relying on this file for a real deployment.
+  # Verified 2026-08-08 against a real Docker Engine on the production host
+  # (docs/runbooks/deploy.md) — this file's own postgres volume path was
+  # wrong (pre-18 convention) until that session caught it; see the
+  # postgres.volumes comment below.
   #
   # Every `environment:` value below is a local-dev-only, throwaway
   # credential (matches .env.example's own comment) — never a real secret.
@@ -25,7 +25,11 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - eramix-postgres-data:/var/lib/postgresql/data
+      # PostgreSQL 18+ Docker images expect a single mount at
+      # /var/lib/postgresql (data goes in a major-version-specific
+      # subdirectory) — the pre-18 convention of mounting directly at
+      # .../data is now explicitly rejected at startup as an "unused mount".
+      - eramix-postgres-data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U eramix']
       interval: 5s
