@@ -67,6 +67,12 @@ docker run --rm --env-file .env --network eramix_default \
 
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
+
+# The host has only 9.4GB disk — old, now-unreferenced image layers from
+# prior deploys (superseded SHAs) fill it fast enough to break the next
+# deploy's `docker pull`. Safe: only removes images with no container
+# (running or stopped) referencing them, i.e. never the ones just started.
+docker image prune -a -f
 ```
 
 Run it with the commit SHA to deploy (GHCR packages are public, so no

@@ -1014,7 +1014,7 @@ Exit criteria:
 - CI blocks release on failing required gates; staging smoke and production
   promotion evidence are retained.
 
-### Phase 7 status: observability/rate-limiting/CI-CD artifacts built; CI now runs for real on GitHub's runners (three genuine, independently-diagnosed bugs found and fixed in the process); Docker images/staging/production promotion remain unbuilt and unrun pending the authorized Docker-capable session
+### Phase 7 status: observability/rate-limiting/CI-CD artifacts built; CI runs for real on GitHub's runners; production promotion completed 2026-08-08 against a real Docker-capable host (94.232.41.16/eramix.uz) — see that date's evidence block below for the three additional real bugs this first live run found and fixed. Restore-drill timing evidence now exists (ADR-0013); RTO/RPO _targets_ to compare it against remain blocked on ADR-0008.
 
 Evidence, 2026-08-01:
 
@@ -1096,6 +1096,71 @@ proven locally (`dotenvx prebuild` failed before it existed, passed after).
 No Pi/VPS access was used or needed — this is a local/CI-only tooling
 change; production/staging secret injection is unaffected and remains the
 deployment platform's responsibility, never `dotenvx`'s.
+
+### Evidence, 2026-08-08: first real production deployment (94.232.41.16 / eramix.uz)
+
+Phase 7's own named blocker — no Docker-capable session — is now resolved:
+a real VPS with root access was provisioned end-to-end and used for the
+authorized Docker-capable session prior sessions were blocked on.
+
+- **Server**: fresh Ubuntu 24.04, 1 vCPU/~1GB RAM/9.4GB disk, hardened
+  (`ufw` allowing only 22/80/443, `fail2ban` on sshd, `unattended-upgrades`,
+  2GB swap), Docker Engine 29.7.2 + Compose v5.4.0 installed and verified
+  running for the first time ever against this codebase's Dockerfiles.
+- **CI/CD**: `.github/workflows/ci.yml` gained a `docker-publish` job
+  building and pushing `eramix-web`/`eramix-worker`/`eramix-migrate` to
+  GHCR on every green `main` push, gated behind every other job. A new
+  `infra/docker/migrate.Dockerfile` (lightweight, no Next.js build) runs
+  `prisma migrate deploy` without needing the 1GB host to build the full
+  monorepo.
+- **PostgreSQL 19 Beta 2 (ADR-0013)**: exact digest resolved and pinned
+  (`postgres@sha256:d37ce87b33b80bd76fb8d9bc9ff6ad2caaf6c4a50caf9ae25e393f247fc01d6e`).
+  All 13 migrations applied from empty — real evidence, not simulated.
+  Backup/restore drill run for the first time against real production data
+  (`docs/runbooks/backup-restore.md`); see ADR-0013's evidence section.
+- **ADR-0003 (ODS identity)**: the Product Owner's real ODS partner
+  organization supplied the real, non-invented issuer/endpoint contract and
+  registered a real SSO application (`cli_4AdGCY8VhoSHbtAg3yjXen5V`). Real
+  login against the real ODS issuer was exercised live — the first time
+  this has ever happened outside the fake IdP double — and correctly
+  created a `CUSTOMER` user row (per ADR-0014's no-invented-role design),
+  manually promoted to `ADMIN` via a one-time direct DB update (no
+  bootstrap-admin mechanism exists in-app, by design).
+- **ADR-0006 (object storage)**: resolved — Cloudflare R2 (private bucket,
+  pre-signed URLs), `R2StorageProvider` implemented and wired into
+  `container.ts`'s `storage` getter alongside the existing local-dev
+  fallback.
+- **Three real, previously-undetected bugs found and fixed by this
+  session** (each only surfaces against a real deployment, not `curl`- or
+  unit-test-level verification):
+  1. `docker-compose.yml`'s Postgres volume mount used the pre-18
+     convention (`.../postgresql/data`); PostgreSQL 18+ images reject it
+     as an "unused mount" and restart-loop. Fixed in both the local-dev and
+     production compose files.
+  2. `prisma/seed.ts` set a non-existent `Category.publishedAt` field —
+     this script had never actually run against a real generated Prisma
+     client before. Fixed.
+  3. `apps/web/src/app/api/auth/callback/route.ts` built the post-login
+     redirect from `request.url`'s origin, which resolved to the backend
+     container's internal Docker hostname behind the Caddy reverse proxy in
+     production — verified live (a real ODS login redirected the browser
+     to `http://<container-id>:3000/`). Fixed to use `PUBLIC_ORIGIN`, with
+     a new regression test using distinct request/origin values (the
+     previous test used the same origin for both, so it could not have
+     caught this).
+- **Smoke-tested live**: `/health/ready`, `/en` homepage, `/en/catalog`,
+  `/sitemap.xml`, `/robots.txt` all 200; `/api/auth/login` redirects to the
+  real `https://auth.ods.uz/authorize` with the correct `redirect_uri`,
+  PKCE S256 challenge, state/nonce; `/api/admin/users` and `/api/orders`
+  correctly 401 without a session; real HTTPS via Caddy/Let's Encrypt
+  (`eramix.uz`), HSTS/CSP/X-Frame-Options headers all present.
+- **Not yet done**: no static styling exists anywhere in `apps/web/src`
+  (zero CSS files/imports) — the site is functionally live but entirely
+  unstyled; this is a pre-existing Phase 3 gap ("accessibility/visual
+  polish... not yet built"), not something this deployment session
+  introduced or was in scope to close. Malware scanning remains the
+  dev-stub scanner (ADR-0006's still-open half). RTO/RPO targets remain
+  blocked on ADR-0008's Q-04 load forecast.
 
 ## Phase 8 — release acceptance
 
