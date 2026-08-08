@@ -1,5 +1,6 @@
 import { AnalyticsEventTracker } from '@/components/analytics-event-tracker';
 import { JsonLd } from '@/components/json-ld';
+import { Link } from '@/i18n/navigation';
 import { getContainer } from '@/server/container';
 import { staticPageAlternates } from '@/server/seo';
 import {
@@ -75,10 +76,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
 function HomePageContent() {
   const t = useTranslations('HomePage');
+  const nav = useTranslations('Nav');
   return (
     <main>
-      <h1>{t('title')}</h1>
-      <p>{t('description')}</p>
+      <section className="hero">
+        <h1>{t('title')}</h1>
+        <p>{t('description')}</p>
+        <div className="cluster">
+          <Link href="/catalog" className="btn">
+            {nav('catalog')}
+          </Link>
+          <Link href="/account" className="btn btn-secondary">
+            {nav('account')}
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { AddOrderCommentForm } from '@/components/add-order-comment-form';
+import { StatusBadge } from '@/components/status-badge';
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
 import { TransitionOrderForm } from './transition-order-form';
@@ -42,7 +43,9 @@ export default async function AdminOrderDetailPage({
   return (
     <main>
       <h1>Order {order.orderNumber}</h1>
-      <p>Status: {order.status}</p>
+      <p className="cluster">
+        Status: <StatusBadge status={order.status} />
+      </p>
       <p>Company: {company?.legalName ?? order.companyId}</p>
 
       <h2>Lines</h2>

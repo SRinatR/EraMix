@@ -59,16 +59,16 @@ export default async function FaqPage({ params }: { params: Promise<{ locale: st
       {faqPageJsonLd && <JsonLd data={{ ...faqPageJsonLd }} />}
       <h1>FAQ</h1>
       {items.length === 0 ? (
-        <p>No FAQ entries are published yet.</p>
+        <p className="empty-state">No FAQ entries are published yet.</p>
       ) : (
-        <dl>
+        <dl className="faq-list">
           {items.map((item) => {
             const translation = item.translations.find((t) => t.locale === (locale as LocaleCode));
             if (!translation) {
               return null;
             }
             return (
-              <div key={item.id}>
+              <div key={item.id} className="faq-item">
                 <dt>{translation.title}</dt>
                 <dd>
                   {translation.summary && <p>{translation.summary}</p>}

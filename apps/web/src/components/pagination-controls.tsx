@@ -44,9 +44,17 @@ export function PaginationControls({
   }
 
   return (
-    <nav aria-label="Pagination">
-      {hasFirst && <Link href={hrefFor(undefined)}>First page</Link>}
-      {hasNext && <Link href={hrefFor(page.nextCursor)}>Next</Link>}
+    <nav className="pagination cluster" aria-label="Pagination">
+      {hasFirst && (
+        <Link href={hrefFor(undefined)} className="btn btn-secondary btn-sm">
+          First page
+        </Link>
+      )}
+      {hasNext && (
+        <Link href={hrefFor(page.nextCursor)} className="btn btn-sm">
+          Next
+        </Link>
+      )}
     </nav>
   );
 }

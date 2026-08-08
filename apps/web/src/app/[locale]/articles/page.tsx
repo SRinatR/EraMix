@@ -43,9 +43,9 @@ export default async function ArticleIndexPage({
     <main>
       <h1>Articles</h1>
       {articles.length === 0 ? (
-        <p>No articles are published yet.</p>
+        <p className="empty-state">No articles are published yet.</p>
       ) : (
-        <ul>
+        <ul className="card-grid">
           {articles.map((article) => {
             const translation = article.translations.find(
               (t) => t.locale === (locale as LocaleCode),
@@ -56,7 +56,9 @@ export default async function ArticleIndexPage({
             }
             return (
               <li key={article.id}>
-                <Link href={`/articles/${canonicalRoute.slug}`}>{translation.title}</Link>
+                <Link href={`/articles/${canonicalRoute.slug}`} className="card card-link">
+                  <p className="card-title">{translation.title}</p>
+                </Link>
               </li>
             );
           })}

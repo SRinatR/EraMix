@@ -38,7 +38,7 @@ export function LanguageSwitcher() {
   }
 
   return (
-    <nav aria-label="Language">
+    <nav className="lang-switcher" aria-label="Language">
       <ul>
         {SUPPORTED_LOCALES.map((locale) => (
           <li key={locale}>

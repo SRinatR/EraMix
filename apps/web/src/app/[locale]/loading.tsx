@@ -8,7 +8,15 @@
 export default function LocaleLoading() {
   return (
     <main aria-busy="true">
-      <p role="status">Loading…</p>
+      <p role="status" className="visually-hidden">
+        Loading…
+      </p>
+      <div className="skeleton-page" aria-hidden="true">
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton skeleton-line" />
+        <div className="skeleton skeleton-line" />
+        <div className="skeleton skeleton-block" />
+      </div>
     </main>
   );
 }

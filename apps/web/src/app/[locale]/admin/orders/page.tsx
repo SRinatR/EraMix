@@ -1,4 +1,5 @@
 import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { getContainer } from '@/server/container';
 import { Link } from '@/i18n/navigation';
 import {
@@ -69,7 +70,7 @@ export default async function AdminOrdersPage({
   return (
     <main>
       <h1>Order queue</h1>
-      <form method="get">
+      <form method="get" className="form-inline">
         <label>
           Order number
           <input type="search" name="search" defaultValue={search ?? ''} />
@@ -98,7 +99,7 @@ export default async function AdminOrdersPage({
         <button type="submit">Filter</button>
       </form>
       {orders.length === 0 ? (
-        <p>No orders match this filter.</p>
+        <p className="empty-state">No orders match this filter.</p>
       ) : (
         <table>
           <thead>
@@ -115,7 +116,9 @@ export default async function AdminOrdersPage({
                 <td>
                   <Link href={`/admin/orders/${order.orderNumber}`}>{order.orderNumber}</Link>
                 </td>
-                <td>{order.status}</td>
+                <td>
+                  <StatusBadge status={order.status} />
+                </td>
                 <td>{companyNameById.get(order.companyId) ?? order.companyId}</td>
                 <td>{order.lines.length}</td>
               </tr>

@@ -43,9 +43,9 @@ export default async function CatalogIndexPage({
     <main>
       <h1>Catalog</h1>
       {categories.length === 0 ? (
-        <p>No categories are published yet.</p>
+        <p className="empty-state">No categories are published yet.</p>
       ) : (
-        <ul>
+        <ul className="card-grid">
           {categories.map((category) => {
             const translation = category.translations.find(
               (t) => t.locale === (locale as LocaleCode),
@@ -56,7 +56,9 @@ export default async function CatalogIndexPage({
             }
             return (
               <li key={category.id}>
-                <Link href={`/catalog/${canonicalRoute.slug}`}>{translation.name}</Link>
+                <Link href={`/catalog/${canonicalRoute.slug}`} className="card card-link">
+                  <p className="card-title">{translation.name}</p>
+                </Link>
               </li>
             );
           })}

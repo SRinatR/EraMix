@@ -51,35 +51,47 @@ export function ConsentBanner() {
 
   return (
     <div role="dialog" aria-modal="false" aria-label={t('bannerLabel')}>
-      <p>{t('bannerText')}</p>
-      <fieldset>
-        <legend>{t('preferencesLegend')}</legend>
-        <label>
-          <input
-            type="checkbox"
-            checked={analytics}
-            onChange={(event) => setAnalytics(event.target.checked)}
-          />
-          {t('analyticsLabel')}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={advertising}
-            onChange={(event) => setAdvertising(event.target.checked)}
-          />
-          {t('advertisingLabel')}
-        </label>
-      </fieldset>
-      <button type="button" onClick={() => save({ analytics: true, advertising: true })}>
-        {t('acceptAll')}
-      </button>
-      <button type="button" onClick={() => save({ analytics: false, advertising: false })}>
-        {t('rejectNonEssential')}
-      </button>
-      <button type="button" onClick={() => save({ analytics, advertising })}>
-        {t('savePreferences')}
-      </button>
+      <div className="container stack">
+        <p>{t('bannerText')}</p>
+        <fieldset>
+          <legend>{t('preferencesLegend')}</legend>
+          <label>
+            <input
+              type="checkbox"
+              checked={analytics}
+              onChange={(event) => setAnalytics(event.target.checked)}
+            />
+            {t('analyticsLabel')}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={advertising}
+              onChange={(event) => setAdvertising(event.target.checked)}
+            />
+            {t('advertisingLabel')}
+          </label>
+        </fieldset>
+        <div className="cluster">
+          <button type="button" onClick={() => save({ analytics: true, advertising: true })}>
+            {t('acceptAll')}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => save({ analytics: false, advertising: false })}
+          >
+            {t('rejectNonEssential')}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => save({ analytics, advertising })}
+          >
+            {t('savePreferences')}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

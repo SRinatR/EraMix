@@ -1,4 +1,5 @@
 import { PaginationControls } from '@/components/pagination-controls';
+import { StatusBadge } from '@/components/status-badge';
 import { getContainer } from '@/server/container';
 import {
   parseAllowlistedParam,
@@ -92,9 +93,11 @@ export default async function AccountOrdersPage({
     <main>
       <h1>My orders</h1>
       <p>
-        <Link href="/account/orders/new">Create a new order</Link>
+        <Link href="/account/orders/new" className="btn">
+          Create a new order
+        </Link>
       </p>
-      <form method="get">
+      <form method="get" className="form-inline">
         {actor.companyIds.length > 1 && (
           <label>
             Company
@@ -136,7 +139,7 @@ export default async function AccountOrdersPage({
         <button type="submit">Filter</button>
       </form>
       {orders.length === 0 ? (
-        <p>No orders match this filter.</p>
+        <p className="empty-state">No orders match this filter.</p>
       ) : (
         <table>
           <thead>
@@ -153,7 +156,9 @@ export default async function AccountOrdersPage({
                 <td>
                   <Link href={`/account/orders/${order.orderNumber}`}>{order.orderNumber}</Link>
                 </td>
-                <td>{order.status}</td>
+                <td>
+                  <StatusBadge status={order.status} />
+                </td>
                 {actor.companyIds.length > 1 && (
                   <td>{companyNameById.get(order.companyId) ?? order.companyId}</td>
                 )}

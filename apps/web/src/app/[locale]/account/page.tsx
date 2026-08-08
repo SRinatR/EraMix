@@ -32,32 +32,42 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     <main>
       <h1>My account</h1>
       {user && (
-        <dl>
-          <dt>Name</dt>
-          <dd>{user.displayName}</dd>
-          <dt>Email</dt>
-          <dd>{user.email}</dd>
-          <dt>Role</dt>
-          <dd>{user.platformRole}</dd>
-        </dl>
+        <div className="card section">
+          <dl>
+            <dt>Name</dt>
+            <dd>{user.displayName}</dd>
+            <dt>Email</dt>
+            <dd>{user.email}</dd>
+            <dt>Role</dt>
+            <dd>
+              <span className="badge" data-tone="info">
+                {user.platformRole}
+              </span>
+            </dd>
+          </dl>
+        </div>
       )}
 
-      <h2>Company</h2>
-      {companies.length === 0 ? (
-        <p>
-          You are not yet a member of a company. Contact your administrator to be added to one
-          before you can place an order.
-        </p>
-      ) : (
-        <ul>
-          {companies.map((company) => (
-            <li key={company.id}>{company.legalName}</li>
-          ))}
-        </ul>
-      )}
+      <section className="section">
+        <h2>Company</h2>
+        {companies.length === 0 ? (
+          <p className="empty-state">
+            You are not yet a member of a company. Contact your administrator to be added to one
+            before you can place an order.
+          </p>
+        ) : (
+          <ul>
+            {companies.map((company) => (
+              <li key={company.id}>{company.legalName}</li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <p>
-        <Link href="/account/orders">My orders</Link>
+        <Link href="/account/orders" className="btn">
+          My orders
+        </Link>
       </p>
     </main>
   );

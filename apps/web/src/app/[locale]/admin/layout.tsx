@@ -32,8 +32,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <div>
-      <nav>
+    <div className="admin-shell">
+      <nav className="admin-shell__nav" aria-label="Admin">
         <ul>
           <li>
             <Link href="/admin">Dashboard</Link>
@@ -76,7 +76,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </li>
         </ul>
       </nav>
-      {children}
+      <div className="admin-shell__content">{children}</div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { getContainer } from '@/server/container';
 import { getServerActor } from '@/server/session';
 import { AddOrderCommentForm } from '@/components/add-order-comment-form';
+import { StatusBadge } from '@/components/status-badge';
 import { AddLineForm } from './add-line-form';
 import { CancelOrderButton } from './cancel-order-button';
 import { RemoveLineButton } from './remove-line-button';
@@ -83,7 +84,9 @@ export default async function OrderDetailPage({
     <main>
       <h1>Order {order.orderNumber}</h1>
       <p>Company: {company?.legalName ?? order.companyId}</p>
-      <p>Status: {order.status}</p>
+      <p className="cluster">
+        Status: <StatusBadge status={order.status} />
+      </p>
       <p>
         Prices shown, where available, are non-binding indicative &quot;from&quot; prices — never a
         payable total. The final quote is confirmed manually by a manager after submission.

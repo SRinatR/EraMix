@@ -129,19 +129,32 @@ export default async function CatalogEntryPage({
         />
         <JsonLd data={{ ...buildProductJsonLd(product, translation) }} />
         <h1>{translation.name}</h1>
-        <p>SKU: {product.sku}</p>
+        <p className="card-meta">SKU: {product.sku}</p>
         {translation.description && <p>{translation.description}</p>}
-        {translation.indicativePrice && <p>{formatIndicativePrice(translation.indicativePrice)}</p>}
+        {translation.indicativePrice && (
+          <p>
+            <span className="badge" data-tone="info">
+              {formatIndicativePrice(translation.indicativePrice)}
+            </span>
+          </p>
+        )}
         {images.length > 0 && (
-          <section aria-label="Product images">
-            {images.map((image) => (
-              // eslint-disable-next-line @next/next/no-img-element -- dev-only local storage provider; a real CDN-backed provider would use next/image (ADR-0006 pending)
-              <img key={image.id} src={downloadUrl(image.id)} alt={image.altText ?? ''} />
-            ))}
+          <section className="section" aria-label="Product images">
+            <div className="card-grid">
+              {images.map((image) => (
+                // eslint-disable-next-line @next/next/no-img-element -- dev-only local storage provider; a real CDN-backed provider would use next/image (ADR-0006 pending)
+                <img
+                  key={image.id}
+                  className="product-image"
+                  src={downloadUrl(image.id)}
+                  alt={image.altText ?? ''}
+                />
+              ))}
+            </div>
           </section>
         )}
         {documents.length > 0 && (
-          <section aria-label="Product documents">
+          <section className="section" aria-label="Product documents">
             <h2>Documents</h2>
             <ul>
               {documents.map((document) => (
@@ -214,9 +227,9 @@ export default async function CatalogEntryPage({
       <h1>{translation.name}</h1>
 
       {subcategories.length > 0 && (
-        <>
+        <section className="section">
           <h2>Subcategories</h2>
-          <ul>
+          <ul className="card-grid">
             {subcategories.map((subcategory) => {
               const subTranslation = subcategory.translations.find((t) => t.locale === locale);
               const canonicalRoute = subTranslation?.routes.find((route) => route.isCanonical);
@@ -225,46 +238,55 @@ export default async function CatalogEntryPage({
               }
               return (
                 <li key={subcategory.id}>
-                  <Link href={`/catalog/${canonicalRoute.slug}`}>{subTranslation.name}</Link>
+                  <Link href={`/catalog/${canonicalRoute.slug}`} className="card card-link">
+                    <p className="card-title">{subTranslation.name}</p>
+                  </Link>
                 </li>
               );
             })}
           </ul>
-        </>
+        </section>
       )}
 
-      <h2>Products</h2>
-      {/* CAT-002: search by name/SKU/indexable description within this category. */}
-      <form method="get">
-        <label>
-          Search
-          <input type="search" name="search" defaultValue={searchParam ?? ''} />
-        </label>
-        <button type="submit">Search</button>
-      </form>
-      {productPage.data.length === 0 ? (
-        <p>No products match this search.</p>
-      ) : (
-        <ul>
-          {productPage.data.map((product) => {
-            const productTranslation = product.translations.find((t) => t.locale === locale);
-            if (!productTranslation) {
-              return null;
-            }
-            return (
-              <li key={product.id}>
-                <Link href={`/catalog/${product.publicId}-${productTranslation.slug}`}>
-                  {productTranslation.name}
-                </Link>{' '}
-                (SKU: {product.sku})
-                {productTranslation.indicativePrice && (
-                  <> — {formatIndicativePrice(productTranslation.indicativePrice)}</>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <section className="section">
+        <h2>Products</h2>
+        {/* CAT-002: search by name/SKU/indexable description within this category. */}
+        <form method="get" className="form-inline">
+          <label>
+            Search
+            <input type="search" name="search" defaultValue={searchParam ?? ''} />
+          </label>
+          <button type="submit">Search</button>
+        </form>
+        {productPage.data.length === 0 ? (
+          <p className="empty-state">No products match this search.</p>
+        ) : (
+          <ul className="card-grid">
+            {productPage.data.map((product) => {
+              const productTranslation = product.translations.find((t) => t.locale === locale);
+              if (!productTranslation) {
+                return null;
+              }
+              return (
+                <li key={product.id}>
+                  <Link
+                    href={`/catalog/${product.publicId}-${productTranslation.slug}`}
+                    className="card card-link"
+                  >
+                    <p className="card-title">{productTranslation.name}</p>
+                    <p className="card-meta">SKU: {product.sku}</p>
+                    {productTranslation.indicativePrice && (
+                      <p className="card-meta">
+                        {formatIndicativePrice(productTranslation.indicativePrice)}
+                      </p>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
       <PaginationControls
         basePath={`/catalog/${slug}`}
         page={productPage.page}

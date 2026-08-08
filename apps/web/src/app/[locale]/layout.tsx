@@ -1,3 +1,4 @@
+import '../globals.css';
 import { ConsentBanner } from '@/components/consent-banner';
 import { ManageConsentLink } from '@/components/manage-consent-link';
 import { SiteHeader } from '@/components/site-header';
@@ -45,8 +46,11 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <SiteHeader />
           {children}
-          <footer>
-            <ManageConsentLink />
+          <footer className="site-footer">
+            <div className="site-footer__bar">
+              <span>© {new Date().getFullYear()} EraMix</span>
+              <ManageConsentLink />
+            </div>
           </footer>
           <ConsentBanner />
         </NextIntlClientProvider>

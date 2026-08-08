@@ -9,6 +9,7 @@ export function ManageConsentLink() {
   return (
     <button
       type="button"
+      className="btn-link"
       onClick={() => window.dispatchEvent(new Event(OPEN_CONSENT_BANNER_EVENT))}
     >
       {t('manageLink')}

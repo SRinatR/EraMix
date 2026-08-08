@@ -19,27 +19,35 @@ export function SiteHeader() {
   const t = useTranslations('Nav');
 
   return (
-    <header>
-      <nav aria-label="Primary">
-        <ul>
-          <li>
-            <Link href="/">{t('home')}</Link>
-          </li>
-          <li>
-            <Link href="/catalog">{t('catalog')}</Link>
-          </li>
-          <li>
-            <Link href="/articles">{t('articles')}</Link>
-          </li>
-          <li>
-            <Link href="/faq">{t('faq')}</Link>
-          </li>
-          <li>
-            <Link href="/account">{t('account')}</Link>
-          </li>
-        </ul>
-      </nav>
-      <LanguageSwitcher />
+    <header className="site-header">
+      <div className="site-header__bar">
+        <Link href="/" className="site-header__brand">
+          <span className="site-header__brand-mark" aria-hidden="true">
+            E
+          </span>
+          EraMix
+        </Link>
+        <nav className="site-nav" aria-label="Primary">
+          <ul>
+            <li>
+              <Link href="/">{t('home')}</Link>
+            </li>
+            <li>
+              <Link href="/catalog">{t('catalog')}</Link>
+            </li>
+            <li>
+              <Link href="/articles">{t('articles')}</Link>
+            </li>
+            <li>
+              <Link href="/faq">{t('faq')}</Link>
+            </li>
+            <li>
+              <Link href="/account">{t('account')}</Link>
+            </li>
+          </ul>
+        </nav>
+        <LanguageSwitcher />
+      </div>
     </header>
   );
 }
