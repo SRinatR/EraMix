@@ -37,6 +37,8 @@ export type { YandexMetricaEventSinkOptions } from './analytics/yandex-metrica-e
 export { RustAnalyticsEventSink } from './analytics/rust-analytics-event-sink.js';
 export { DevMalwareScanner } from './dev-malware-scanner.js';
 export { LocalFilesystemStorageProvider } from './local-storage-provider.js';
+export { R2StorageProvider } from './r2-storage-provider.js';
+export type { R2StorageProviderConfig } from './r2-storage-provider.js';
 export { startTelemetry } from './telemetry.js';
 export type { TelemetryConfig } from './telemetry.js';
 export { OidcIdentityProvider } from './oidc/oidc-identity-provider.js';

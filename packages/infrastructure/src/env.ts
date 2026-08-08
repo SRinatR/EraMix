@@ -29,6 +29,16 @@ const envSchema = z.object({
   MEDIA_STORAGE_DIR: z.string().min(1).default('.var/media'),
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
   /**
+   * Cloudflare R2 (S3-compatible) production object storage (ADR-0006,
+   * Accepted). All optional and all-or-nothing: when unset, the app falls
+   * back to LocalFilesystemStorageProvider for local dev. Never invent
+   * these — obtain them from the Cloudflare R2 dashboard.
+   */
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  /**
    * IndexNow (CLAUDE.md: "P1, secret-managed notification adapter for Bing/
    * Yandex only"). Optional — apps/worker only submits when both this and
    * PlatformSettings.indexNowEnabled are set. Never invented; obtained from

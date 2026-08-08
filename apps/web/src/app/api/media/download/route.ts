@@ -2,17 +2,19 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { getContainer } from '@/server/container';
 import { defineRouteHandlers, withApiHandler } from '@/server/handler';
-import { AccessDeniedError, ValidationFailedError } from '@eramix/domain';
+import { AccessDeniedError, ResourceNotFoundError, ValidationFailedError } from '@eramix/domain';
+import { LocalFilesystemStorageProvider } from '@eramix/infrastructure';
 import { NextResponse } from 'next/server';
 
 /**
  * Serves a file previously stored via LocalFilesystemStorageProvider,
  * verifying the HMAC signature and expiry embedded in the URL (dev-only —
- * a real S3-compatible provider issues its own pre-signed URLs and this
- * route would not exist in that world; see ADR-0006). This is the
- * "controlled download URL" enforcement point (CLAUDE.md / ACC-005): the
- * signature alone proves the URL wasn't tampered with, it is not itself a
- * substitute for the caller having been authorized when the URL was minted.
+ * the production R2StorageProvider (ADR-0006) issues its own pre-signed R2
+ * URLs and never routes through here — see the `instanceof` guard below).
+ * This is the "controlled download URL" enforcement point (CLAUDE.md /
+ * ACC-005): the signature alone proves the URL wasn't tampered with, it is
+ * not itself a substitute for the caller having been authorized when the URL
+ * was minted.
  */
 /** Strips characters that would break or inject into a quoted Content-Disposition header value. */
 function sanitizeContentDispositionFilename(rawFilename: string): string {
@@ -34,6 +36,14 @@ const getHandler = withApiHandler('media.download', async (request) => {
   }
 
   const container = getContainer();
+  if (!(container.storage instanceof LocalFilesystemStorageProvider)) {
+    // R2StorageProvider mints its own pre-signed R2 URLs directly — a
+    // caller reaching this route means either a stale local-dev link is
+    // being replayed against a production R2 deployment, or the URL was
+    // otherwise malformed. Either way, there is nothing this route can
+    // proxy to.
+    throw new ResourceNotFoundError('This download route is only served in local development.', {});
+  }
   const expires = Number(expiresParam);
   if (!container.storage.verifySignedDownload(key, expires, signature, downloadFilename ?? '')) {
     throw new AccessDeniedError('This download URL is invalid, tampered with, or has expired.', {});

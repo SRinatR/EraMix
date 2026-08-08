@@ -22,6 +22,8 @@
     "db:seed:e2e": "dotenvx run -f ../../.env --ignore MISSING_ENV_FILE -- tsx prisma/seed-e2e.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1106.0",
+    "@aws-sdk/s3-request-presigner": "3.1106.0",
     "@eramix/application": "workspace:*",
     "@eramix/domain": "workspace:*",
     "@opentelemetry/api": "1.9.1",

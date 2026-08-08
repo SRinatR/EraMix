@@ -24,6 +24,7 @@ import {
   PrismaProductRepository,
   PrismaUnitOfWork,
   PrismaUserRepository,
+  R2StorageProvider,
   SessionCodec,
   createPrismaClient,
   loadEnv,
@@ -100,6 +101,26 @@ function buildContainer() {
       return new PendingAuthCodec(env.SESSION_SECRET);
     },
     get storage() {
+      const r2Vars = [
+        env.R2_ACCOUNT_ID,
+        env.R2_BUCKET,
+        env.R2_ACCESS_KEY_ID,
+        env.R2_SECRET_ACCESS_KEY,
+      ];
+      const r2VarsSetCount = r2Vars.filter((value) => value !== undefined).length;
+      if (r2VarsSetCount === 4) {
+        return new R2StorageProvider({
+          accountId: env.R2_ACCOUNT_ID!,
+          bucket: env.R2_BUCKET!,
+          accessKeyId: env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: env.R2_SECRET_ACCESS_KEY!,
+        });
+      }
+      if (r2VarsSetCount > 0) {
+        throw new Error(
+          'Partial R2 configuration: R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must all be set together, or all left unset to fall back to local dev storage.',
+        );
+      }
       if (env.MEDIA_SIGNING_SECRET === undefined) {
         throw new Error('MEDIA_SIGNING_SECRET is not configured — required for /api/media/*.');
       }
