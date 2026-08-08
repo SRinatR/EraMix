@@ -50,28 +50,38 @@ SHA="$1"
 BASE="ghcr.io/srinatr"
 cd /opt/eramix
 
-docker pull "${BASE}/eramix-migrate:${SHA}"
-docker pull "${BASE}/eramix-web:${SHA}"
-docker pull "${BASE}/eramix-worker:${SHA}"
-
 export WEB_IMAGE="${BASE}/eramix-web:${SHA}"
 export WORKER_IMAGE="${BASE}/eramix-worker:${SHA}"
 
-# Bring up postgres first so the one-off migrate container can join the
-# compose network and reach it by service name before web/worker start.
+# The host has only 9.4GB disk (2GB of which is swap) — not enough to hold
+# two full generations of web+worker images plus the migrate image at once.
+# Stop/remove the old web/worker containers first (brief downtime;
+# postgres/caddy stay up) so their images become unreferenced and prunable
+# before pulling the new generation, rather than risk running out of space
+# mid-pull.
+docker compose -f docker-compose.prod.yml stop web worker || true
+docker compose -f docker-compose.prod.yml rm -f web worker || true
+docker image prune -a -f
+
+docker pull "${BASE}/eramix-migrate:${SHA}"
+
 docker compose -f docker-compose.prod.yml up -d postgres
 docker compose -f docker-compose.prod.yml exec -T postgres sh -c 'until pg_isready -U "$POSTGRES_USER"; do sleep 1; done'
 
 docker run --rm --env-file .env --network eramix_default \
   "${BASE}/eramix-migrate:${SHA}"
 
+# Single-use, and by far the largest image (full devDependencies for prisma
+# migrate deploy) — remove it immediately rather than let it compete with
+# web/worker for disk.
+docker rmi "${BASE}/eramix-migrate:${SHA}"
+
+docker pull "${BASE}/eramix-web:${SHA}"
+docker pull "${BASE}/eramix-worker:${SHA}"
+
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
 
-# The host has only 9.4GB disk — old, now-unreferenced image layers from
-# prior deploys (superseded SHAs) fill it fast enough to break the next
-# deploy's `docker pull`. Safe: only removes images with no container
-# (running or stopped) referencing them, i.e. never the ones just started.
 docker image prune -a -f
 ```
 
@@ -83,7 +93,11 @@ bash /opt/eramix/deploy.sh <full-commit-sha>
 ```
 
 Verify: `docker compose -f docker-compose.prod.yml ps`, then
-`curl -f https://eramix.uz/health/ready`.
+`curl -f https://eramix.uz/health/ready`. **Note**: `web`/`worker` are
+briefly unavailable during a redeploy (the disk constraint above requires
+removing the old containers before the new images can be pulled) — this is
+a known limitation of the current single-VPS, 9.4GB-disk deployment, not a
+zero-downtime setup.
 
 ## Redeploy (new commit on main)
 
