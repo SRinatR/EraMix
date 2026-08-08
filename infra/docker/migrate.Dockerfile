@@ -28,6 +28,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS runtime
 # .dockerignore (ADR-0016) excludes .env/.env.*/.env.keys from this build
 # context entirely.
+COPY tsconfig.base.json ./
 COPY packages/domain packages/domain
 COPY packages/application packages/application
 COPY packages/infrastructure packages/infrastructure
