@@ -28,7 +28,16 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health/ready']
+      # `node` is guaranteed present in the runtime image (it's how the
+      # container itself starts) — avoids depending on wget/curl being
+      # installed in the minimal Alpine runtime stage.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
