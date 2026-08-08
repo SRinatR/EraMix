@@ -50,7 +50,7 @@ value (not `postgres:19beta2-alpine`, which is a floating tag) — set in
    docker pull ghcr.io/srinatr/eramix-migrate:<sha>
    ```
    (Unnecessary once the GHCR packages are set to public — then `docker
-   pull` needs no authentication.)
+pull` needs no authentication.)
 3. Run migrations as a one-off container, before starting web/worker:
    ```sh
    docker run --rm --env-file /opt/eramix/.env \
