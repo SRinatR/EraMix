@@ -65,6 +65,13 @@ services:
     environment:
       DATABASE_URL: postgresql://eramix:eramix_local_dev@postgres:5432/eramix
       NODE_ENV: production
+      # Without this, Next's standalone server.js binds only to whatever
+      # process.env.HOSTNAME resolves to — Docker auto-sets HOSTNAME to the
+      # container's own id/hostname, which /etc/hosts maps to the
+      # container's bridge-network IP only, never 127.0.0.1 or the
+      # published host port (verified live in production — see
+      # docker-compose.prod.yml's identical comment).
+      HOSTNAME: '0.0.0.0'
     depends_on:
       postgres:
         condition: service_healthy

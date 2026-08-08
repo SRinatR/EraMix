@@ -28,20 +28,26 @@ services:
     image: ${WEB_IMAGE:?WEB_IMAGE must be set to ghcr.io/.../eramix-web:<tag>}
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Verified live: without this, Next's standalone server.js binds only
+      # to whatever process.env.HOSTNAME resolves to — Docker auto-sets
+      # HOSTNAME to the container's own id/hostname, which /etc/hosts maps
+      # to the container's bridge-network IP only, never 127.0.0.1. Caddy
+      # (a separate container, reaching it via Docker DNS at that same
+      # bridge IP) worked fine the whole time; only same-container
+      # "localhost" connections — i.e. this container's own healthcheck —
+      # got ECONNREFUSED. Binding to all interfaces fixes both.
+      HOSTNAME: '0.0.0.0'
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      # `node` is guaranteed present in the runtime image (it's how the
-      # container itself starts) — avoids depending on wget/curl being
-      # installed in the minimal Alpine runtime stage.
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://localhost:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
+      # wget (present in this Alpine-based image via busybox — verified
+      # live) is far lighter than spawning a fresh Node interpreter per
+      # check on a 1-vCPU/~1GB host under real load; the earlier
+      # node -e fetch(...) healthcheck was intermittently exceeding its own
+      # 5s timeout just from Node's own cold-start overhead.
+      test: ['CMD', 'wget', '-qO-', '--tries=1', 'http://127.0.0.1:3000/health/ready']
       interval: 15s
       timeout: 5s
       retries: 5
