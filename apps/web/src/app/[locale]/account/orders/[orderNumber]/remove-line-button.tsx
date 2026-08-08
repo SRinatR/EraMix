@@ -44,7 +44,7 @@ export function RemoveLineButton({
   }
 
   return (
-    <form onSubmit={(event) => void handleRemove(event)} style={{ display: 'inline' }}>
+    <form onSubmit={(event) => void handleRemove(event)} className="form-inline-action">
       <button type="submit" disabled={pending}>
         {pending ? 'Removing…' : 'Remove'}
       </button>

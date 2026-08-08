@@ -45,7 +45,7 @@ export function RollbackButton({
   }
 
   return (
-    <form onSubmit={(event) => void handleRollback(event)} style={{ display: 'inline' }}>
+    <form onSubmit={(event) => void handleRollback(event)} className="form-inline-action">
       <button type="submit" disabled={pending}>
         {pending ? 'Rolling back…' : 'Roll back to this state'}
       </button>

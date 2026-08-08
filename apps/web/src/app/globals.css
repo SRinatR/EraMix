@@ -779,6 +779,13 @@ dd {
 .pagination {
   margin-top: var(--space-5);
 }
+/* A <form> that should flow inline with surrounding text/buttons instead of
+   as a block — was a `style={{display:'inline'}}` attribute (blocked by a
+   style-src without 'unsafe-inline'), moved to CSS so the CSP can stay
+   nonce-based with no unsafe-inline anywhere. */
+.form-inline-action {
+  display: inline;
+}
 .card-title {
   margin: 0 0 var(--space-1);
   font-size: var(--text-lg);

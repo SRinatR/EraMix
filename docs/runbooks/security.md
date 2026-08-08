@@ -25,16 +25,34 @@
   with a same-origin `Origin` reaches the normal `401 AUTH_REQUIRED` gate
   instead.
 - **CSP/XSS (SEC-003 — "CSP, безопасный output encoding, ... и запрет
-  unsafe eval снижают риск XSS")**: `apps/web/next.config.ts`'s `headers()`
-  sends `Content-Security-Policy` (`default-src 'self'`, no `unsafe-eval`
-  in production — only Turbopack's dev-mode HMR runtime gets it — no
-  inline `<script>` ever allowed), plus `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Referrer-Policy:
-strict-origin-when-cross-origin`, a minimal `Permissions-Policy`, and
-  `Strict-Transport-Security` (safe to always send — a browser only
-  enforces it over a connection that was actually HTTPS). Output encoding
-  itself is React's default JSX escaping (no `dangerouslySetInnerHTML`
-  anywhere in this codebase); rich text sanitization is moot because
+  unsafe eval снижают риск XSS")**: `apps/web/src/proxy.ts` generates a
+  fresh, cryptographically random nonce every request (Web Crypto, 18 bytes)
+  and sends `Content-Security-Policy` with `script-src 'self'
+'nonce-<value>'` and `style-src 'self' 'nonce-<value>'` — no `unsafe-eval`
+  in production (only Turbopack's dev-mode HMR runtime gets it) and no
+  `unsafe-inline` anywhere. **Found and fixed as a real production bug
+  (2026-08-08, verified live in Firefox)**: an earlier version set this
+  policy as a static string once in `next.config.ts`'s `headers()` (with no
+  nonce and no `unsafe-inline`), which correctly-but-unintentionally blocked
+  Next.js's own inline RSC-streaming bootstrap scripts
+  (`<script>self.__next_f.push(...)</script>`) required for hydration —
+  the site was serving HTML but was non-interactive in a real browser
+  (client components never hydrated) while still returning `200` and
+  passing every `curl`-based check, exactly the class of bug `curl` cannot
+  catch. `next.config.ts`'s `headers()` cannot generate a per-request value
+  at all (evaluated once, not per request), so the fix moved CSP generation
+  to `proxy.ts` (Next's per-request middleware-equivalent), which sets the
+  nonce on both the outgoing request (so Next's own renderer reads it back
+  via `next/headers` during the same request and applies it to the
+  scripts/styles it emits — verified against next-intl's own middleware
+  source, which clones `request.headers`) and the response (so the browser
+  enforces it). Plus `X-Content-Type-Options: nosniff`, `X-Frame-Options:
+DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a minimal
+  `Permissions-Policy`, and `Strict-Transport-Security` (still set in
+  `next.config.ts`, safe to always send — a browser only enforces it over a
+  connection that was actually HTTPS). Output encoding itself is React's
+  default JSX escaping (no `dangerouslySetInnerHTML` anywhere in this
+  codebase); rich text sanitization is moot because
   `ContentTranslation.content` is deliberately plain string/string-array
   paragraphs, never HTML/markdown (see Phase 6's roadmap status block).
   Verified live against the dev server: `curl -D -` on `/en` shows every

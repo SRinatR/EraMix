@@ -18,6 +18,41 @@ import { NextResponse, type NextRequest } from 'next/server';
 // as app/.
 const intlMiddleware = createMiddleware(routing);
 
+// SEC-003 (CSP/XSS): must be built here, per-request, not in
+// next.config.ts's headers() (evaluated once, not per request) — a fresh
+// cryptographically random nonce is required so Next.js's own inline
+// RSC-streaming bootstrap scripts (<script>self.__next_f.push(...)</script>,
+// required for hydration, not decorative) and any inline <style> Next
+// injects can run without 'unsafe-inline'. Verified live in production
+// (Firefox): every such inline script was rejected under the previous
+// static `script-src 'self'` policy with no nonce and no 'unsafe-inline'.
+//
+// Setting the header on BOTH the outgoing request (so Next's own
+// server-side renderer can read it back via next/headers during this same
+// request and apply the nonce to the scripts/styles it emits — this is
+// Next's documented automatic-nonce-propagation contract) and the response
+// (so the browser enforces it) is required; setting it on the response
+// alone does not reach the renderer.
+const isProduction = process.env.NODE_ENV === 'production';
+
+function buildCsp(nonce: string): string {
+  return [
+    "default-src 'self'",
+    // 'unsafe-eval' only outside production — Turbopack's dev-mode HMR
+    // runtime needs it; the production bundle this policy protects never
+    // gets it.
+    `script-src 'self' 'nonce-${nonce}'${isProduction ? '' : " 'unsafe-eval'"}`,
+    `style-src 'self' 'nonce-${nonce}'`,
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
+
 // Matches a *locale-prefixed* content/category/product detail path only —
 // the shapes that can ever be durably retired (ADR-0018). Deliberately
 // excludes the catalog index (/{locale}/catalog), home, admin, account, and
@@ -91,11 +126,36 @@ async function checkRetired(request: NextRequest): Promise<NextResponse | undefi
 }
 
 export default async function proxy(request: NextRequest) {
+  // Web Crypto (not Node's node:crypto — the proxy runs on the Edge
+  // runtime), 18 random bytes base64-encoded: cryptographically random and
+  // unique per request, never a static/reused value.
+  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(18))).toString('base64');
+  const csp = buildCsp(nonce);
+
+  // Mutated in place (Headers instances are mutable even on an existing
+  // Request/NextRequest) rather than reconstructing a new NextRequest —
+  // reconstructing risks silently losing NextRequest-specific state
+  // (.nextUrl, geo, basePath) that next-intl's own middleware depends on.
+  // next-intl clones via `new Headers(request.headers)` when building its
+  // own NextResponse.next()/rewrite() (verified against the installed
+  // next-intl@4.13.4 source, middleware.js), so setting these here means
+  // its clone — and therefore the request Next's App Router renderer sees
+  // — carries them too. Next's renderer reads the nonce back out of this
+  // same request's Content-Security-Policy header via next/headers during
+  // this request to apply it to the scripts/styles it emits — a
+  // response-only header would never reach the renderer.
+  request.headers.set('x-nonce', nonce);
+  request.headers.set('Content-Security-Policy', csp);
+
   const gone = await checkRetired(request);
   if (gone) {
+    gone.headers.set('Content-Security-Policy', csp);
     return gone;
   }
-  return intlMiddleware(request);
+
+  const response = intlMiddleware(request);
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
 }
 
 export const config = {
